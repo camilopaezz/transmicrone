@@ -1,0 +1,34 @@
+{
+  "features": [
+    {
+      "numero_estacion": "12003",
+      "nombre_estacion": "Ricaurte - CL 13",
+      "codigo_nodo_estacion": 12003,
+      "troncal_estacion": "Americas",
+      "numero_vagones_estacion": 3,
+      "latitud_estacion": 4.61301485,
+      "longitud_estacion": -74.09048002,
+      "ubicacion_estacion": "CL 13 - KR 28"
+    },
+    {
+      "numero_estacion": "07505",
+      "nombre_estacion": "León XIII",
+      "codigo_nodo_estacion": 7505,
+      "troncal_estacion": "Soacha",
+      "numero_vagones_estacion": 2,
+      "latitud_estacion": 4.59217919,
+      "longitud_estacion": -74.19313846,
+      "ubicacion_estacion": "Autopista Sur - CL 48"
+    },
+    {
+      "numero_estacion": "07111",
+      "nombre_estacion": "Ricaurte - NQS",
+      "codigo_nodo_estacion": 7111,
+      "troncal_estacion": "NQS",
+      "numero_vagones_estacion": 3,
+      "latitud_estacion": 4.6116862,
+      "longitud_estacion": -74.09386888,
+      "ubicacion_estacion": "Kr 30 Cl 10"
+    }
+  ]
+}

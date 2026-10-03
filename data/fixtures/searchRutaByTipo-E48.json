@@ -1,0 +1,28 @@
+{
+  "lista_rutas": [
+    {
+      "codigo": "E48",
+      "color": "#AE6B00",
+      "horarios": {
+        "data": [
+          {
+            "convencion": "L-V",
+            "hora_fin": "10:00 AM",
+            "hora_inicio": "4:00 AM"
+          },
+          {
+            "convencion": "S",
+            "hora_fin": "10:00 AM",
+            "hora_inicio": "4:30 AM"
+          }
+        ]
+      },
+      "id": "12444",
+      "idZona": null,
+      "nombre": "CAD",
+      "sistema": "TransMilenio",
+      "tipoServicio": "TransMilenio"
+    }
+  ],
+  "STATUS": false
+}

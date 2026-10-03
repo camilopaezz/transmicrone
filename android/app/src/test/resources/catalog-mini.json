@@ -1,0 +1,40 @@
+{
+  "generated_at": "2026-10-02T04:51:04Z",
+  "schema_version": 1,
+  "places": [
+    {
+      "place_id": "estacion:TM0101",
+      "kind": "estacion",
+      "name": "León XIII",
+      "fold": "leon xiii soacha",
+      "disambiguator": "Soacha",
+      "query_paradero": "TM0101",
+      "servicios": [
+        {"painted": "E48", "destino": "CAD", "route_ids": [13266], "color": "#AE6B00"},
+        {"painted": "K43", "destino": "P. ElDorado", "route_ids": [13276], "color": "#D5B079"}
+      ]
+    },
+    {
+      "place_id": "estacion:TM0069",
+      "kind": "estacion",
+      "name": "Ricaurte - NQS",
+      "fold": "ricaurte - nqs nqs",
+      "disambiguator": "NQS",
+      "query_paradero": "TM0069",
+      "servicios": [
+        {"painted": "S48", "destino": "San Mateo", "route_ids": [13267], "color": "#049CDD"},
+        {"painted": "S43", "destino": "San Mateo", "route_ids": [13277, 13278, 13279], "color": "#049CDD"}
+      ]
+    },
+    {
+      "place_id": "paradero:080A01",
+      "kind": "paradero",
+      "name": "Br. Liberia",
+      "fold": "br. liberia",
+      "query_paradero": "080A01",
+      "servicios": [
+        {"painted": "B419", "destino": "Lijaca", "route_ids": [11150]}
+      ]
+    }
+  ]
+}

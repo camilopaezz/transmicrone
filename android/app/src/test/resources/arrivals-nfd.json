@@ -1,0 +1,62 @@
+[
+  {
+    "ruta_sae": 12819,
+    "ruta_extraida": "B23",
+    "destino_limpio": "Alcalá",
+    "nodo": 1,
+    "labelparadero": "0 mts",
+    "labeltiempo": "Entre 2 y 4 min",
+    "color_ruta": "#7AC143",
+    "color_texto": "#FFFFFF",
+    "ocupacion_bus": ""
+  },
+  {
+    "ruta_sae": 13266,
+    "ruta_extraida": "E48",
+    "destino_limpio": "CAD",
+    "nodo": 62282,
+    "labelparadero": "200 mts",
+    "labeltiempo": "Entre 5 y 7 min",
+    "color_ruta": "#AE6B00",
+    "color_texto": "#FFFFFF",
+    "ocupacion_bus": "MEDIO"
+  },
+  {
+    "ruta_sae": 13276,
+    "ruta_extraida": "K43",
+    "destino_limpio": "P. ElDorado",
+    "nodo": 62283,
+    "labelparadero": "50 mts",
+    "labeltiempo": "Servicio llegando",
+    "color_ruta": "not-a-color",
+    "color_texto": "#FFFFFF"
+  },
+  {
+    "ruta_sae": 13277,
+    "ruta_extraida": "S43",
+    "destino_limpio": "San Mateo",
+    "nodo": 61601,
+    "labelparadero": "1 kms",
+    "labeltiempo": "Entre 5 y 7 min",
+    "color_ruta": "#049CDD",
+    "color_texto": "#FFFFFF"
+  },
+  {
+    "ruta_sae": 13277,
+    "ruta_extraida": "S43",
+    "destino_limpio": "San Mateo",
+    "nodo": 61601,
+    "labelparadero": "1 kms",
+    "labeltiempo": "Entre 5 y 7 min",
+    "color_ruta": "#049CDD",
+    "color_texto": "#FFFFFF"
+  },
+  {
+    "ruta_sae": 99999,
+    "ruta_extraida": "E48",
+    "destino_limpio": "Otra",
+    "nodo": 1,
+    "labelparadero": "10 mts",
+    "labeltiempo": "Entre 2 y 4 min"
+  }
+]

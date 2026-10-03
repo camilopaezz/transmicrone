@@ -1,0 +1,408 @@
+{
+  "boards": [
+    {
+      "label": "León XIII",
+      "selected_painted": [
+        "E48",
+        "K43"
+      ],
+      "direction_note": "Toward Ricaurte",
+      "recommended_place_id": "estacion:TM0101",
+      "query_paradero": "TM0101",
+      "nodo": 7505,
+      "boarding_note": "E48 uses vagón A; K43 uses vagón B. Adjacent faces, tens of metres apart.",
+      "resolved_places": [
+        {
+          "place_id": "estacion:TM0101",
+          "kind": "estacion",
+          "tm_code": "TM0101",
+          "nodo": 7505,
+          "name": "León XIII",
+          "disambiguator": "Soacha",
+          "troncal": "Soacha",
+          "address": "Autopista Sur - CL 48",
+          "lat": 4.59217919,
+          "lon": -74.19313846,
+          "wagon_count": 2,
+          "gis_numero_estacion": "07505",
+          "query_paradero": "TM0101",
+          "served_painted": [
+            "K43",
+            "E42",
+            "S42",
+            "S43",
+            "B46",
+            "S48",
+            "E48",
+            "S46",
+            "S45",
+            "G45"
+          ],
+          "platforms": [
+            {
+              "stop_id": "62281",
+              "stop_code": "S004",
+              "name": "León XIII A - 1",
+              "wagon": "A",
+              "lat": 4.592076508237848,
+              "lon": -74.19339359656138
+            },
+            {
+              "stop_id": "62282",
+              "stop_code": "S005",
+              "name": "León XIII A - 4",
+              "wagon": "A",
+              "lat": 4.5920486478137965,
+              "lon": -74.19329211229967
+            },
+            {
+              "stop_id": "62283",
+              "stop_code": "S006",
+              "name": "León XIII B - 3 ó 6",
+              "wagon": "B",
+              "lat": 4.592303855482743,
+              "lon": -74.19281794508
+            },
+            {
+              "stop_id": "71714",
+              "stop_code": "S015",
+              "name": "León XIII B - 2 ó 5",
+              "wagon": "B",
+              "lat": 4.592286327734372,
+              "lon": -74.19296820460558
+            }
+          ],
+          "served_route_ids": [
+            "13276",
+            "13264",
+            "13265",
+            "13277",
+            "13268",
+            "13278",
+            "13267",
+            "13266",
+            "13269",
+            "13270",
+            "13238",
+            "13239",
+            "13279"
+          ]
+        }
+      ],
+      "servicios": {
+        "E48": [
+          {
+            "route_id": 13266,
+            "painted": "E48",
+            "destino": "CAD",
+            "agency_id": 1,
+            "nombre_sistema": "TransMilenio",
+            "catalog_id": "12444",
+            "catalog_ids_sharing_painted": [
+              "12444"
+            ],
+            "gis_cod_ruta": "E48",
+            "gis_cod_linea": "ES48",
+            "gis_route_id": 13266,
+            "color": "#AE6B00"
+          }
+        ],
+        "K43": [
+          {
+            "route_id": 13276,
+            "painted": "K43",
+            "destino": "P. ElDorado",
+            "agency_id": 1,
+            "nombre_sistema": "TransMilenio",
+            "catalog_id": "5663",
+            "catalog_ids_sharing_painted": [
+              "5663"
+            ],
+            "gis_cod_ruta": "K43",
+            "gis_cod_linea": "KS43",
+            "gis_route_id": 13276,
+            "color": "#D5B079"
+          }
+        ]
+      }
+    },
+    {
+      "label": "Ricaurte",
+      "selected_painted": [
+        "S48",
+        "S43"
+      ],
+      "direction_note": "Toward León XIII",
+      "recommended_place_id": "estacion:TM0069",
+      "query_paradero": "TM0069",
+      "nodo": 7111,
+      "boarding_note": "S48 and S43 board vagón B (NQS). GIS also lists Ricaurte - CL 13 (nodo 12003) as a separate estación with no TM code, no GTFS platforms, and no serving in this snapshot. Do not use 12003 for this board.",
+      "resolved_places": [
+        {
+          "place_id": "estacion-nodo:12003",
+          "kind": "estacion",
+          "tm_code": null,
+          "nodo": 12003,
+          "name": "Ricaurte - CL 13",
+          "disambiguator": "Americas",
+          "troncal": "Americas",
+          "address": "CL 13 - KR 28",
+          "lat": 4.61301485,
+          "lon": -74.09048002,
+          "wagon_count": 3,
+          "gis_numero_estacion": "12003",
+          "query_paradero": null,
+          "served_painted": [],
+          "platforms": [],
+          "served_route_ids": []
+        },
+        {
+          "place_id": "estacion:TM0069",
+          "kind": "estacion",
+          "tm_code": "TM0069",
+          "nodo": 7111,
+          "name": "Ricaurte - NQS",
+          "disambiguator": "NQS",
+          "troncal": "NQS",
+          "address": "Kr 30 Cl 10",
+          "lat": 4.6116862,
+          "lon": -74.09386888,
+          "wagon_count": 3,
+          "gis_numero_estacion": "07111",
+          "query_paradero": "TM0069",
+          "served_painted": [
+            "G12",
+            "B12",
+            "5",
+            "J23",
+            "F23",
+            "K43",
+            "A60",
+            "4",
+            "F60",
+            "C25",
+            "L25",
+            "S43",
+            "D21",
+            "C19",
+            "H21",
+            "F19",
+            "M51",
+            "F51",
+            "B11",
+            "G11",
+            "S48",
+            "A61",
+            "Z61",
+            "E48"
+          ],
+          "platforms": [
+            {
+              "stop_id": "61583",
+              "stop_code": "E051T",
+              "name": "Ricaurte F - 3",
+              "wagon": "F",
+              "lat": 4.612397031188412,
+              "lon": -74.08974477100422
+            },
+            {
+              "stop_id": "61585",
+              "stop_code": "E053",
+              "name": "Ricaurte E -4 ó 6",
+              "wagon": "E",
+              "lat": 4.612868048272754,
+              "lon": -74.09024899032057
+            },
+            {
+              "stop_id": "61587",
+              "stop_code": "E055T",
+              "name": "Ricaurte D - 4 ó 6",
+              "wagon": "D",
+              "lat": 4.613293814134677,
+              "lon": -74.09073523860827
+            },
+            {
+              "stop_id": "61589",
+              "stop_code": "E057T",
+              "name": "Ricaurte D - 2 ó 5",
+              "wagon": "D",
+              "lat": 4.613029890914125,
+              "lon": -74.09051725619697
+            },
+            {
+              "stop_id": "61591",
+              "stop_code": "E059",
+              "name": "Ricaurte E - 2 ó 5",
+              "wagon": "E",
+              "lat": 4.612587381196055,
+              "lon": -74.09005102580232
+            },
+            {
+              "stop_id": "61592",
+              "stop_code": "E060T",
+              "name": "Ricaurte F - 1",
+              "wagon": "F",
+              "lat": 4.612250171557645,
+              "lon": -74.08966788734966
+            },
+            {
+              "stop_id": "61595",
+              "stop_code": "E063",
+              "name": "Ricaurte B - 4 ó 6",
+              "wagon": "B",
+              "lat": 4.61162440332076,
+              "lon": -74.09388346311344
+            },
+            {
+              "stop_id": "61597",
+              "stop_code": "E065T",
+              "name": "Ricaurte C - 4 ó 6",
+              "wagon": "C",
+              "lat": 4.612157563681356,
+              "lon": -74.0934681145884
+            },
+            {
+              "stop_id": "61599",
+              "stop_code": "E067",
+              "name": "Ricaurte C - 2 ó 5",
+              "wagon": "C",
+              "lat": 4.611951154921662,
+              "lon": -74.09368718055347
+            },
+            {
+              "stop_id": "61601",
+              "stop_code": "E069",
+              "name": "Ricaurte B - 2 ó 5",
+              "wagon": "B",
+              "lat": 4.611401652723291,
+              "lon": -74.09413141847786
+            },
+            {
+              "stop_id": "73813",
+              "stop_code": "Ricaurte A - 4 ó 6",
+              "name": "Ricaurte A - 4 ó 6",
+              "wagon": "A",
+              "lat": 4.611128285388184,
+              "lon": -74.09429963848969
+            },
+            {
+              "stop_id": "73814",
+              "stop_code": "Ricaurte A - 2 ó 5",
+              "name": "Ricaurte A - 2 ó 5",
+              "wagon": "A",
+              "lat": 4.61092874200755,
+              "lon": -74.09453581265294
+            }
+          ],
+          "served_route_ids": [
+            "12873",
+            "12874",
+            "12841",
+            "11712",
+            "12639",
+            "11163",
+            "13276",
+            "13309",
+            "11747",
+            "11853",
+            "13310",
+            "10073",
+            "10074",
+            "13277",
+            "11382",
+            "13300",
+            "13163",
+            "13175",
+            "11724",
+            "11725",
+            "13007",
+            "13008",
+            "13278",
+            "13267",
+            "13172",
+            "13173",
+            "13266",
+            "11876",
+            "12070",
+            "10082",
+            "11463",
+            "13279"
+          ]
+        }
+      ],
+      "servicios": {
+        "S48": [
+          {
+            "route_id": 13267,
+            "painted": "S48",
+            "destino": "San Mateo",
+            "agency_id": 1,
+            "nombre_sistema": "TransMilenio",
+            "catalog_id": "5655",
+            "catalog_ids_sharing_painted": [
+              "5655"
+            ],
+            "gis_cod_ruta": "S48",
+            "gis_cod_linea": "ES48",
+            "gis_route_id": 13267,
+            "color": "#049CDD"
+          }
+        ],
+        "S43": [
+          {
+            "route_id": 13277,
+            "painted": "S43",
+            "destino": "San Mateo",
+            "agency_id": 1,
+            "nombre_sistema": "TransMilenio",
+            "catalog_id": "5665",
+            "catalog_ids_sharing_painted": [
+              "5665"
+            ],
+            "gis_cod_ruta": null,
+            "gis_cod_linea": null,
+            "gis_route_id": null,
+            "color": "#049CDD"
+          },
+          {
+            "route_id": 13278,
+            "painted": "S43",
+            "destino": "San Mateo",
+            "agency_id": 1,
+            "nombre_sistema": "TransMilenio",
+            "catalog_id": "5665",
+            "catalog_ids_sharing_painted": [
+              "5665"
+            ],
+            "gis_cod_ruta": "S43",
+            "gis_cod_linea": "KS43",
+            "gis_route_id": 13278,
+            "color": "#049CDD"
+          },
+          {
+            "route_id": 13279,
+            "painted": "S43",
+            "destino": "San Mateo",
+            "agency_id": 1,
+            "nombre_sistema": "TransMilenio",
+            "catalog_id": "5665",
+            "catalog_ids_sharing_painted": [
+              "5665"
+            ],
+            "gis_cod_ruta": null,
+            "gis_cod_linea": null,
+            "gis_route_id": null,
+            "color": "#049CDD"
+          }
+        ]
+      }
+    }
+  ],
+  "notes": [
+    "León XIII is a unique estación name; query_paradero is the TM code from infoRuta.",
+    "Ricaurte is two estaciones in GIS/GTFS (NQS vs CL 13 / Americas). The commute board is NQS.",
+    "Catalog API id is not GTFS route_id (E48 catalog 12444 vs GTFS 13266).",
+    "S43 has multiple GTFS route_id variantes sharing the painted code and destino."
+  ],
+  "generated_at": "2026-10-02T04:51:04Z"
+}

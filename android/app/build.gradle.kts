@@ -1,0 +1,130 @@
+import java.util.Properties
+
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.plugin.serialization")
+}
+
+fun feedField(name: String): String {
+    val feed = rootDir.resolve("../docs/feed.md")
+    require(feed.isFile) { "canonical feed doc missing: ${feed.invariantSeparatorsPath}" }
+    val text = feed.readText()
+    val match = Regex("""^$name=(.+)$""", RegexOption.MULTILINE).find(text)
+        ?: error("docs/feed.md has no $name= line")
+    val value = match.groupValues[1].trim()
+    require(value.isNotEmpty()) { "empty $name in docs/feed.md" }
+    require(!value.contains("\"") && !value.contains("\\")) { "refusing unsafe $name" }
+    return value
+}
+
+val localFeed = Properties().apply {
+    val file = rootDir.resolve("../feed.local.properties")
+    if (file.isFile) file.inputStream().use { load(it) }
+}
+
+fun feedSetting(name: String, environment: String, default: String): String {
+    val value = providers.environmentVariable(environment).orNull
+        ?: localFeed.getProperty(name)
+        ?: default
+    require(!value.contains("\"") && !value.contains("\\")) { "refusing unsafe $name" }
+    return value.trim()
+}
+
+val feedBaseUrl = feedSetting("BASE_URL", "TRANSMICRONE_BASE_URL", feedField("BASE_URL"))
+val feedAppId = feedSetting("APPID", "TRANSMICRONE_APP_ID", "unconfigured")
+
+android {
+    namespace = "co.camilo.transmicrone"
+    compileSdk = 36
+    buildToolsVersion = "36.1.0"
+
+    defaultConfig {
+        applicationId = "co.camilo.transmicrone"
+        minSdk = 26
+        targetSdk = 35
+        versionCode = 1
+        versionName = "0.1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "FEED_BASE_URL", "\"$feedBaseUrl\"")
+        buildConfigField("String", "FEED_APPID", "\"$feedAppId\"")
+        buildConfigField("boolean", "MOCK_FEED", "false")
+        buildConfigField("long", "AUTO_REFRESH_MS", "25000L")
+        buildConfigField("long", "MANUAL_REFRESH_THROTTLE_MS", "8000L")
+        buildConfigField("int", "HTTP_CONNECT_TIMEOUT_MS", "10000")
+        buildConfigField("int", "HTTP_READ_TIMEOUT_MS", "15000")
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+        }
+        debug {
+            isMinifyEnabled = false
+            applicationIdSuffix = ".debug"
+            buildConfigField("boolean", "MOCK_FEED", providers.gradleProperty("mockFeed").orElse("false").get().toBoolean().toString())
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
+    }
+
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+
+    testOptions {
+        unitTests.isIncludeAndroidResources = false
+    }
+
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+}
+
+dependencies {
+    val composeBom = platform("androidx.compose:compose-bom:2025.08.01")
+    implementation(composeBom)
+    androidTestImplementation(composeBom)
+
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.compose.material3:material3:1.4.0")
+    implementation("androidx.compose.material:material-icons-extended")
+    implementation("androidx.activity:activity-compose:1.9.3")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    implementation("androidx.datastore:datastore-preferences:1.2.1")
+    implementation("com.squareup.okhttp3:okhttp:5.3.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+
+    debugImplementation("androidx.compose.ui:ui-tooling")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
+
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
+    testImplementation("com.squareup.okhttp3:mockwebserver:5.3.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
+
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+}

@@ -1,0 +1,4 @@
+[
+  {"vehicleid":41405,"etiqueta":"T10405","ruta_sae":13278,"ruta_extraida":"S43","destino_limpio":"San Mateo","distancia":2594,"labeltiempo":"Entre 4 min. y 7 min. a: 2Km","lasttime":"08:18:07 AM","posicion":8854,"ocupacion_bus":""},
+  {"vehicleid":42418,"etiqueta":"M10418","ruta_sae":13278,"ruta_extraida":"S43","destino_limpio":"San Mateo","distancia":6544,"labeltiempo":"Entre 10 min. y 13 min. a: 6Km","lasttime":"08:18:02 AM","posicion":4904,"ocupacion_bus":"MEDIO"}
+]

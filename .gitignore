@@ -1,0 +1,16 @@
+android/.gradle/
+android/**/build/
+android/local.properties
+android/captures/
+android/.idea/
+android/*.iml
+*.apk
+.DS_Store
+feed.local.properties
+.env
+.env.*
+__pycache__/
+*.py[cod]
+android/.kotlin/
+*.jks
+*.keystore
