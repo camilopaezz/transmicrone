@@ -7,6 +7,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.res.stringResource
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.SnackbarDuration
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -41,7 +47,21 @@ class MainActivity : ComponentActivity() {
         setContent {
             TransmicroneTheme {
                 val state by vm.state.collectAsStateWithLifecycle()
-                BackHandler(enabled = state.screen != Screen.HOME) { vm.goHome() }
+                val snackbarHostState = remember { SnackbarHostState() }
+                val deletedMessage = state.pendingDeletion?.let { stringResource(R.string.manage_deleted_message, it.displayName) }
+                val undoLabel = stringResource(R.string.manage_undo)
+                LaunchedEffect(state.pendingDeletion?.boardId) {
+                    val deleted = state.pendingDeletion ?: return@LaunchedEffect
+                    snackbarHostState.currentSnackbarData?.dismiss()
+                    val result = snackbarHostState.showSnackbar(deletedMessage.orEmpty(), undoLabel,
+                        withDismissAction = true, duration = SnackbarDuration.Long)
+                    if (result == SnackbarResult.ActionPerformed) vm.undoDeleteBoard(deleted.boardId)
+                    else vm.dismissDeletedBoard(deleted.boardId)
+                }
+                BackHandler(enabled = state.screen != Screen.HOME) {
+                    if (state.screen == Screen.SETUP && state.setupPlace != null) vm.changeSetupPlace()
+                    else vm.goHome()
+                }
                 when (state.screen) {
                     Screen.HOME -> HomeScreen(
                         boards = state.boards,
@@ -51,6 +71,7 @@ class MainActivity : ComponentActivity() {
                         onManage = vm::openManage,
                         onRefresh = vm::manualRefresh,
                         loadingBoards = !state.boardsReady,
+                        snackbarHostState = snackbarHostState,
                     )
                     Screen.SETUP -> SetupScreen(
                         query = state.setupQuery,
@@ -64,6 +85,9 @@ class MainActivity : ComponentActivity() {
                         onToggle = vm::toggleServicio,
                         onSave = vm::saveSetup,
                         onBack = vm::goHome,
+                        isEditing = state.editingBoardId != null,
+                        onChangePlace = vm::changeSetupPlace,
+                        snackbarHostState = snackbarHostState,
                     )
                     Screen.MANAGE -> ManageScreen(
                         boards = state.boards,
@@ -71,6 +95,8 @@ class MainActivity : ComponentActivity() {
                         onEdit = { vm.openSetup(it) },
                         onDelete = vm::deleteBoard,
                         onMove = vm::moveBoard,
+                        onAdd = { vm.openSetup(null) },
+                        snackbarHostState = snackbarHostState,
                     )
                 }
             }

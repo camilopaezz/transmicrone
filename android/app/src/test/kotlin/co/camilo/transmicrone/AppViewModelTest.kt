@@ -26,6 +26,7 @@ import androidx.lifecycle.ViewModelStore
 import co.camilo.transmicrone.ui.AppViewModel
 import co.camilo.transmicrone.ui.Freshness
 import co.camilo.transmicrone.ui.Screen
+import co.camilo.transmicrone.ui.key
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -207,6 +208,113 @@ class AppViewModelTest {
         val failed = vm.state.value.boards.single().freshness as Freshness.FailedCached
         assertEquals(FailureKind.HOST_REJECTED, failed.kind)
         assertEquals("E48", vm.state.value.boards.single().arrivals.single().painted)
+    }
+
+    @Test
+    fun editedBoardKeepsDraftSelectionWhenReturningToSamePlace() = vmTest {
+        val place = leonPlace().copy(servicios = leonPlace().servicios + ServicioOption("S48", "San Mateo", listOf(12), null))
+        val vm = viewModel(ScriptedFeed(), MemoryBoards(listOf(leonBoard())), catalog = FakeCatalog(listOf(place)))
+        runCurrent()
+        vm.openSetup("leon")
+        vm.toggleServicio(place.servicios.last().key())
+        val selection = vm.state.value.setupSelected
+
+        vm.changeSetupPlace()
+        vm.onSearch("leo")
+        vm.onSearch("leon")
+        runCurrent()
+        assertEquals(null, vm.state.value.setupPlace)
+        vm.pickPlace(place)
+
+        assertEquals(selection, vm.state.value.setupSelected)
+        assertEquals("leon", vm.state.value.editingBoardId)
+        vm.saveSetup()
+        runCurrent()
+        assertEquals(listOf("E48", "S48"), vm.state.value.boards.single().board.servicios.map { it.painted })
+    }
+
+    @Test
+    fun newBoardPreservesSelectionDuringSearchButResetsWhenDifferentPlaceIsChosen() = vmTest {
+        val vm = viewModel(ScriptedFeed(), MemoryBoards())
+        runCurrent()
+        vm.openSetup()
+        vm.pickPlace(leonPlace())
+        vm.toggleServicio(leonPlace().servicios.single().key())
+        val selection = vm.state.value.setupSelected
+        vm.changeSetupPlace()
+        vm.onSearch("")
+        vm.onSearch("leon")
+        runCurrent()
+        vm.pickPlace(leonPlace())
+        assertEquals(selection, vm.state.value.setupSelected)
+
+        vm.changeSetupPlace()
+        vm.pickPlace(ricaurtePlace())
+        assertTrue(vm.state.value.setupSelected.isEmpty())
+        vm.toggleServicio(ricaurtePlace().servicios.single().key())
+        vm.changeSetupPlace()
+        vm.pickPlace(leonPlace())
+        assertTrue(vm.state.value.setupSelected.isEmpty())
+    }
+
+    @Test
+    fun openingNewSetupDoesNotRestoreAbandonedDraft() = vmTest {
+        val vm = viewModel(ScriptedFeed(), MemoryBoards())
+        runCurrent()
+        vm.openSetup()
+        vm.pickPlace(leonPlace())
+        vm.toggleServicio(leonPlace().servicios.single().key())
+        vm.goHome()
+        vm.openSetup()
+        vm.pickPlace(leonPlace())
+        assertTrue(vm.state.value.setupSelected.isEmpty())
+    }
+
+    @Test
+    fun immediateRetryAfterManualFailureBypassesThrottleAndIgnoresInFlightTaps() = vmTest {
+        val feed = ScriptedFeed()
+        feed.enqueue(0, FetchResult.Success(listOf(arrival("E48", "Entre 2 y 4 min")), clock.now()))
+        feed.enqueue(0, FetchResult.Failure(FailureKind.TIMEOUT, null))
+        feed.enqueue(1_000, FetchResult.Success(listOf(arrival("E48", "Llegando")), clock.now()))
+        val vm = viewModel(feed, MemoryBoards(listOf(leonBoard())))
+        runCurrent()
+        vm.setStarted(true)
+        runCurrent()
+        vm.manualRefresh()
+        runCurrent()
+        assertTrue(vm.state.value.boards.single().freshness is Freshness.FailedCached)
+
+        vm.manualRefresh()
+        vm.manualRefresh()
+        runCurrent()
+        vm.manualRefresh()
+        runCurrent()
+        assertEquals(3, feed.calls.size)
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertTrue(vm.state.value.boards.single().freshness is Freshness.Updated)
+        vm.manualRefresh()
+        runCurrent()
+        assertEquals(3, feed.calls.size)
+    }
+
+    @Test
+    fun immediateRetryWithoutCacheBypassesThrottle() = vmTest {
+        val feed = ScriptedFeed()
+        feed.enqueue(0, FetchResult.Failure(FailureKind.TIMEOUT, null))
+        feed.enqueue(0, FetchResult.Failure(FailureKind.HOST_REJECTED, null))
+        feed.enqueue(0, FetchResult.Empty(clock.now()))
+        val vm = viewModel(feed, MemoryBoards(listOf(leonBoard())))
+        runCurrent()
+        vm.setStarted(true)
+        runCurrent()
+        vm.manualRefresh()
+        runCurrent()
+        assertTrue(vm.state.value.boards.single().freshness is Freshness.Failed)
+        vm.manualRefresh()
+        runCurrent()
+        assertEquals(3, feed.calls.size)
+        assertTrue(vm.state.value.boards.single().freshness is Freshness.Empty)
     }
 
     private fun viewModel(

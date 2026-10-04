@@ -69,15 +69,13 @@ JDK 21. No new SDK licenses accepted. No commit.
 - `:app:lintDebug` SUCCESS, 0 errors, 17 warnings (dependency/targetSdk/unused resources)
 - `:app:assembleDebug` SUCCESS — `android/app/build/outputs/apk/debug/app-debug.apk`
 - `:app:connectedDebugAndroidTest` SUCCESS on emulator-5554 Daily_API35, 11 tests, including stale vehicle reports, packaged catalog and installation-ID persistence regressions
-- Screenshots: `android/screenshots/empty-home.png`, `android/screenshots/setup.png`
+- Current empty-state screenshot: `android/screenshots/empty-home.png`
 - Initial live Bodega POSTs and health checks returned 403. Adding the newly required installation `uuid` restored arrivals access on 2026-10-02. Host POST returned 200 with 24 service rows; agent-device verified S43 to San Mateo at Ricaurte NQS, "Entre 5 y 7 min", "Ocupación desconocida", and an updated timestamp.
 - Agent-device verification completed search → multi-select → save for León XIII with E48/K43 and Ricaurte NQS with S43/S48. Swiping, tabs, previous/next arrows, opening edit with preserved selections, saving edits, and reopening the last-used board passed.
 - Search initially crashed with `FileNotFoundException: catalog.json.gz`, revealing the previous app's Settings screen. The asset loader now reads the JSON name produced by Android's asset merger. The regression test failed before this fix and passed afterward.
 - JVM tests, lint, debug assembly, and all seven device tests passed after the catalog-loader, theme, and UUID-header fixes.
 - Before the UUID fix, live refresh showed "el servidor rechazó la consulta". After the fix, live refresh succeeded. The UUID remained identical across app close/reopen, and arrivals refreshed successfully after reopening. Failure with a real populated cache remains unverified.
-- Screenshots from this walkthrough: `screenshots/agent-device-ricaurte.png`, `screenshots/agent-device-edit-leon.png`.
 - The UI refresh adds a dedicated saved-board loading state, so reopening no longer presents an empty-board prompt before persistence finishes loading.
-- Live screenshot: `screenshots/agent-device-live-ricaurte.png`.
 - TalkBack on a device and large text were not run
 
 The PC tools were updated for the same installation-header requirement. `python3 scripts/eta.py S43 TM0069 -n 1` succeeded with seven live vehicles and three nearby results. See `docs/android-data-validation.md` for the correction to the earlier access-policy hypothesis.

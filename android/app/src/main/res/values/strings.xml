@@ -9,7 +9,6 @@
     <string name="manage_boards">Tableros</string>
     <string name="delete_board">Eliminar tablero</string>
     <string name="save_board">Guardar tablero</string>
-    <string name="search_place">Buscar estación o paradero</string>
     <string name="search_hint">Nombre del lugar</string>
     <string name="kind_estacion">Estación</string>
     <string name="kind_paradero">Paradero</string>
@@ -18,7 +17,6 @@
     <string name="need_servicio">Elige al menos un servicio.</string>
     <string name="previous_board">Tablero anterior</string>
     <string name="next_board">Tablero siguiente</string>
-    <string name="refresh">Actualizar</string>
     <string name="freshness_updating">Actualizando…</string>
     <string name="freshness_updated">Actualizado %1$s</string>
     <string name="freshness_less_than_minute">hace menos de un minuto</string>
@@ -48,10 +46,8 @@
     <string name="back">Atrás</string>
     <string name="unofficial_notice">Fuente no oficial. Las frases de llegada no son un reloj.</string>
     <string name="estimate_label">Estimación del servicio, no un bus identificado</string>
-    <string name="select_place_first">Elige un lugar</string>
     <string name="confirm_delete">¿Eliminar este tablero?</string>
-    <string name="watching_arrivals">Llegadas de tus servicios</string>
-    <string name="empty_home_headline">Tu próximo bus,\na un vistazo.</string>
+    <string name="empty_home_headline">Tu próximo bus, a un vistazo.</string>
     <string name="loading_boards">Cargando tus tableros…</string>
     <string name="destination_prefix">Hacia</string>
     <string name="unknown_destination">Destino sin información</string>
@@ -59,25 +55,20 @@
     <string name="choose_services_title">Elegir servicios</string>
     <string name="setup_step_place">Paso 1 de 2</string>
     <string name="setup_place_title">¿Dónde vas a subir?</string>
-    <string name="setup_place_body">Busca una estación o un paradero.</string>
     <string name="clear_search">Borrar búsqueda</string>
     <string name="search_example">Por ejemplo, León XIII o Ricaurte</string>
     <string name="setup_step_services">Paso 2 de 2</string>
-    <string name="setup_services_title">Tus alternativas</string>
     <string name="setup_services_body">Elige los servicios que tomarías. Los verás juntos en tu tablero.</string>
     <string name="your_boards">Tus tableros</string>
-    <string name="manage_title">A tu manera</string>
-    <string name="manage_body">En las opciones de cada tablero puedes editar sus servicios, cambiar el orden o eliminarlo.</string>
-    <string name="selected_services_count">%1$d servicios seleccionados</string>
     <string name="board_options">Opciones de %1$s</string>
-    <string name="delete_board_body">%1$s se quitará de tus lugares guardados.</string>
     <string name="delete_action">Eliminar</string>
     <string name="vehicle_estimate_label">Estimación reportada para un bus</string>
-    <string name="report_time_unknown">Hora del reporte no disponible</string>
-    <string name="report_age_seconds">hace %1$d s</string>
     <string name="report_age_minutes">hace %1$d min</string>
-    <string name="vehicle_report">Reporte %1$s · %2$s</string>
     <string name="old_vehicle_report">Reporte antiguo</string>
     <string name="last_vehicle_estimate">Última estimación: %1$s</string>
     <string name="bus_label">Bus %1$s</string>
+    <string name="retry_refresh">Reintentar</string>
+    <string name="freshness_updating_cached">Actualizando… Mostrando datos anteriores (%1$s)</string>
+    <string name="search_stations">Estaciones</string>
+    <string name="search_stops">Paraderos</string>
 </resources>

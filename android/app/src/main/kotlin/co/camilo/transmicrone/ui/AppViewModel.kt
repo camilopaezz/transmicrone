@@ -25,10 +25,21 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.time.Instant
 
 enum class Screen { HOME, SETUP, MANAGE }
+
+data class DeletedBoard(val boardId: String, val displayName: String)
+
+private data class BoardDeletion(
+    val board: Board,
+    val originalOrder: List<String>,
+    val previousLastBoardId: String?,
+    val lastBoardIdAfterDelete: String?,
+)
 
 data class BoardView(
     val board: Board,
@@ -62,6 +73,7 @@ data class UiState(
     val setupSelected: Set<String> = emptySet(),
     val editingBoardId: String? = null,
     val catalogReady: Boolean = false,
+    val pendingDeletion: DeletedBoard? = null,
 )
 
 class AppViewModel(
@@ -77,9 +89,13 @@ class AppViewModel(
     private var loop: Job? = null
     private var refreshJob: Job? = null
     private var searchJob: Job? = null
+    // Search hides the chosen place, but its selection remains a draft until another place is chosen.
+    private var setupDraftPlaceId: String? = null
     private var fetchGeneration: Long = 0
     private var lastPersistedId: String? = null
     private var lastManual: Instant = Instant.EPOCH
+    private val boardMutation = Mutex()
+    private var boardDeletion: BoardDeletion? = null
 
     init {
         viewModelScope.launch {
@@ -114,6 +130,7 @@ class AppViewModel(
 
     fun openSetup(editId: String? = null) {
         val editing = editId?.let { id -> _state.value.boards.find { it.board.boardId == id }?.board }
+        setupDraftPlaceId = editing?.placeId
         _state.update {
             it.copy(
                 screen = Screen.SETUP,
@@ -144,7 +161,6 @@ class AppViewModel(
             it.copy(
                 setupQuery = query,
                 setupPlace = null,
-                setupSelected = emptySet(),
                 setupSearching = searching,
                 setupResults = if (searching) it.setupResults else emptyList(),
             )
@@ -167,14 +183,23 @@ class AppViewModel(
 
     fun pickPlace(place: Place) {
         searchJob?.cancel()
+        val samePlace = setupDraftPlaceId == place.placeId
+        setupDraftPlaceId = place.placeId
         _state.update {
             it.copy(
                 setupPlace = place,
-                setupSelected = emptySet(),
+                setupSelected = if (samePlace) it.setupSelected else emptySet(),
                 setupResults = emptyList(),
                 setupSearching = false,
             )
         }
+    }
+
+    fun changeSetupPlace() {
+        val st = _state.value
+        val query = st.setupQuery.ifBlank { st.setupPlace?.name.orEmpty() }
+        // The same board is edited if the user chooses a different place; saving replaces it.
+        onSearch(query)
     }
 
     fun toggleServicio(optionKey: String) {
@@ -209,21 +234,59 @@ class AppViewModel(
     }
 
     fun deleteBoard(boardId: String) {
-        viewModelScope.launch { boards.delete(boardId) }
+        viewModelScope.launch {
+            boardMutation.withLock {
+                val before = boards.snapshot()
+                val deleted = before.boards.find { it.boardId == boardId } ?: return@withLock
+                boards.delete(boardId)
+                val after = boards.snapshot()
+                boardDeletion = BoardDeletion(deleted, before.boards.map { it.boardId }, before.lastBoardId, after.lastBoardId)
+                _state.update { it.copy(pendingDeletion = DeletedBoard(deleted.boardId, deleted.displayName)) }
+            }
+        }
+    }
+
+    fun undoDeleteBoard(boardId: String) {
+        viewModelScope.launch {
+            boardMutation.withLock {
+                val deleted = boardDeletion?.takeIf { it.board.boardId == boardId } ?: return@withLock
+                boards.restoreDeleted(deleted.board, deleted.originalOrder, deleted.previousLastBoardId, deleted.lastBoardIdAfterDelete)
+                boardDeletion = null
+                _state.update { it.copy(pendingDeletion = null) }
+            }
+        }
+    }
+
+    fun dismissDeletedBoard(boardId: String) {
+        viewModelScope.launch {
+            boardMutation.withLock {
+                if (boardDeletion?.board?.boardId != boardId) return@withLock
+                boardDeletion = null
+                _state.update { it.copy(pendingDeletion = null) }
+            }
+        }
     }
 
     fun moveBoard(boardId: String, delta: Int) {
-        val ids = _state.value.boards.map { it.board.boardId }.toMutableList()
-        val i = ids.indexOf(boardId)
-        val j = i + delta
-        if (i < 0 || j !in ids.indices) return
-        ids[i] = ids[j].also { ids[j] = ids[i] }
-        viewModelScope.launch { boards.reorder(ids) }
+        viewModelScope.launch {
+            boardMutation.withLock {
+                val ids = boards.snapshot().boards.map { it.boardId }.toMutableList()
+                val i = ids.indexOf(boardId)
+                val j = i + delta
+                if (i < 0 || j !in ids.indices) return@withLock
+                ids[i] = ids[j].also { ids[j] = ids[i] }
+                boards.reorder(ids)
+            }
+        }
     }
 
     fun manualRefresh() {
+        val st = _state.value
+        if (!st.started || st.screen != Screen.HOME || refreshJob?.isActive == true) return
+        val visible = st.boards.getOrNull(st.pageIndex) ?: return
+        val retryingFailure = visible.freshness is Freshness.Failed || visible.freshness is Freshness.FailedCached
         val now = clock.now()
-        if (now.toEpochMilli() - lastManual.toEpochMilli() < BuildConfig.MANUAL_REFRESH_THROTTLE_MS) return
+        if (!retryingFailure && now.toEpochMilli() - lastManual.toEpochMilli() < BuildConfig.MANUAL_REFRESH_THROTTLE_MS) return
         lastManual = now
         refreshVisible()
     }

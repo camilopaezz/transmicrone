@@ -28,6 +28,15 @@ interface BoardRepository {
     suspend fun delete(boardId: String)
     suspend fun reorder(boardIds: List<String>)
     suspend fun setLastBoard(boardId: String?)
+    suspend fun restoreDeleted(board: Board, originalOrder: List<String>, previousLastBoardId: String?, lastBoardIdAfterDelete: String?) {
+        val current = snapshot()
+        if (current.boards.any { it.boardId == board.boardId }) return
+        val restored = current.restoringDeleted(board, originalOrder, previousLastBoardId, lastBoardIdAfterDelete)
+        save(board)
+        val ids = restored.boards.map { it.boardId }
+        reorder(ids + snapshot().boards.map { it.boardId }.filterNot { it in ids })
+        setLastBoard(restored.lastBoardId)
+    }
     fun newId(): String = UUID.randomUUID().toString()
 }
 
@@ -44,6 +53,29 @@ internal fun BoardSnapshot.saving(cleaned: Board): BoardSnapshot {
         boards + cleaned
     }
     return copy(boards = next, lastBoardId = cleaned.boardId)
+}
+
+/** Insert only the deleted board into the latest order, retaining subsequent edits and additions. */
+internal fun BoardSnapshot.restoringDeleted(
+    board: Board,
+    originalOrder: List<String>,
+    previousLastBoardId: String?,
+    lastBoardIdAfterDelete: String?,
+): BoardSnapshot {
+    if (boards.any { it.boardId == board.boardId }) return this
+    val originalIndex = originalOrder.indexOf(board.boardId).coerceAtLeast(0)
+    val following = originalOrder.drop(originalIndex + 1).firstOrNull { id -> boards.any { it.boardId == id } }
+    val preceding = originalOrder.take(originalIndex).lastOrNull { id -> boards.any { it.boardId == id } }
+    val insertAt = when {
+        following != null -> boards.indexOfFirst { it.boardId == following }
+        preceding != null -> boards.indexOfFirst { it.boardId == preceding } + 1
+        else -> originalIndex.coerceAtMost(boards.size)
+    }
+    val restored = boards.toMutableList().also { it.add(insertAt, board) }
+    val selected = if (lastBoardId == lastBoardIdAfterDelete && restored.any { it.boardId == previousLastBoardId }) {
+        previousLastBoardId
+    } else lastBoardId
+    return copy(boards = restored, lastBoardId = selected)
 }
 
 class DataStoreBoardRepository(
@@ -90,6 +122,10 @@ class DataStoreBoardRepository(
 
     override suspend fun setLastBoard(boardId: String?) {
         mutate { it.copy(lastBoardId = boardId) }
+    }
+
+    override suspend fun restoreDeleted(board: Board, originalOrder: List<String>, previousLastBoardId: String?, lastBoardIdAfterDelete: String?) {
+        mutate { it.restoringDeleted(board, originalOrder, previousLastBoardId, lastBoardIdAfterDelete) }
     }
 
     private suspend fun mutate(block: (BoardSnapshot) -> BoardSnapshot) {

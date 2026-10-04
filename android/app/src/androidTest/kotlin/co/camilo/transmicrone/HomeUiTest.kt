@@ -132,7 +132,7 @@ class HomeUiTest {
         compose.onNodeWithText("Ocupación desconocida", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithText("Tableros").assertIsDisplayed()
         val rowName = compose.onAllNodesWithContentDescription(
-            "E48 a CAD, Entre 2 y 4 min, 200 mts, Ocupación desconocida",
+            "E48 a CAD, Entre 2 y 4 min, 200 m, Ocupación desconocida",
             substring = true,
         ).fetchSemanticsNodes()
         assertTrue(rowName.isNotEmpty())

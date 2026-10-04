@@ -1,0 +1,7 @@
+<resources>
+    <string name="manage_empty_title">Aún no tienes tableros</string>
+    <string name="manage_empty_body">Agrega un tablero para ver las llegadas de tus servicios en una estación o paradero.</string>
+    <string name="manage_delete_body">Se eliminará el tablero «%1$s». Podrás deshacerlo durante unos segundos en el aviso de confirmación.</string>
+    <string name="manage_deleted_message">Tablero «%1$s» eliminado</string>
+    <string name="manage_undo">Deshacer</string>
+</resources>

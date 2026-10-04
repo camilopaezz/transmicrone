@@ -25,6 +25,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import co.camilo.transmicrone.R
 import co.camilo.transmicrone.domain.Arrival
 import co.camilo.transmicrone.domain.Occupancy
@@ -33,13 +34,16 @@ import co.camilo.transmicrone.domain.Occupancy
 fun ArrivalList(
     arrivals: List<Arrival>, emptyMessage: String, modifier: Modifier = Modifier,
     state: LazyListState = rememberLazyListState(), header: (@Composable () -> Unit)? = null,
+    bottomContentPadding: Dp = 104.dp,
+    colorForArrival: (Arrival) -> String? = { it.colorRuta },
 ) {
     val now by produceState(Instant.now()) {
         while (true) { delay(5_000); value = Instant.now() }
     }
+    val keys = remember(arrivals) { arrivalListKeys(arrivals) }
     LazyColumn(
         state = state,
-        modifier = modifier, contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = if (header == null) 8.dp else 0.dp, bottom = 104.dp),
+        modifier = modifier, contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = if (header == null) 8.dp else 0.dp, bottom = bottomContentPadding),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         header?.let { item(key = "station-header", contentType = "header") { it() } }
@@ -51,8 +55,8 @@ fun ArrivalList(
                 }
             }
         }
-        itemsIndexed(arrivals, key = { index, item -> "${item.painted}-${item.destino}-${item.routeId}-${item.nodo}-$index" }) { _, arrival ->
-            ArrivalRow(arrival, now)
+        itemsIndexed(arrivals, key = { index, _ -> keys[index] }) { _, arrival ->
+            ArrivalRow(arrival, now, colorForArrival(arrival))
         }
         item {
             Text(stringResource(R.string.unofficial_notice), style = MaterialTheme.typography.bodySmall,
@@ -62,34 +66,39 @@ fun ArrivalList(
 }
 
 @Composable
-fun ArrivalRow(arrival: Arrival, now: Instant = Instant.now()) {
+fun ArrivalRow(arrival: Arrival, now: Instant = Instant.now(), routeColor: String? = arrival.colorRuta) {
     val occupancy = occupancyLabel(arrival.occupancy)
+    val display = arrivalDisplay(arrival)
+    val phrase = display.phrase.ifBlank { stringResource(R.string.unknown_arrival_time) }
+    val destination = arrival.destino.ifBlank { stringResource(R.string.unknown_destination) }
     val vehicle = arrival.identity == ArrivalIdentity.VEHICLE
     val estimate = stringResource(if (vehicle) R.string.vehicle_estimate_label else R.string.estimate_label)
     val age = arrival.sourceReportedAt?.let { Duration.between(it, now).seconds.coerceAtLeast(0) }
     val stale = vehicle && age != null && age > 120
     val staleLabel = stringResource(R.string.old_vehicle_report)
-    val desc = listOfNotNull("${arrival.painted} a ${arrival.destino}", arrival.label,
-        if (stale) staleLabel else null, arrival.etaPhrase, arrival.distanceLabel, occupancy, estimate).joinToString(", ")
+    val desc = listOfNotNull("${arrival.painted} a $destination", arrival.label?.let { stringResource(R.string.bus_label, it) },
+        if (stale) staleLabel else null,
+        if (stale) stringResource(R.string.last_vehicle_estimate, phrase) else phrase,
+        display.distance, occupancy, estimate).joinToString(", ")
     Surface(
         modifier = Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = desc },
         shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerHigh,
     ) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                ServicioBadge(arrival.painted, arrival.colorRuta)
+                ServicioBadge(arrival.painted, routeColor)
                 Column(Modifier.weight(1f)) {
                     Text(stringResource(R.string.destination_prefix), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(arrival.destino.ifBlank { stringResource(R.string.unknown_destination) }, style = MaterialTheme.typography.titleLarge)
+                    Text(destination, style = MaterialTheme.typography.titleMedium)
                 }
             }
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(if (stale) staleLabel else arrival.etaPhrase.ifBlank { stringResource(R.string.unknown_arrival_time) }, style = MaterialTheme.typography.headlineSmall)
-                if (stale) Text(stringResource(R.string.last_vehicle_estimate, arrival.etaPhrase), style = MaterialTheme.typography.bodyMedium)
+                Text(if (stale) staleLabel else phrase, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                if (stale) Text(stringResource(R.string.last_vehicle_estimate, phrase), style = MaterialTheme.typography.bodyMedium)
                 if (vehicle) {
-                    Text(listOfNotNull(arrival.label?.let { stringResource(R.string.bus_label, it) }, arrival.distanceLabel).joinToString(" · "),
+                    Text(listOfNotNull(arrival.label?.let { stringResource(R.string.bus_label, it) }, display.distance).joinToString(" · "),
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else arrival.distanceLabel?.let {
+                } else display.distance?.let {
                     Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
