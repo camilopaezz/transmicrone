@@ -5,6 +5,9 @@
     <string name="empty_boards_title">Sin tableros</string>
     <string name="empty_boards_body">Busca una estación o un paradero y elige los servicios que quieres ver juntos.</string>
     <string name="add_board">Agregar tablero</string>
+    <string name="add_board_short">Agregar</string>
+    <string name="swipe_board_hint">Desliza para cambiar de tablero</string>
+    <string name="board_page_description">Tablero %1$d de %2$d</string>
     <string name="edit_board">Editar tablero</string>
     <string name="manage_boards">Tableros</string>
     <string name="delete_board">Eliminar tablero</string>

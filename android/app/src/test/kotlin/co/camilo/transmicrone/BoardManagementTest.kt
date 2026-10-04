@@ -11,6 +11,7 @@ import co.camilo.transmicrone.data.local.BoardRepository
 import co.camilo.transmicrone.data.local.BoardSnapshot
 import co.camilo.transmicrone.data.local.restoringDeleted
 import co.camilo.transmicrone.data.local.saving
+import co.camilo.transmicrone.data.local.deleting
 import co.camilo.transmicrone.domain.*
 import co.camilo.transmicrone.ui.AppViewModel
 import kotlinx.coroutines.Dispatchers
@@ -27,6 +28,19 @@ import java.time.Instant
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class BoardManagementTest {
+    @Test
+    fun deletingSelectedBoardChoosesClampedNeighborAndUndoRestoresIt() {
+        val initial = BoardSnapshot(listOf(board("a"), board("b"), board("c")), "b")
+        val middle = initial.deleting("b")
+        assertEquals("c", middle.lastBoardId)
+        assertEquals("b", middle.restoringDeleted(board("b"), listOf("a", "b", "c"), "b", "c").lastBoardId)
+        val last = initial.copy(lastBoardId = "c").deleting("c")
+        assertEquals("b", last.lastBoardId)
+        assertEquals("c", last.restoringDeleted(board("c"), listOf("a", "b", "c"), "c", "b").lastBoardId)
+        assertNull(BoardSnapshot(listOf(board("c")), "c").deleting("c").lastBoardId)
+        assertEquals("b", initial.deleting("a").lastBoardId)
+    }
+
     @Test
     fun restoreReturnsDeletedBoardToItsPositionAndSelection() {
         val deleted = board("b")
@@ -110,6 +124,26 @@ class BoardManagementTest {
         assertNull(vm.state.value.pendingDeletion)
     }
 
+    @Test
+    fun deletingEditedFinalBoardReturnsEmptyHomeAndUndoRestoresSelection() = withVm { vm, repository ->
+        vm.deleteBoard("a")
+        vm.deleteBoard("b")
+        runCurrent()
+        vm.openSetup("c")
+        assertEquals(co.camilo.transmicrone.ui.Screen.SETUP, vm.state.value.screen)
+        vm.deleteBoard("c")
+        runCurrent()
+        assertEquals(co.camilo.transmicrone.ui.Screen.HOME, vm.state.value.screen)
+        assertNull(vm.state.value.editingBoardId)
+        assertTrue(vm.state.value.boards.isEmpty())
+        assertEquals("c", vm.state.value.pendingDeletion?.boardId)
+        vm.undoDeleteBoard("c")
+        runCurrent()
+        assertEquals(listOf("c"), vm.state.value.boards.map { it.board.boardId })
+        assertEquals("c", repository.snapshot().lastBoardId)
+        assertEquals(co.camilo.transmicrone.ui.Screen.HOME, vm.state.value.screen)
+    }
+
     private fun withVm(body: suspend kotlinx.coroutines.test.TestScope.(AppViewModel, ManagementBoards) -> Unit) {
         val dispatcher = StandardTestDispatcher()
         Dispatchers.setMain(dispatcher)
@@ -159,12 +193,7 @@ private class ManagementBoards(initial: BoardSnapshot) : BoardRepository {
     override fun observe() = state
     override suspend fun snapshot() = state.value
     override suspend fun save(board: Board) { state.value = state.value.saving(board) }
-    override suspend fun delete(boardId: String) {
-        val current = state.value
-        val remaining = current.boards.filterNot { it.boardId == boardId }
-        state.value = current.copy(boards = remaining,
-            lastBoardId = if (current.lastBoardId == boardId) remaining.firstOrNull()?.boardId else current.lastBoardId)
-    }
+    override suspend fun delete(boardId: String) { state.value = state.value.deleting(boardId) }
     override suspend fun reorder(boardIds: List<String>) {
         val byId = state.value.boards.associateBy { it.boardId }
         state.value = state.value.copy(boards = boardIds.mapNotNull { byId[it] })

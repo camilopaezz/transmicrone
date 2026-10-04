@@ -50,7 +50,8 @@ Android's asset merger expands this gzip source into `assets/catalog.json` in th
 1. Agregar tablero.
 2. Search an estación or paradero by name.
 3. Multi-select painted servicios that serve that place.
-4. Swipe, tabs, or previous/next to change boards.
+4. Swipe or tap board chips to change boards. Tiny dots and a brief swipe hint indicate multiple boards.
+5. Use the pencil icon to edit the current board or delete it with confirmation and undo. Add another board with the trailing “+ Agregar” chip.
 
 The list is one combined phrase list, approximately soonest first. `labeltiempo` is shown as returned. Empty occupancy is “Ocupación desconocida”, never “Vacío”. A failed refresh keeps the last cache and names the failure (rejected host, network, timeout, …), distinct from an in-progress refresh. Disk cache after process restart is shown as old until this process gets a successful fetch. HTTP 403 is a host failure, not “no buses”. Station boards query `/getServicios` for every selected GTFS route variant, combine identified buses, and show distance, fleet label, and source report age. Stop boards retain `/paradero/buses` service estimates.
 

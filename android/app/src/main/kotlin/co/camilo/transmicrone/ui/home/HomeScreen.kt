@@ -1,5 +1,11 @@
 package co.camilo.transmicrone.ui.home
 
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
+import androidx.compose.runtime.saveable.rememberSaveable
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -11,8 +17,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -21,7 +25,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
@@ -50,9 +53,10 @@ import co.camilo.transmicrone.ui.theme.TransmicroneBrandStyle
 @Composable
 fun HomeScreen(
     boards: List<BoardView>, pageIndex: Int,
-    onPage: (Int) -> Unit, onAdd: () -> Unit, onManage: () -> Unit,
+    onPage: (Int) -> Unit, onAdd: () -> Unit, onEdit: (String) -> Unit,
     onRefresh: () -> Unit,
     loadingBoards: Boolean = false,
+    swipeHintDismissal: MutableState<Boolean> = rememberSaveable { mutableStateOf(false) },
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
 ) {
     if (loadingBoards) {
@@ -70,17 +74,26 @@ fun HomeScreen(
     val current = boards[index]
     val listStates = boards.map { view -> key(view.board.boardId) { rememberLazyListState() } }
     val currentListState = listStates[index]
-    var addButtonHeight by remember { mutableIntStateOf(0) }
-    val addButtonClearance = maxOf(88.dp, with(LocalDensity.current) { addButtonHeight.toDp() } + 32.dp)
     val windowWidth = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }
     val fontScale = LocalDensity.current.fontScale
     val compactAppBar = fontScale > 1.2f || windowWidth < 400.dp
-    val addButtonExpanded by remember(currentListState) { derivedStateOf { !currentListState.canScrollBackward } }
     val headerGone by remember(currentListState) { derivedStateOf {
         currentListState.firstVisibleItemIndex > 0 ||
             currentListState.layoutInfo.visibleItemsInfo.firstOrNull()?.let { it.offset < -it.size / 2 } == true
     } }
     val pager = rememberPagerState(initialPage = index, pageCount = { boards.size })
+    var swipeHintDismissed by swipeHintDismissal
+    val dragging by pager.interactionSource.collectIsDraggedAsState()
+    LaunchedEffect(dragging) {
+        if (dragging) swipeHintDismissed = true
+    }
+    LaunchedEffect(boards.size > 1) {
+        if (boards.size > 1) {
+            delay(5000)
+            swipeHintDismissed = true
+        }
+    }
+    val showSwipeHint = boards.size > 1 && !swipeHintDismissed
     LaunchedEffect(index) {
         if (pager.currentPage != index) pager.animateScrollToPage(index)
     }
@@ -115,48 +128,39 @@ fun HomeScreen(
                     if (!compactAppBar) Icon(Icons.Default.DirectionsBus, null, Modifier.padding(start = 20.dp, end = 12.dp), tint = MaterialTheme.colorScheme.primary)
                 },
                 actions = {
-                    if (compactAppBar) {
-                        IconButton(onClick = onManage) {
-                            Icon(Icons.Default.Dashboard, stringResource(R.string.manage_boards))
-                        }
-                    } else {
-                        TextButton(onClick = onManage, modifier = Modifier.padding(end = 8.dp)) {
-                            Icon(Icons.Default.Dashboard, null, Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text(stringResource(R.string.manage_boards))
-                        }
+                    IconButton(onClick = { boards.getOrNull(pager.currentPage)?.board?.boardId?.let(onEdit) }, modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)) {
+                        Icon(Icons.Default.Edit, stringResource(R.string.edit_board))
                     }
                 },
             )
         },
-        floatingActionButton = {
-            val addBoardLabel = stringResource(R.string.add_board)
-            ExtendedFloatingActionButton(
-                onClick = onAdd,
-                expanded = addButtonExpanded,
-                modifier = Modifier.onSizeChanged { addButtonHeight = it.height }
-                    .semantics { contentDescription = addBoardLabel },
-                icon = { Icon(Icons.Default.Add, null) },
-                text = { Text(addBoardLabel) },
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
-        },
     ) { insets ->
-        Column(Modifier.fillMaxSize().padding(insets).padding(bottom = addButtonClearance)) {
-            if (boards.size > 1) {
-                Row(
-                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    boards.forEachIndexed { i, view ->
+        Column(Modifier.fillMaxSize().padding(insets)) {
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                boards.forEachIndexed { i, view ->
+                    key(view.board.boardId) {
+                        val chipRequester = remember { BringIntoViewRequester() }
+                        LaunchedEffect(i == index) {
+                            if (i == index) chipRequester.bringIntoView()
+                        }
                         FilterChip(
                             selected = i == index, onClick = { onPage(i) },
                             label = { Text(view.board.displayName) },
                             leadingIcon = if (i == index) ({ Icon(Icons.Default.Check, null, Modifier.size(18.dp)) }) else null,
+                            modifier = Modifier.bringIntoViewRequester(chipRequester),
                         )
                     }
                 }
+                val addLabel = stringResource(R.string.add_board)
+                AssistChip(
+                    onClick = onAdd,
+                    label = { Text(stringResource(R.string.add_board_short)) },
+                    leadingIcon = { Icon(Icons.Default.Add, null, Modifier.size(18.dp)) },
+                    modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = addLabel },
+                )
             }
             HorizontalPager(state = pager, modifier = Modifier.weight(1f)) { page ->
                 val view = boards[page]
@@ -190,10 +194,19 @@ fun HomeScreen(
                         }
                         ArrivalList(
                             view.arrivals, empty, Modifier.weight(1f).fillMaxWidth().testTag("arrival-viewport").topFade { fade }, state = listState,
-                            header = { StationHeader(view, page, boards.size, onPage, onRefresh) },
+                            header = { StationHeader(view, page, boards.size, onRefresh) },
                             bottomContentPadding = 24.dp,
                             colorForArrival = { arrival -> routeColor(view, arrival.painted, arrival.routeId) },
                         )
+                    }
+                    if (showSwipeHint) Surface(
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp),
+                        shape = MaterialTheme.shapes.large,
+                        color = MaterialTheme.colorScheme.inverseSurface,
+                        contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                    ) {
+                        Text(stringResource(R.string.swipe_board_hint), Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }
@@ -202,7 +215,7 @@ fun HomeScreen(
 }
 
 @Composable
-private fun StationHeader(view: BoardView, index: Int, boardCount: Int, onPage: (Int) -> Unit, onRefresh: () -> Unit) {
+private fun StationHeader(view: BoardView, index: Int, boardCount: Int, onRefresh: () -> Unit) {
     Column(Modifier.padding(horizontal = 4.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -218,26 +231,30 @@ private fun StationHeader(view: BoardView, index: Int, boardCount: Int, onPage: 
                 }
             }
         }
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            view.board.servicios.forEach { servicio ->
-                val color = parseColor(routeColor(view, servicio.painted, servicio.routeIds.firstOrNull()))
-                    ?: MaterialTheme.colorScheme.primary
-                Surface(shape = CircleShape, color = color) {
-                    Text(servicio.painted, Modifier.padding(horizontal = 12.dp, vertical = 6.dp), style = MaterialTheme.typography.labelLarge,
-                        color = if (color.luminance() > 0.179f) Color.Black else Color.White)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                view.board.servicios.forEach { servicio ->
+                    val color = parseColor(routeColor(view, servicio.painted, servicio.routeIds.firstOrNull()))
+                        ?: MaterialTheme.colorScheme.primary
+                    Surface(shape = CircleShape, color = color) {
+                        Text(servicio.painted, Modifier.padding(horizontal = 12.dp, vertical = 6.dp), style = MaterialTheme.typography.labelLarge,
+                            color = if (color.luminance() > 0.179f) Color.Black else Color.White)
+                    }
                 }
             }
-        }
-    }
-    if (boardCount > 1) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 0.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.End) {
-            IconButton(onClick = { onPage(index - 1) }, enabled = index > 0) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.previous_board))
-            }
-            Text("${index + 1}/${boardCount}", style = MaterialTheme.typography.labelMedium)
-            IconButton(onClick = { onPage(index + 1) }, enabled = index < boardCount - 1) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next_board))
+            if (boardCount > 1) {
+                val activeDotRequester = remember { BringIntoViewRequester() }
+                LaunchedEffect(index) { activeDotRequester.bringIntoView() }
+                val pageDescription = stringResource(R.string.board_page_description, index + 1, boardCount)
+                Row(Modifier.widthIn(max = 80.dp).horizontalScroll(rememberScrollState(), enabled = false)
+                    .semantics { contentDescription = pageDescription }.testTag("board-page-dots"),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    repeat(boardCount) { dot ->
+                        Box(Modifier.width(if (dot == index) 14.dp else 5.dp).height(5.dp)
+                            .then(if (dot == index) Modifier.bringIntoViewRequester(activeDotRequester) else Modifier)
+                            .background(if (dot == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, CircleShape))
+                    }
+                }
             }
         }
     }

@@ -1,90 +1,94 @@
 package co.camilo.transmicrone
 
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.test.assertHeightIsAtLeast
-import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertWidthIsAtLeast
-import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
-import androidx.compose.ui.unit.dp
-import co.camilo.transmicrone.domain.Board
-import co.camilo.transmicrone.domain.PlaceKind
-import co.camilo.transmicrone.domain.SelectedServicio
+import androidx.compose.runtime.*
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.SnackbarDuration
+import kotlinx.coroutines.launch
 import co.camilo.transmicrone.ui.BoardView
-import co.camilo.transmicrone.ui.setup.ManageScreen
+import co.camilo.transmicrone.ui.home.HomeScreen
+import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.createComposeRule
+import co.camilo.transmicrone.domain.*
+import co.camilo.transmicrone.ui.key
+import co.camilo.transmicrone.ui.setup.SetupScreen
 import co.camilo.transmicrone.ui.theme.TransmicroneTheme
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 
 class ManagementUiTest {
     @get:Rule val compose = createComposeRule()
+    private val service = ServicioOption("E48", "CAD", listOf(13266), null)
+    private val place = Place("estacion:TM0101", PlaceKind.ESTACION, "León XIII", "leon xiii", "Soacha", "TM0101", listOf(service))
 
-    private val board = BoardView(Board("synthetic-board", "estacion:TM0101", PlaceKind.ESTACION,
-        "TM0101", "León XIII", "Soacha", listOf(SelectedServicio("E48", "CAD", listOf(13266)))))
-
-    @Test
-    fun tappingBoardOpensEditAndOptionsHaveMinimumTouchArea() {
-        var edited: String? = null
-        compose.setContent {
-            TransmicroneTheme {
-                ManageScreen(listOf(board), onBack = {}, onEdit = { edited = it }, onDelete = {}, onMove = { _, _ -> })
-            }
-        }
-        compose.onNodeWithText("León XIII").performClick()
-        compose.runOnIdle { assertEquals(board.board.boardId, edited) }
-        compose.onNodeWithContentDescription("Opciones de León XIII")
-            .assertIsDisplayed().assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
-    }
-
-    @Test
-    fun deletionNamesBoardAndCancelKeepsItWhileConfirmInvokesDeletion() {
-        val boards = mutableStateOf(listOf(board))
-        var deleted: String? = null
-        var edited: String? = null
-        compose.setContent {
-            TransmicroneTheme {
-                ManageScreen(boards.value, onBack = {}, onEdit = { edited = it },
-                    onDelete = { id -> deleted = id; boards.value = boards.value.filterNot { it.board.boardId == id } },
-                    onMove = { _, _ -> })
-            }
-        }
-        compose.onNodeWithContentDescription("Opciones de León XIII").performClick()
+    @Test fun editDeletionNamesSavedBoardAndRequiresConfirmation() {
+        var deleted = 0
+        compose.setContent { TransmicroneTheme {
+            SetupScreen("", emptyList(), place.copy(name = "Draft station"), setOf(service.key()), true, false,
+                onQuery = {}, onPick = {}, onToggle = {}, onSave = {}, onBack = {},
+                isEditing = true, editingBoardName = "León XIII", onDelete = { deleted++ })
+        } }
         compose.onNodeWithText("Eliminar tablero").performClick()
-        compose.onNodeWithText("¿Eliminar este tablero?").assertIsDisplayed()
         compose.onNodeWithText("Se eliminará el tablero «León XIII». Podrás deshacerlo durante unos segundos en el aviso de confirmación.").assertIsDisplayed()
         compose.onNodeWithText("Cancelar").performClick()
+        compose.runOnIdle { assertEquals(0, deleted) }
         compose.onNodeWithText("¿Eliminar este tablero?").assertDoesNotExist()
-        compose.onNodeWithText("León XIII").assertIsDisplayed()
-        compose.runOnIdle {
-            assertNull(deleted)
-            assertNull(edited)
-            assertEquals(listOf(board), boards.value)
-        }
-        compose.onNodeWithContentDescription("Opciones de León XIII").performClick()
         compose.onNodeWithText("Eliminar tablero").performClick()
         compose.onNodeWithText("Eliminar").performClick()
-        compose.runOnIdle {
-            assertEquals(board.board.boardId, deleted)
-            assertNull(edited)
-            assertEquals(emptyList<BoardView>(), boards.value)
-        }
-        compose.onNodeWithText("Aún no tienes tableros").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(1, deleted) }
     }
 
-    @Test
-    fun emptyManagementHasAddBoardAction() {
-        var added = 0
+    @Test fun missingCatalogPlaceStillAllowsDeletingSavedBoard() {
+        var deleted = 0
+        compose.setContent { TransmicroneTheme {
+            SetupScreen("", emptyList(), null, emptySet(), true, false,
+                onQuery = {}, onPick = {}, onToggle = {}, onSave = {}, onBack = {},
+                isEditing = true, editingBoardName = "Removed station", onDelete = { deleted++ })
+        } }
+        compose.onNodeWithText("Eliminar tablero").assertIsDisplayed().performClick()
+        compose.onNodeWithText("Removed station", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Eliminar").performClick()
+        compose.runOnIdle { assertEquals(1, deleted) }
+        compose.onNodeWithText("Guardar tablero").assertDoesNotExist()
+    }
+
+    @Test fun finalBoardDeletionShowsUndoOnEmptyHomeAndRestoresBoard() {
+        val saved = BoardView(Board("last", place.placeId, place.kind, place.queryParadero, place.name,
+            place.disambiguator, listOf(SelectedServicio(service.painted, service.destino, service.routeIds))))
         compose.setContent {
+            var boards by remember { mutableStateOf(listOf(saved)) }
+            var editing by remember { mutableStateOf(false) }
+            val host = remember { SnackbarHostState() }
+            val scope = rememberCoroutineScope()
             TransmicroneTheme {
-                ManageScreen(emptyList(), onBack = {}, onEdit = {}, onDelete = {}, onMove = { _, _ -> }, onAdd = { added++ })
+                if (editing) SetupScreen("", emptyList(), place, setOf(service.key()), true, false,
+                    onQuery = {}, onPick = {}, onToggle = {}, onSave = {}, onBack = { editing = false },
+                    isEditing = true, editingBoardName = saved.board.displayName,
+                    onDelete = {
+                        boards = emptyList()
+                        editing = false
+                        scope.launch {
+                            if (host.showSnackbar("Tablero eliminado", "Deshacer", duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed) boards = listOf(saved)
+                        }
+                    }, snackbarHostState = host)
+                else HomeScreen(boards, 0, {}, {}, { editing = true }, {}, snackbarHostState = host)
             }
         }
-        compose.onNodeWithText("Aún no tienes tableros").assertIsDisplayed()
-        compose.onNodeWithText("Agregar tablero").assertIsDisplayed().performClick()
-        compose.runOnIdle { assertEquals(1, added) }
+        compose.onNodeWithContentDescription("Editar tablero").performClick()
+        compose.onNodeWithText("Eliminar tablero").performClick()
+        compose.onNodeWithText("Eliminar").performClick()
+        compose.onNodeWithText("Sin tableros").assertIsDisplayed()
+        compose.onNodeWithText("Deshacer").assertIsDisplayed().performClick()
+        compose.onNodeWithText("Sin tableros").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Editar tablero").assertIsDisplayed()
+    }
+
+    @Test fun addingHasNoDeleteAction() {
+        compose.setContent { TransmicroneTheme {
+            SetupScreen("", emptyList(), place, setOf(service.key()), true, false,
+                onQuery = {}, onPick = {}, onToggle = {}, onSave = {}, onBack = {})
+        } }
+        compose.onNodeWithText("Eliminar tablero").assertDoesNotExist()
     }
 }

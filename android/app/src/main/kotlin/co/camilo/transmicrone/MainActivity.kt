@@ -8,6 +8,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.res.stringResource
 import androidx.compose.material3.SnackbarHostState
@@ -20,7 +22,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import co.camilo.transmicrone.ui.AppViewModel
 import co.camilo.transmicrone.ui.Screen
 import co.camilo.transmicrone.ui.home.HomeScreen
-import co.camilo.transmicrone.ui.setup.ManageScreen
 import co.camilo.transmicrone.ui.setup.SetupScreen
 import co.camilo.transmicrone.ui.theme.TransmicroneTheme
 import kotlinx.coroutines.awaitCancellation
@@ -47,6 +48,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             TransmicroneTheme {
                 val state by vm.state.collectAsStateWithLifecycle()
+                val swipeHintDismissal = rememberSaveable { mutableStateOf(false) }
                 val snackbarHostState = remember { SnackbarHostState() }
                 val deletedMessage = state.pendingDeletion?.let { stringResource(R.string.manage_deleted_message, it.displayName) }
                 val undoLabel = stringResource(R.string.manage_undo)
@@ -59,8 +61,7 @@ class MainActivity : ComponentActivity() {
                     else vm.dismissDeletedBoard(deleted.boardId)
                 }
                 BackHandler(enabled = state.screen != Screen.HOME) {
-                    if (state.screen == Screen.SETUP && state.setupPlace != null) vm.changeSetupPlace()
-                    else vm.goHome()
+                    vm.backSetup()
                 }
                 when (state.screen) {
                     Screen.HOME -> HomeScreen(
@@ -68,7 +69,8 @@ class MainActivity : ComponentActivity() {
                         pageIndex = state.pageIndex,
                         onPage = vm::onPage,
                         onAdd = { vm.openSetup(null) },
-                        onManage = vm::openManage,
+                        onEdit = { vm.openSetup(it) },
+                        swipeHintDismissal = swipeHintDismissal,
                         onRefresh = vm::manualRefresh,
                         loadingBoards = !state.boardsReady,
                         snackbarHostState = snackbarHostState,
@@ -84,18 +86,11 @@ class MainActivity : ComponentActivity() {
                         onPick = vm::pickPlace,
                         onToggle = vm::toggleServicio,
                         onSave = vm::saveSetup,
-                        onBack = vm::goHome,
+                        onBack = vm::backSetup,
                         isEditing = state.editingBoardId != null,
+                        editingBoardName = state.boards.find { it.board.boardId == state.editingBoardId }?.board?.displayName,
+                        onDelete = { state.editingBoardId?.let(vm::deleteBoard) },
                         onChangePlace = vm::changeSetupPlace,
-                        snackbarHostState = snackbarHostState,
-                    )
-                    Screen.MANAGE -> ManageScreen(
-                        boards = state.boards,
-                        onBack = vm::goHome,
-                        onEdit = { vm.openSetup(it) },
-                        onDelete = vm::deleteBoard,
-                        onMove = vm::moveBoard,
-                        onAdd = { vm.openSetup(null) },
                         snackbarHostState = snackbarHostState,
                     )
                 }

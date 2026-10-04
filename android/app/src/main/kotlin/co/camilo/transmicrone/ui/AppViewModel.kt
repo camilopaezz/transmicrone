@@ -30,7 +30,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.time.Instant
 
-enum class Screen { HOME, SETUP, MANAGE }
+enum class Screen { HOME, SETUP }
 
 data class DeletedBoard(val boardId: String, val displayName: String)
 
@@ -145,13 +145,13 @@ class AppViewModel(
         stopPolling()
     }
 
-    fun openManage() {
-        _state.update { it.copy(screen = Screen.MANAGE) }
-        stopPolling()
+    fun backSetup() {
+        if (_state.value.editingBoardId == null && _state.value.setupPlace != null) changeSetupPlace()
+        else goHome()
     }
 
     fun goHome() {
-        _state.update { it.copy(screen = Screen.HOME) }
+        _state.update { it.copy(screen = Screen.HOME, editingBoardId = null) }
         restartLoop()
     }
 
@@ -241,7 +241,9 @@ class AppViewModel(
                 boards.delete(boardId)
                 val after = boards.snapshot()
                 boardDeletion = BoardDeletion(deleted, before.boards.map { it.boardId }, before.lastBoardId, after.lastBoardId)
-                _state.update { it.copy(pendingDeletion = DeletedBoard(deleted.boardId, deleted.displayName)) }
+                _state.update { it.copy(screen = Screen.HOME, editingBoardId = null,
+                    pendingDeletion = DeletedBoard(deleted.boardId, deleted.displayName)) }
+                restartLoop()
             }
         }
     }

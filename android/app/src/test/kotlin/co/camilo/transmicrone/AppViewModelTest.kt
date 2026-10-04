@@ -40,6 +40,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.serialization.json.Json
 import org.junit.After
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -208,6 +209,36 @@ class AppViewModelTest {
         val failed = vm.state.value.boards.single().freshness as Freshness.FailedCached
         assertEquals(FailureKind.HOST_REJECTED, failed.kind)
         assertEquals("E48", vm.state.value.boards.single().arrivals.single().painted)
+    }
+
+    @Test
+    fun backFromDirectEditReturnsHomeAndDiscardsDraft() = vmTest {
+        val vm = viewModel(ScriptedFeed(), MemoryBoards(listOf(leonBoard())))
+        runCurrent()
+        vm.openSetup("leon")
+        assertEquals(Screen.SETUP, vm.state.value.screen)
+        vm.toggleServicio(vm.state.value.setupSelected.first())
+        vm.backSetup()
+        assertEquals(Screen.HOME, vm.state.value.screen)
+        assertNull(vm.state.value.editingBoardId)
+        vm.openSetup("leon")
+        assertTrue(vm.state.value.setupSelected.isNotEmpty())
+        vm.changeSetupPlace()
+        vm.backSetup()
+        assertEquals(Screen.HOME, vm.state.value.screen)
+    }
+
+    @Test
+    fun backFromAddingServicesReturnsToSearchBeforeHome() = vmTest {
+        val vm = viewModel(ScriptedFeed(), MemoryBoards())
+        runCurrent()
+        vm.openSetup()
+        vm.pickPlace(leonPlace())
+        vm.backSetup()
+        assertEquals(Screen.SETUP, vm.state.value.screen)
+        assertNull(vm.state.value.setupPlace)
+        vm.backSetup()
+        assertEquals(Screen.HOME, vm.state.value.screen)
     }
 
     @Test

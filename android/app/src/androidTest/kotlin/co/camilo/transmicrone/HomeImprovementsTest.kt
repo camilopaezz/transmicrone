@@ -1,10 +1,17 @@
 package co.camilo.transmicrone
 
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.test.junit4.StateRestorationTester
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import co.camilo.transmicrone.domain.*
 import co.camilo.transmicrone.ui.*
 import co.camilo.transmicrone.ui.home.HomeScreen
@@ -34,38 +41,35 @@ class HomeImprovementsTest {
         compose.runOnIdle { assertEquals(1, retries) }
     }
 
-    @Test fun scrollCollapsesAddAndLeavesNoticeClearAtLargeFont() {
+    @Test fun singleBoardShowsInlineAddAndEditWithoutPagerControls() {
+        var adds = 0
+        var edits = 0
+        compose.setContent { TransmicroneTheme {
+            HomeScreen(listOf(BoardView(board, listOf(arrival))), 0, {}, { adds++ }, { edits++ }, {})
+        } }
+        compose.onAllNodesWithText("León XIII").assertCountEquals(2)
+        compose.onNodeWithText("Agregar").assertHeightIsAtLeast(48.dp)
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button)).performClick()
+        compose.onNodeWithContentDescription("Editar tablero")
+            .assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp).performClick()
+        compose.onNodeWithText("Tableros").assertDoesNotExist()
+        compose.onNodeWithTag("board-page-dots").assertDoesNotExist()
+        compose.onNodeWithText("Desliza para cambiar de tablero").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Tablero siguiente").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(1, adds); assertEquals(1, edits) }
+    }
+
+    @Test fun arrivalsAndNoticeUseFullViewportAtDoubleFont() {
         compose.setContent {
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, 2f)) { TransmicroneTheme {
                 HomeScreen(listOf(BoardView(board, listOf(arrival), Freshness.Updated(Instant.now()))), 0, {}, {}, {}, {})
             } }
         }
-        val notice = "Fuente no oficial. Las frases de llegada no son un reloj."
-        compose.onNodeWithText(notice).performScrollTo().assertIsDisplayed()
-        compose.onAllNodesWithText("Agregar tablero").assertCountEquals(0)
-        val noticeBounds = compose.onNodeWithText(notice).fetchSemanticsNode().boundsInRoot
-        val addBounds = compose.onNodeWithContentDescription("Agregar tablero").fetchSemanticsNode().boundsInRoot
-        assertTrue("Notice must remain above the FAB", noticeBounds.bottom <= addBounds.top)
-    }
-
-    @Test fun initialViewportClearsExpandedFabAtLargeFont() = checkInitialViewport(1.3f)
-
-    @Test fun initialViewportClearsExpandedFabAtDoubleFont() = checkInitialViewport(2f)
-
-    private fun checkInitialViewport(fontScale: Float) {
-        compose.setContent {
-            val density = LocalDensity.current
-            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) { TransmicroneTheme {
-                HomeScreen(listOf(BoardView(board, List(8) { arrival.copy(nodo = 62282 + it) }, Freshness.Updated(Instant.now()))),
-                    0, {}, {}, {}, {})
-            } }
-        }
-        val add = compose.onNodeWithContentDescription("Agregar tablero").assertIsDisplayed()
-        val fab = add.fetchSemanticsNode().boundsInRoot
-        assertTrue("Initial FAB must be expanded", fab.width > fab.height * 2)
+        compose.onNodeWithText("Fuente no oficial. Las frases de llegada no son un reloj.").performScrollTo().assertIsDisplayed()
         val viewport = compose.onNodeWithTag("arrival-viewport").fetchSemanticsNode().boundsInRoot
-        assertTrue("Initial list viewport must end above the expanded FAB", viewport.bottom <= fab.top)
+        val add = compose.onNodeWithContentDescription("Agregar tablero").fetchSemanticsNode().boundsInRoot
+        assertTrue("Add chip should precede the arrivals", add.bottom <= viewport.top)
     }
 
     @Test fun refreshDoesNotResizeArrivalViewport() {
@@ -93,11 +97,70 @@ class HomeImprovementsTest {
             HomeScreen(listOf(BoardView(board, listOf(arrival)), BoardView(second, listOf(arrival))),
                 page.intValue, { page.intValue = it }, {}, {}, {})
         } }
-        compose.onNodeWithContentDescription("Tablero siguiente").performClick()
+        compose.onNodeWithTag("board-page-dots").assertIsDisplayed()
+        compose.onNodeWithText("Desliza para cambiar de tablero").assertIsDisplayed()
+        compose.onNodeWithTag("arrival-viewport").performTouchInput { swipeLeft() }
         compose.waitForIdle()
         compose.runOnIdle { assertEquals(1, page.intValue) }
-        compose.onNodeWithContentDescription("Tablero anterior").performClick()
+        compose.onNodeWithText("Desliza para cambiar de tablero").assertDoesNotExist()
+        compose.onAllNodesWithText("León XIII")[0].performClick()
+        compose.waitForIdle()
         compose.runOnIdle { assertEquals(0, page.intValue) }
+        compose.onNodeWithContentDescription("Tablero anterior").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Tablero siguiente").assertDoesNotExist()
+        compose.onNodeWithText("1/2").assertDoesNotExist()
+    }
+
+    @Test fun selectedChipIsRevealedWhenSwitchingToDistantBoard() {
+        val page = mutableIntStateOf(0)
+        val boards = List(12) { i -> BoardView(board.copy(boardId = "$i", displayName = "Estación $i"), listOf(arrival)) }
+        compose.setContent { TransmicroneTheme {
+            HomeScreen(boards, page.intValue, { page.intValue = it }, {}, {}, {})
+        } }
+        compose.runOnIdle { page.intValue = 11 }
+        compose.waitForIdle()
+        compose.onNode(isSelected() and hasText("Estación 11")).assertIsDisplayed()
+    }
+
+    @Test fun hintDismissalDoesNotMoveArrivalsAndSurvivesNavigationAndRestoration() {
+        val restoration = StateRestorationTester(compose)
+        val showHome = mutableStateOf(true)
+        val boards = listOf(BoardView(board, listOf(arrival)), BoardView(board.copy(boardId = "2"), listOf(arrival)))
+        restoration.setContent {
+            val dismissal = rememberSaveable { mutableStateOf(false) }
+            TransmicroneTheme {
+                if (showHome.value) HomeScreen(boards, 0, {}, {}, {}, {}, swipeHintDismissal = dismissal)
+            }
+        }
+        val before = compose.onNodeWithText("Entre 2 y 4 min", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        compose.mainClock.advanceTimeBy(6000)
+        compose.onNodeWithText("Desliza para cambiar de tablero").assertDoesNotExist()
+        val after = compose.onNodeWithText("Entre 2 y 4 min", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertEquals(before, after)
+        compose.runOnIdle { showHome.value = false }
+        compose.runOnIdle { showHome.value = true }
+        compose.onNodeWithText("Desliza para cambiar de tablero").assertDoesNotExist()
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithText("Desliza para cambiar de tablero").assertDoesNotExist()
+    }
+
+    @Test fun pencilEditsPagerVisibleBoardBeforeSettledPageCallback() {
+        var edited: String? = null
+        var settled = 0
+        val second = board.copy(boardId = "2", displayName = "Ricaurte")
+        compose.setContent { TransmicroneTheme {
+            HomeScreen(listOf(BoardView(board, listOf(arrival)), BoardView(second, listOf(arrival))),
+                0, { settled = it }, {}, { edited = it }, {})
+        } }
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("arrival-viewport").performTouchInput {
+            down(Offset(width * 0.9f, centerY))
+            moveTo(Offset(width * 0.1f, centerY), 600)
+        }
+        compose.onNodeWithContentDescription("Editar tablero").performSemanticsAction(SemanticsActions.OnClick) { it() }
+        compose.runOnIdle { assertEquals("2", edited); assertEquals(0, settled) }
+        compose.onAllNodesWithTag("arrival-viewport")[0].performTouchInput { up() }
+        compose.mainClock.autoAdvance = true
     }
 
     @Test fun emptyHomeIsScrollableAtDoubleFont() {

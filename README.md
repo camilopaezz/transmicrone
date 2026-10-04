@@ -4,7 +4,7 @@
 
 Personal arrivals boards for Bogotá's TransMilenio and SITP. A native Android app built with Kotlin, Jetpack Compose, and Material 3, with a Spanish UI.
 
-Save a station or stop, choose its services, and see arrivals together. Swipe between boards and pull down to refresh. Station arrivals show individual vehicle reports; old reports stay marked as old. The app polls the visible board every 25 seconds.
+Save a station or stop, choose its services, and see arrivals together. Swipe or tap chips between boards and pull down to refresh. Use the pencil to edit or delete the current board, and the trailing “+ Agregar” chip to add one. Station arrivals show individual vehicle reports; old reports stay marked as old. The app polls the visible board every 25 seconds.
 
 ## Build and run
 

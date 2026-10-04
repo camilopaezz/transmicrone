@@ -64,7 +64,7 @@ class HomeUiTest {
                     pageIndex = 0,
                     onPage = {},
                     onAdd = {},
-                    onManage = {},
+                    onEdit = {},
                     onRefresh = {},
                 )
             }
@@ -120,7 +120,7 @@ class HomeUiTest {
                     pageIndex = 0,
                     onPage = {},
                     onAdd = {},
-                    onManage = {},
+                    onEdit = {},
                     onRefresh = {},
                 )
             }
@@ -130,7 +130,8 @@ class HomeUiTest {
         compose.onNodeWithText("CAD", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithText("Entre 2 y 4 min", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithText("Ocupación desconocida", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithText("Tableros").assertIsDisplayed()
+        compose.onAllNodesWithText("Tableros").assertCountEquals(0)
+        compose.onAllNodesWithContentDescription("Editar tablero")[0].assertIsDisplayed()
         val rowName = compose.onAllNodesWithContentDescription(
             "E48 a CAD, Entre 2 y 4 min, 200 m, Ocupación desconocida",
             substring = true,
@@ -156,7 +157,7 @@ class HomeUiTest {
                     pageIndex = 0,
                     onPage = {},
                     onAdd = {},
-                    onManage = {},
+                    onEdit = {},
                     onRefresh = {},
                 )
             }
@@ -181,7 +182,7 @@ class HomeUiTest {
                     pageIndex = 0,
                     onPage = {},
                     onAdd = {},
-                    onManage = {},
+                    onEdit = {},
                     onRefresh = {},
                 )
             }

@@ -14,6 +14,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
@@ -42,9 +44,10 @@ fun SetupScreen(
     catalogReady: Boolean, searching: Boolean,
     onQuery: (String) -> Unit, onPick: (Place) -> Unit, onToggle: (String) -> Unit,
     onSave: () -> Unit, onBack: () -> Unit,
-    isEditing: Boolean = false, onChangePlace: () -> Unit = onBack,
+    isEditing: Boolean = false, editingBoardName: String? = null, onDelete: () -> Unit = {}, onChangePlace: () -> Unit = onBack,
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
 ) {
+    var confirmingDelete by remember(isEditing, editingBoardName) { mutableStateOf(false) }
     val searchFocus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     val repeatedNames = remember(results) { results.groupingBy { it.name }.eachCount() }
@@ -64,21 +67,29 @@ fun SetupScreen(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(if (isEditing) R.string.edit_board else R.string.add_board), style = MaterialTheme.typography.titleMedium) },
-                navigationIcon = { IconButton(onClick = if (place == null) onBack else onChangePlace) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
             )
         },
         bottomBar = {
-            if (place != null) Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
+            if (place != null || isEditing) Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
                 Column(Modifier.navigationBarsPadding().imePadding().padding(horizontal = 24.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        if (selected.isEmpty()) stringResource(R.string.need_servicio)
-                        else pluralStringResource(R.plurals.setup_selected_services, selected.size, selected.size),
-                        style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Button(onClick = onSave, enabled = selected.isNotEmpty(), modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-                        Icon(Icons.Default.Check, null)
+                    if (place != null) {
+                        Text(
+                            if (selected.isEmpty()) stringResource(R.string.need_servicio)
+                            else pluralStringResource(R.plurals.setup_selected_services, selected.size, selected.size),
+                            style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Button(onClick = onSave, enabled = selected.isNotEmpty(), modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                            Icon(Icons.Default.Check, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.save_board))
+                        }
+                    }
+                    if (isEditing) TextButton(onClick = { confirmingDelete = true }, modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+                        Icon(Icons.Default.DeleteOutline, null)
                         Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.save_board))
+                        Text(stringResource(R.string.delete_board))
                     }
                 }
             }
@@ -205,6 +216,17 @@ fun SetupScreen(
             }
         }
     }
+    if (confirmingDelete) AlertDialog(
+        onDismissRequest = { confirmingDelete = false },
+        icon = { Icon(Icons.Default.DeleteOutline, null) },
+        title = { Text(stringResource(R.string.confirm_delete)) },
+        text = { Text(stringResource(R.string.manage_delete_body, editingBoardName ?: place?.name.orEmpty())) },
+        confirmButton = { TextButton(onClick = { confirmingDelete = false; onDelete() },
+            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+            Text(stringResource(R.string.delete_action))
+        } },
+        dismissButton = { TextButton(onClick = { confirmingDelete = false }) { Text(stringResource(R.string.cancel)) } },
+    )
 }
 
 @Composable

@@ -33,7 +33,7 @@ class SetupUiTest {
     private val place = Place("estacion:TM0101", PlaceKind.ESTACION, "León XIII", "leon xiii", "Soacha", "TM0101", listOf(service))
 
     @Test
-    fun editBackAndChangeInvokePlaceChangeWithoutExiting() {
+    fun editBackExitsAndChangeOpensPlaceSearch() {
         var changed = 0
         var exited = false
         val selected = setOf(service.key())
@@ -49,8 +49,8 @@ class SetupUiTest {
         compose.onNodeWithText("Cambiar").performClick()
         compose.onNodeWithContentDescription("Atrás").performClick()
         compose.runOnIdle {
-            assertEquals(2, changed)
-            assertTrue(!exited)
+            assertEquals(1, changed)
+            assertTrue(exited)
         }
         compose.onNodeWithText("1 servicio seleccionado").assertIsDisplayed()
         compose.onNodeWithText("Guardar tablero").assertIsEnabled()

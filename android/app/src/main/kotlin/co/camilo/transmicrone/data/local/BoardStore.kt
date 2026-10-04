@@ -55,6 +55,16 @@ internal fun BoardSnapshot.saving(cleaned: Board): BoardSnapshot {
     return copy(boards = next, lastBoardId = cleaned.boardId)
 }
 
+internal fun BoardSnapshot.deleting(boardId: String): BoardSnapshot {
+    val deletedIndex = boards.indexOfFirst { it.boardId == boardId }
+    if (deletedIndex < 0) return this
+    val remaining = boards.filterNot { it.boardId == boardId }
+    val selected = if (lastBoardId == boardId) {
+        remaining.getOrNull(deletedIndex.coerceAtMost(remaining.lastIndex))?.boardId
+    } else lastBoardId
+    return copy(boards = remaining, lastBoardId = selected)
+}
+
 /** Insert only the deleted board into the latest order, retaining subsequent edits and additions. */
 internal fun BoardSnapshot.restoringDeleted(
     board: Board,
@@ -104,11 +114,7 @@ class DataStoreBoardRepository(
     }
 
     override suspend fun delete(boardId: String) {
-        mutate { current ->
-            val boards = current.boards.filterNot { it.boardId == boardId }
-            val last = if (current.lastBoardId == boardId) boards.firstOrNull()?.boardId else current.lastBoardId
-            current.copy(boards = boards, lastBoardId = last)
-        }
+        mutate { it.deleting(boardId) }
     }
 
     override suspend fun reorder(boardIds: List<String>) {
