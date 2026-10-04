@@ -19,6 +19,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
@@ -58,6 +60,7 @@ fun HomeScreen(
     val current = boards[index]
     val listStates = boards.map { view -> key(view.board.boardId) { rememberLazyListState() } }
     val currentListState = listStates[index]
+    val addButtonExpanded by remember(currentListState) { derivedStateOf { !currentListState.canScrollBackward } }
     val headerGone by remember(currentListState) { derivedStateOf { currentListState.firstVisibleItemIndex > 0 } }
     val pager = rememberPagerState(initialPage = index, pageCount = { boards.size })
     LaunchedEffect(index) {
@@ -101,10 +104,13 @@ fun HomeScreen(
             )
         },
         floatingActionButton = {
+            val addBoardLabel = stringResource(R.string.add_board)
             ExtendedFloatingActionButton(
                 onClick = onAdd,
+                expanded = addButtonExpanded,
+                modifier = Modifier.semantics { contentDescription = addBoardLabel },
                 icon = { Icon(Icons.Default.Add, null) },
-                text = { Text(stringResource(R.string.add_board)) },
+                text = { Text(addBoardLabel) },
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
             )
