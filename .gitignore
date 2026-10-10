@@ -14,3 +14,4 @@ __pycache__/
 android/.kotlin/
 *.jks
 *.keystore
+signing.local.properties

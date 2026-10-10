@@ -32,6 +32,14 @@ fun feedSetting(name: String, environment: String, default: String): String {
     return value.trim()
 }
 
+val localSigning = Properties().apply {
+    val file = rootDir.resolve("../signing.local.properties")
+    if (file.isFile) file.inputStream().use { load(it) }
+}
+val signingFields = listOf("STORE_FILE", "STORE_PASSWORD", "KEY_ALIAS", "KEY_PASSWORD")
+val signingConfigured = signingFields.all { !localSigning.getProperty(it).isNullOrBlank() }
+require(localSigning.isEmpty() || signingConfigured) { "Incomplete release signing configuration" }
+
 val feedBaseUrl = feedSetting("BASE_URL", "TRANSMICRONE_BASE_URL", feedField("BASE_URL"))
 val feedAppId = feedSetting("APPID", "TRANSMICRONE_APP_ID", "unconfigured")
 
@@ -44,8 +52,8 @@ android {
         applicationId = "co.camilo.transmicrone"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.1.0-alpha.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "FEED_BASE_URL", "\"$feedBaseUrl\"")
         buildConfigField("String", "FEED_APPID", "\"$feedAppId\"")
@@ -56,8 +64,18 @@ android {
         buildConfigField("int", "HTTP_READ_TIMEOUT_MS", "15000")
     }
 
+    signingConfigs {
+        if (signingConfigured) create("permanentRelease") {
+            storeFile = rootDir.resolve(localSigning.getProperty("STORE_FILE"))
+            storePassword = localSigning.getProperty("STORE_PASSWORD")
+            keyAlias = localSigning.getProperty("KEY_ALIAS")
+            keyPassword = localSigning.getProperty("KEY_PASSWORD")
+        }
+    }
+
     buildTypes {
         release {
+            if (signingConfigured) signingConfig = signingConfigs.getByName("permanentRelease")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
