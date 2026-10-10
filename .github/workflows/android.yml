@@ -39,7 +39,9 @@ jobs:
         run: sdkmanager 'platforms;android-36' 'build-tools;36.1.0'
       - name: Check Python tools
         working-directory: .
-        run: python3 -m compileall -q scripts tools
+        run: |
+          python3 -m compileall -q scripts tools
+          python3 -m unittest discover -s tests -v
       - name: Test, lint, and build
         run: ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
       - name: Upload debug APK

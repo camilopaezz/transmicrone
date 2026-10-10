@@ -127,7 +127,7 @@ class DomainTest {
         val feed = object : FeedClient {
             override suspend fun fetchBoard(queryParadero: String): FetchResult = next
         }
-        val repo = ArrivalsRepository(feed, cache, clock)
+        val repo = ArrivalsRepository(feed, cache)
         val board = Board(
             boardId = "board-1",
             placeId = "estacion:TM0101",
@@ -254,6 +254,5 @@ class DomainTest {
         distanceLabel = null,
         occupancy = Occupancy.UNKNOWN,
         colorRuta = null,
-        colorTexto = null,
     )
 }

@@ -86,8 +86,8 @@ class BoardManagementTest {
     @Test
     fun deletionAndUndoUseRepositorySnapshotsBeforeUiObserverCatchesUp() = withVm { vm, repository ->
         vm.deleteBoard("b")
-        vm.moveBoard("c", -1)
         runCurrent()
+        repository.reorder(listOf("c", "a"))
         assertEquals(listOf("c", "a"), repository.snapshot().boards.map { it.boardId })
         assertEquals("b", vm.state.value.pendingDeletion?.boardId)
         vm.undoDeleteBoard("b")
@@ -152,6 +152,8 @@ class BoardManagementTest {
             runTest(dispatcher) {
                 val repository = ManagementBoards(BoardSnapshot(listOf(board("a"), board("b"), board("c")), "b"))
                 val catalog = object : CatalogRepository {
+                    override suspend fun explore(query: String, limit: Int) = co.camilo.transmicrone.domain.CatalogResults()
+                    override suspend fun service(painted: String, destino: String): co.camilo.transmicrone.domain.CatalogEntry.Service? = null
                     override suspend fun search(query: String, limit: Int): List<Place> = emptyList()
                     override fun place(placeId: String): Place? = null
                     override suspend fun generatedAt(): String = "test"
@@ -168,7 +170,8 @@ class BoardManagementTest {
                 val factory = object : ViewModelProvider.Factory {
                     @Suppress("UNCHECKED_CAST")
                     override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                        AppViewModel(catalog, repository, ArrivalsRepository(feed, cache, clock), clock, dispatcher, dispatcher) as T
+                        AppViewModel(catalog, repository, ArrivalsRepository(feed, cache), clock, dispatcher, dispatcher,
+                            co.camilo.transmicrone.data.catalog.RouteRepository { emptyList() }) as T
                 }
                 val vm = ViewModelProvider(store, factory)[AppViewModel::class.java]
                 try {
@@ -194,7 +197,7 @@ private class ManagementBoards(initial: BoardSnapshot) : BoardRepository {
     override suspend fun snapshot() = state.value
     override suspend fun save(board: Board) { state.value = state.value.saving(board) }
     override suspend fun delete(boardId: String) { state.value = state.value.deleting(boardId) }
-    override suspend fun reorder(boardIds: List<String>) {
+    suspend fun reorder(boardIds: List<String>) {
         val byId = state.value.boards.associateBy { it.boardId }
         state.value = state.value.copy(boards = boardIds.mapNotNull { byId[it] })
     }

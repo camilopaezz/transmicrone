@@ -1,0 +1,124 @@
+{
+  "STATUS": false,
+  "servicio": {
+    "codigo": "E48",
+    "id": "12444",
+    "nombre": "CAD",
+    "color": "#AE6B00",
+    "sistema": "TransMilenio",
+    "tipoServicio": "TRONCAL"
+  },
+  "recorrido_len": 11,
+  "recorrido": [
+    {
+      "codigo": "TM0103",
+      "id": "7503",
+      "nombre": "San Mateo",
+      "vagon": "A",
+      "posicion": 0,
+      "direccion": "KR 4 - CL 30 Soacha",
+      "parada": "1",
+      "sistema": "TransMilenio"
+    },
+    {
+      "codigo": "TM0102",
+      "id": "7504",
+      "nombre": "Terreros - H. Cardiovascular",
+      "vagon": "B",
+      "posicion": 866,
+      "direccion": "KR 7 - CL 33 Soacha",
+      "parada": "1",
+      "sistema": "TransMilenio"
+    },
+    {
+      "codigo": "TM0101",
+      "id": "7505",
+      "nombre": "León XIII",
+      "vagon": "A",
+      "posicion": 1574,
+      "direccion": "TV 7 - CL 47 Soacha",
+      "parada": "1",
+      "sistema": "TransMilenio"
+    },
+    {
+      "codigo": "TM0100",
+      "id": "7506",
+      "nombre": "La Despensa",
+      "vagon": "B",
+      "posicion": 2239,
+      "direccion": "TV 7 - CL 55 Soacha",
+      "parada": "1",
+      "sistema": "TransMilenio"
+    },
+    {
+      "codigo": "TM0149",
+      "id": "7010",
+      "nombre": "Bosa",
+      "vagon": "A",
+      "posicion": 3002,
+      "direccion": "Autopista Sur- 65A Sur",
+      "parada": "1",
+      "sistema": "TransMilenio"
+    },
+    {
+      "codigo": "TM0096",
+      "id": "7003",
+      "nombre": "Sevillana",
+      "vagon": "A",
+      "posicion": 6776,
+      "direccion": "Autopista Sur - KRA 61",
+      "parada": "1",
+      "sistema": "TransMilenio"
+    },
+    {
+      "codigo": "TM0095",
+      "id": "7004",
+      "nombre": "Venecia",
+      "vagon": "B",
+      "posicion": 7355,
+      "direccion": "Autopista Sur - KR 54A",
+      "parada": "1",
+      "sistema": "TransMilenio"
+    },
+    {
+      "codigo": "TM0093",
+      "id": "7006",
+      "nombre": "General Santander",
+      "vagon": "A",
+      "posicion": 8644,
+      "direccion": "Autopista Sur - KR 50A Bis",
+      "parada": "1",
+      "sistema": "TransMilenio"
+    },
+    {
+      "codigo": "TM0089",
+      "id": "7113",
+      "nombre": "Santa Isabel",
+      "vagon": "B",
+      "posicion": 12027,
+      "direccion": "AV. NQS - CL 1G",
+      "parada": "1",
+      "sistema": "TransMilenio"
+    },
+    {
+      "codigo": "TM0069",
+      "id": "7111",
+      "nombre": "Ricaurte",
+      "vagon": "C",
+      "posicion": 13588,
+      "direccion": "AV. NQS - CL 10",
+      "parada": "1",
+      "sistema": "TransMilenio"
+    },
+    {
+      "codigo": "TM0067",
+      "id": "7109",
+      "nombre": "CAD",
+      "vagon": "B",
+      "posicion": 15259,
+      "direccion": "AV. NQS - CL 22C",
+      "parada": "1",
+      "sistema": "TransMilenio"
+    }
+  ]
+}

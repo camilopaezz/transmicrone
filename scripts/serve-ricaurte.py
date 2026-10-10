@@ -23,6 +23,9 @@ PORT = 8765
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         if self.path.split("?", 1)[0] in ("/", "/ricaurte.html"):
+            if not HTML.is_file():
+                self.send_error(404, "ricaurte.html is not present in this checkout")
+                return
             data = HTML.read_bytes()
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")

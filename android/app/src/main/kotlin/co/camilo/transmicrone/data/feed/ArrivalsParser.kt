@@ -65,7 +65,6 @@ class ArrivalsParser(private val json: Json) {
             distanceLabel = obj.str("labelparadero")?.trim()?.ifBlank { null },
             occupancy = OccupancyParser.parse(obj.str("ocupacion_bus") ?: obj.str("ocupacion")),
             colorRuta = TextNorm.hexColor(obj.str("color_ruta")),
-            colorTexto = TextNorm.hexColor(obj.str("color_texto")),
             identity = ArrivalIdentity.SERVICIO_ESTIMATE,
         )
     }

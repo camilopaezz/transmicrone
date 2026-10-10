@@ -36,6 +36,7 @@ import co.camilo.transmicrone.domain.Place
 import co.camilo.transmicrone.domain.PlaceKind
 import co.camilo.transmicrone.ui.board.ServicioBadge
 import co.camilo.transmicrone.ui.key
+import co.camilo.transmicrone.ui.ServiceDestinationList
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,6 +47,7 @@ fun SetupScreen(
     onSave: () -> Unit, onBack: () -> Unit,
     isEditing: Boolean = false, editingBoardName: String? = null, onDelete: () -> Unit = {}, onChangePlace: () -> Unit = onBack,
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
+    catalogLoadFailed: Boolean = false, searchFailed: Boolean = false, saveFailed: Boolean = false,
 ) {
     var confirmingDelete by remember(isEditing, editingBoardName) { mutableStateOf(false) }
     val searchFocus = remember { FocusRequester() }
@@ -74,6 +76,11 @@ fun SetupScreen(
             if (place != null || isEditing) Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
                 Column(Modifier.navigationBarsPadding().imePadding().padding(horizontal = 24.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (place != null) {
+                        if (saveFailed) Text(
+                            stringResource(R.string.setup_save_failed),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
                         Text(
                             if (selected.isEmpty()) stringResource(R.string.need_servicio)
                             else pluralStringResource(R.plurals.setup_selected_services, selected.size, selected.size),
@@ -132,7 +139,7 @@ fun SetupScreen(
                             )
                         }
                     }
-                    if (query.length >= 2 && (!catalogReady || searching || results.isEmpty())) item {
+                    if (query.length >= 2 && (!catalogReady || searching || results.isEmpty()) && !catalogLoadFailed && !searchFailed) item {
                         val loading = !catalogReady || searching
                         val status = when {
                             !catalogReady -> stringResource(R.string.catalog_loading)
@@ -142,6 +149,18 @@ fun SetupScreen(
                         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             if (loading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                             Text(status, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    if (catalogLoadFailed || searchFailed) item {
+                        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                stringResource(if (searchFailed) R.string.setup_search_failed else R.string.catalog_load_failed),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                            if (query.length >= 2) TextButton(onClick = { onQuery(query) }) {
+                                Text(stringResource(R.string.retry_refresh))
+                            }
                         }
                     }
                     if (catalogReady && !searching) {
@@ -207,7 +226,9 @@ fun SetupScreen(
                         ) {
                             Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                                 ServicioBadge(option.painted, option.color)
-                                Text(option.destino, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                                Box(Modifier.weight(1f)) {
+                                    ServiceDestinationList(option.destino, R.string.destination_prefix)
+                                }
                                 Checkbox(checked = checked, onCheckedChange = null)
                             }
                         }

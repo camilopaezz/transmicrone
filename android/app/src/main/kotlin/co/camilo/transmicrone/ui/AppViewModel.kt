@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import co.camilo.transmicrone.BuildConfig
 import co.camilo.transmicrone.data.ArrivalsRepository
 import co.camilo.transmicrone.data.catalog.CatalogRepository
+import co.camilo.transmicrone.data.catalog.RouteRepository
+import co.camilo.transmicrone.domain.ServiceRoute
 import co.camilo.transmicrone.data.local.BoardRepository
 import co.camilo.transmicrone.di.AppContainer
 import co.camilo.transmicrone.domain.Board
@@ -14,8 +16,11 @@ import co.camilo.transmicrone.domain.Clock
 import co.camilo.transmicrone.domain.FailureKind
 import co.camilo.transmicrone.domain.FetchResult
 import co.camilo.transmicrone.domain.Place
-import co.camilo.transmicrone.domain.PlaceKind
+import co.camilo.transmicrone.domain.Paradero
 import co.camilo.transmicrone.domain.SelectedServicio
+import co.camilo.transmicrone.domain.CatalogEntry
+import co.camilo.transmicrone.domain.CatalogResults
+import co.camilo.transmicrone.domain.ServicioOption
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -30,7 +35,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.time.Instant
 
-enum class Screen { HOME, SETUP }
+enum class Screen { HOME, SETUP, SEARCH, DETAILS }
 
 data class DeletedBoard(val boardId: String, val displayName: String)
 
@@ -60,6 +65,19 @@ sealed class Freshness {
     data object Unsupported : Freshness()
 }
 
+sealed interface RouteState {
+    data object Loading : RouteState
+    data class Loaded(val routes: List<ServiceRoute>) : RouteState
+    data object Failed : RouteState
+    data object Unavailable : RouteState
+}
+
+data class ServiceLookupState(
+    val option: ServicioOption,
+    val history: List<CatalogEntry>,
+    val failed: Boolean = false,
+)
+
 data class UiState(
     val screen: Screen = Screen.HOME,
     val boards: List<BoardView> = emptyList(),
@@ -73,7 +91,18 @@ data class UiState(
     val setupSelected: Set<String> = emptySet(),
     val editingBoardId: String? = null,
     val catalogReady: Boolean = false,
+    val catalogLoadFailed: Boolean = false,
+    val setupSearchFailed: Boolean = false,
+    val setupSaveFailed: Boolean = false,
     val pendingDeletion: DeletedBoard? = null,
+    val catalogQuery: String = "",
+    val catalogResults: CatalogResults = CatalogResults(),
+    val catalogSearching: Boolean = false,
+    val catalogSearchFailed: Boolean = false,
+    val details: List<CatalogEntry> = emptyList(),
+    val serviceLookup: ServiceLookupState? = null,
+    val routes: Map<String, RouteState> = emptyMap(),
+    val selectedRoutes: Map<String, Int> = emptyMap(),
 )
 
 class AppViewModel(
@@ -83,12 +112,25 @@ class AppViewModel(
     private val clock: Clock,
     private val io: CoroutineDispatcher = Dispatchers.IO,
     private val compute: CoroutineDispatcher = Dispatchers.Default,
+    private val routeRepository: RouteRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state
     private var loop: Job? = null
     private var refreshJob: Job? = null
     private var searchJob: Job? = null
+    private var catalogSearchJob: Job? = null
+    private var serviceLookupJob: Job? = null
+    private val routeGenerations = mutableMapOf<String, Long>()
+    private val routeJobs = mutableMapOf<String, Job>()
+    private var navigationGeneration = 0L
+    private var setupReturnsToDetails = false
+
+    private fun cancelServiceLookup() {
+        navigationGeneration++
+        serviceLookupJob?.cancel()
+        _state.update { it.copy(serviceLookup = null) }
+    }
     // Search hides the chosen place, but its selection remains a draft until another place is chosen.
     private var setupDraftPlaceId: String? = null
     private var fetchGeneration: Long = 0
@@ -99,10 +141,14 @@ class AppViewModel(
 
     init {
         viewModelScope.launch {
-            withContext(io) {
-                runCatching { catalog.generatedAt() }
+            try {
+                withContext(io) { catalog.generatedAt() }
+                _state.update { it.copy(catalogReady = true, catalogLoadFailed = false) }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                _state.update { it.copy(catalogReady = false, catalogLoadFailed = true) }
             }
-            _state.update { it.copy(catalogReady = true) }
             boards.observe().collect { snap ->
                 applySnapshot(snap)
             }
@@ -129,7 +175,18 @@ class AppViewModel(
     }
 
     fun openSetup(editId: String? = null) {
+        cancelServiceLookup()
+        setupReturnsToDetails = false
         val editing = editId?.let { id -> _state.value.boards.find { it.board.boardId == id }?.board }
+        var placeLookupFailed = false
+        val editingPlace = try {
+            editing?.let { catalog.place(it.placeId) }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            placeLookupFailed = true
+            null
+        }
         setupDraftPlaceId = editing?.placeId
         _state.update {
             it.copy(
@@ -138,7 +195,11 @@ class AppViewModel(
                 setupQuery = "",
                 setupResults = emptyList(),
                 setupSearching = false,
-                setupPlace = editing?.let { b -> catalog.place(b.placeId) },
+                setupSearchFailed = placeLookupFailed,
+                setupSaveFailed = false,
+                catalogLoadFailed = it.catalogLoadFailed || placeLookupFailed,
+                catalogReady = it.catalogReady && !placeLookupFailed,
+                setupPlace = editingPlace,
                 setupSelected = editing?.servicios?.map { s -> s.key() }?.toSet() ?: emptySet(),
             )
         }
@@ -146,11 +207,143 @@ class AppViewModel(
     }
 
     fun backSetup() {
+        cancelServiceLookup()
+        if (_state.value.screen == Screen.SETUP && setupReturnsToDetails) {
+            searchJob?.cancel()
+            setupReturnsToDetails = false
+            setupDraftPlaceId = null
+            _state.update { it.copy(screen = Screen.DETAILS, setupPlace = null, setupSelected = emptySet(), setupSearching = false) }
+            return
+        }
+        when (_state.value.screen) {
+            Screen.DETAILS -> {
+                _state.update {
+                    val previous = it.details.dropLast(1)
+                    it.copy(details = previous, screen = if (previous.isEmpty()) Screen.SEARCH else Screen.DETAILS)
+                }
+                return
+            }
+            Screen.SEARCH -> { catalogSearchJob?.cancel(); goHome(); return }
+            else -> Unit
+        }
         if (_state.value.editingBoardId == null && _state.value.setupPlace != null) changeSetupPlace()
         else goHome()
     }
 
+    fun openSearch() {
+        cancelServiceLookup()
+        _state.update { it.copy(screen = Screen.SEARCH, details = emptyList()) }
+        stopPolling()
+        searchCatalog(_state.value.catalogQuery)
+    }
+
+    fun searchCatalog(query: String) {
+        catalogSearchJob?.cancel()
+        val searching = query.isNotBlank()
+        _state.update { it.copy(catalogQuery = query, catalogResults = CatalogResults(),
+            catalogSearching = searching, catalogSearchFailed = false) }
+        if (!searching) return
+        catalogSearchJob = viewModelScope.launch(compute) {
+            delay(150)
+            try {
+                val results = catalog.explore(query)
+                if (isActive) _state.update {
+                    if (it.catalogQuery != query) it else it.copy(catalogResults = results, catalogSearching = false,
+                        catalogReady = true, catalogLoadFailed = false)
+                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                if (isActive) _state.update {
+                    if (it.catalogQuery != query) it else it.copy(catalogSearching = false, catalogSearchFailed = true)
+                }
+            }
+        }
+    }
+
+    fun openDetails(entry: CatalogEntry) {
+        cancelServiceLookup()
+        _state.update { it.copy(screen = Screen.DETAILS, details = it.details + entry) }
+        if (entry is CatalogEntry.Service) loadRoute(entry.option)
+    }
+
+    fun loadRoute(option: ServicioOption, retry: Boolean = false) {
+        val key = option.key()
+        val previous = _state.value.routes[key]
+        if ((previous == RouteState.Loading && !retry) || (!retry && previous is RouteState.Loaded)) return
+        val generation = (routeGenerations[key] ?: 0L) + 1L
+        routeGenerations[key] = generation
+        routeJobs[key]?.cancel()
+        _state.update { it.copy(routes = it.routes + (key to RouteState.Loading)) }
+        routeJobs[key] = viewModelScope.launch(io) {
+            val result = try {
+                val routes = routeRepository.load(option).map { route -> route.copy(stops = route.stops.map { stop ->
+                    val code = stop.code.removeSuffix("_TM")
+                    val kind = if (code.startsWith("TM")) "estacion" else "paradero"
+                    stop.copy(place = catalog.place("$kind:$code"))
+                }) }
+                if (routes.isEmpty()) RouteState.Unavailable else RouteState.Loaded(routes)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) { RouteState.Failed }
+            if (isActive && routeGenerations[key] == generation) {
+                _state.update { it.copy(routes = it.routes + (key to result)) }
+            }
+        }
+    }
+
+    fun selectRoute(option: ServicioOption, index: Int) {
+        val routes = (_state.value.routes[option.key()] as? RouteState.Loaded)?.routes ?: return
+        if (index !in routes.indices) return
+        _state.update { it.copy(selectedRoutes = it.selectedRoutes + (option.key() to index)) }
+    }
+
+    fun openService(option: ServicioOption) {
+        if (_state.value.screen != Screen.DETAILS) return
+        cancelServiceLookup()
+        val generation = navigationGeneration
+        val previous = _state.value.details
+        _state.update { it.copy(serviceLookup = ServiceLookupState(option, previous)) }
+        serviceLookupJob = viewModelScope.launch {
+            val entry = try {
+                withContext(compute) { catalog.service(option.painted, option.destino) }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                if (isActive && navigationGeneration == generation) {
+                    _state.update { it.copy(serviceLookup = ServiceLookupState(option, previous, failed = true)) }
+                }
+                return@launch
+            }
+            if (!isActive || navigationGeneration != generation) return@launch
+            if (entry == null) {
+                _state.update { it.copy(serviceLookup = ServiceLookupState(option, previous, failed = true)) }
+                return@launch
+            }
+            _state.update {
+                if (it.screen != Screen.DETAILS || it.details != previous) it
+                else it.copy(details = it.details + entry, serviceLookup = null)
+            }
+            if (_state.value.details.lastOrNull() == entry) loadRoute(entry.option)
+        }
+    }
+
+    fun retryServiceLookup() {
+        val current = _state.value
+        val lookup = current.serviceLookup ?: return
+        if (!lookup.failed || current.screen != Screen.DETAILS || current.details != lookup.history) return
+        openService(lookup.option)
+    }
+
+    fun createBoardFrom(place: Place) {
+        openSetup(null)
+        setupReturnsToDetails = true
+        pickPlace(place)
+    }
+
     fun goHome() {
+        cancelServiceLookup()
+        setupReturnsToDetails = false
         _state.update { it.copy(screen = Screen.HOME, editingBoardId = null) }
         restartLoop()
     }
@@ -162,6 +355,7 @@ class AppViewModel(
                 setupQuery = query,
                 setupPlace = null,
                 setupSearching = searching,
+                setupSearchFailed = false,
                 setupResults = if (searching) it.setupResults else emptyList(),
             )
         }
@@ -172,11 +366,21 @@ class AppViewModel(
         }
         val issued = query
         searchJob = viewModelScope.launch(compute) {
-            val results = catalog.search(issued)
-            if (!isActive) return@launch
-            _state.update { ui ->
-                if (ui.setupQuery != issued) ui
-                else ui.copy(setupResults = results, setupSearching = false)
+            try {
+                val results = catalog.search(issued)
+                if (!isActive) return@launch
+                _state.update { ui ->
+                    if (ui.setupQuery != issued) ui
+                    else ui.copy(setupResults = results, setupSearching = false, setupSearchFailed = false,
+                        catalogReady = true, catalogLoadFailed = false)
+                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                if (isActive) _state.update { ui ->
+                    if (ui.setupQuery != issued) ui
+                    else ui.copy(setupResults = emptyList(), setupSearching = false, setupSearchFailed = true)
+                }
             }
         }
     }
@@ -191,6 +395,8 @@ class AppViewModel(
                 setupSelected = if (samePlace) it.setupSelected else emptySet(),
                 setupResults = emptyList(),
                 setupSearching = false,
+                setupSaveFailed = false,
+                setupSearchFailed = false,
             )
         }
     }
@@ -215,6 +421,11 @@ class AppViewModel(
         val place = st.setupPlace ?: return
         val selected = place.servicios.filter { it.key() in st.setupSelected }
         if (selected.isEmpty()) return
+        if (Paradero.normalize(place.queryParadero) == null) {
+            _state.update { it.copy(setupSaveFailed = true) }
+            return
+        }
+        _state.update { it.copy(setupSaveFailed = false) }
         val board = Board(
             boardId = st.editingBoardId ?: boards.newId(),
             placeId = place.placeId,
@@ -227,9 +438,16 @@ class AppViewModel(
             },
         )
         viewModelScope.launch {
-            boards.save(board)
-            _state.update { it.copy(screen = Screen.HOME, editingBoardId = null) }
-            restartLoop()
+            try {
+                boards.save(board)
+                setupReturnsToDetails = false
+                _state.update { it.copy(screen = Screen.HOME, editingBoardId = null) }
+                restartLoop()
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                _state.update { it.copy(setupSaveFailed = true) }
+            }
         }
     }
 
@@ -239,6 +457,7 @@ class AppViewModel(
                 val before = boards.snapshot()
                 val deleted = before.boards.find { it.boardId == boardId } ?: return@withLock
                 boards.delete(boardId)
+                arrivals.remove(deleted.boardId)
                 val after = boards.snapshot()
                 boardDeletion = BoardDeletion(deleted, before.boards.map { it.boardId }, before.lastBoardId, after.lastBoardId)
                 _state.update { it.copy(screen = Screen.HOME, editingBoardId = null,
@@ -265,19 +484,6 @@ class AppViewModel(
                 if (boardDeletion?.board?.boardId != boardId) return@withLock
                 boardDeletion = null
                 _state.update { it.copy(pendingDeletion = null) }
-            }
-        }
-    }
-
-    fun moveBoard(boardId: String, delta: Int) {
-        viewModelScope.launch {
-            boardMutation.withLock {
-                val ids = boards.snapshot().boards.map { it.boardId }.toMutableList()
-                val i = ids.indexOf(boardId)
-                val j = i + delta
-                if (i < 0 || j !in ids.indices) return@withLock
-                ids[i] = ids[j].also { ids[j] = ids[i] }
-                boards.reorder(ids)
             }
         }
     }
@@ -415,6 +621,7 @@ class AppViewModel(
                 container.clock,
                 io,
                 compute,
+                container.routes,
             ) as T
         }
     }
@@ -441,12 +648,12 @@ private fun BoardView.withCache(): BoardView {
 private fun BoardView.applyResult(result: FetchResult): BoardView = when (result) {
     is FetchResult.Success -> copy(
         arrivals = result.arrivals,
-        cache = CachedArrivals(result.arrivals, result.fetchedAt, false),
+        cache = CachedArrivals(result.arrivals, result.fetchedAt),
         freshness = Freshness.Updated(result.fetchedAt),
     )
     is FetchResult.Empty -> copy(
         arrivals = emptyList(),
-        cache = CachedArrivals(emptyList(), result.fetchedAt, true),
+        cache = CachedArrivals(emptyList(), result.fetchedAt),
         freshness = Freshness.Empty(result.fetchedAt),
     )
     is FetchResult.Unsupported -> copy(freshness = Freshness.Unsupported)
@@ -467,5 +674,3 @@ private fun BoardView.applyResult(result: FetchResult): BoardView = when (result
 fun co.camilo.transmicrone.domain.ServicioOption.key(): String = "$painted\u0001$destino"
 
 fun SelectedServicio.key(): String = "$painted\u0001$destino"
-
-fun PlaceKind.label(): String = if (this == PlaceKind.ESTACION) "Estación" else "Paradero"

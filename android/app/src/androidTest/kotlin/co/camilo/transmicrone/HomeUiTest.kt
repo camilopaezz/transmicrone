@@ -105,7 +105,6 @@ class HomeUiTest {
             distanceLabel = "200 mts",
             occupancy = Occupancy.UNKNOWN,
             colorRuta = "#AE6B00",
-            colorTexto = "#FFFFFF",
         )
         compose.setContent {
             TransmicroneTheme {
@@ -270,6 +269,5 @@ class HomeUiTest {
         distanceLabel = "200 mts",
         occupancy = Occupancy.UNKNOWN,
         colorRuta = "#AE6B00",
-        colorTexto = "#FFFFFF",
     )
 }

@@ -6,6 +6,8 @@ Personal arrivals boards for Bogotá's TransMilenio and SITP. A native Android a
 
 Save a station or stop, choose its services, and see arrivals together. Swipe or tap chips between boards and pull down to refresh. Use the pencil to edit or delete the current board, and the trailing “+ Agregar” chip to add one. Station arrivals show individual vehicle reports; old reports stay marked as old. The app polls the visible board every 25 seconds.
 
+Use the top-right search icon to find services by code or destination, or stations and stops by name or code. Place details list their services and can start a new arrivals board. Service details load the official route from origin to destination, with ordered stops and wagons. Separate route variants remain separate. Route details need a connection to the official catalog API; successful routes are cached for this app session.
+
 ## Build and run
 
 Install JDK 21 and an Android SDK with platform 36 and build tools 36.1.0. Set `JAVA_HOME` and `ANDROID_HOME`, or configure the SDK path in `android/local.properties`.

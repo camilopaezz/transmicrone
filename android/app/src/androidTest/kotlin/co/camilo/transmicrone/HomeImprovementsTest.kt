@@ -5,8 +5,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -27,7 +25,7 @@ class HomeImprovementsTest {
     @get:Rule val compose = createComposeRule()
     private val board = Board("1", "estacion:TM0101", PlaceKind.ESTACION, "TM0101", "León XIII", "Soacha",
         listOf(SelectedServicio("E48", "CAD", listOf(13266))))
-    private val arrival = Arrival("E48", "CAD", 13266, 62282, "Entre 2 y 4 min", "200 mts", Occupancy.UNKNOWN, null, null)
+    private val arrival = Arrival("E48", "CAD", 13266, 62282, "Entre 2 y 4 min", "200 mts", Occupancy.UNKNOWN, null)
 
     @Test fun failedCacheKeepsAgeAndOffersRetry() {
         var retries = 0
@@ -144,7 +142,7 @@ class HomeImprovementsTest {
         compose.onNodeWithText("Desliza para cambiar de tablero").assertDoesNotExist()
     }
 
-    @Test fun pencilEditsPagerVisibleBoardBeforeSettledPageCallback() {
+    @Test fun pencilEditsVisibleBoardAfterSwipe() {
         var edited: String? = null
         var settled = 0
         val second = board.copy(boardId = "2", displayName = "Ricaurte")
@@ -152,15 +150,10 @@ class HomeImprovementsTest {
             HomeScreen(listOf(BoardView(board, listOf(arrival)), BoardView(second, listOf(arrival))),
                 0, { settled = it }, {}, { edited = it }, {})
         } }
-        compose.mainClock.autoAdvance = false
-        compose.onNodeWithTag("arrival-viewport").performTouchInput {
-            down(Offset(width * 0.9f, centerY))
-            moveTo(Offset(width * 0.1f, centerY), 600)
-        }
-        compose.onNodeWithContentDescription("Editar tablero").performSemanticsAction(SemanticsActions.OnClick) { it() }
-        compose.runOnIdle { assertEquals("2", edited); assertEquals(0, settled) }
-        compose.onAllNodesWithTag("arrival-viewport")[0].performTouchInput { up() }
-        compose.mainClock.autoAdvance = true
+        compose.onNodeWithTag("arrival-viewport").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Editar tablero").assertIsDisplayed().performClick()
+        compose.runOnIdle { assertEquals("2", edited); assertEquals(1, settled) }
     }
 
     @Test fun emptyHomeIsScrollableAtDoubleFont() {

@@ -26,17 +26,8 @@ interface BoardRepository {
     suspend fun snapshot(): BoardSnapshot
     suspend fun save(board: Board)
     suspend fun delete(boardId: String)
-    suspend fun reorder(boardIds: List<String>)
     suspend fun setLastBoard(boardId: String?)
-    suspend fun restoreDeleted(board: Board, originalOrder: List<String>, previousLastBoardId: String?, lastBoardIdAfterDelete: String?) {
-        val current = snapshot()
-        if (current.boards.any { it.boardId == board.boardId }) return
-        val restored = current.restoringDeleted(board, originalOrder, previousLastBoardId, lastBoardIdAfterDelete)
-        save(board)
-        val ids = restored.boards.map { it.boardId }
-        reorder(ids + snapshot().boards.map { it.boardId }.filterNot { it in ids })
-        setLastBoard(restored.lastBoardId)
-    }
+    suspend fun restoreDeleted(board: Board, originalOrder: List<String>, previousLastBoardId: String?, lastBoardIdAfterDelete: String?)
     fun newId(): String = UUID.randomUUID().toString()
 }
 
@@ -98,7 +89,7 @@ class DataStoreBoardRepository(
     override suspend fun snapshot(): BoardSnapshot = observe().first()
 
     override suspend fun save(board: Board) {
-        val query = Paradero.normalize(board.queryParadero) ?: return
+        val query = requireNotNull(Paradero.normalize(board.queryParadero)) { "Invalid station or stop code" }
         val cleaned = board.copy(
             queryParadero = query,
             displayName = TextNorm.nfc(board.displayName),
@@ -115,15 +106,6 @@ class DataStoreBoardRepository(
 
     override suspend fun delete(boardId: String) {
         mutate { it.deleting(boardId) }
-    }
-
-    override suspend fun reorder(boardIds: List<String>) {
-        mutate { current ->
-            val map = current.boards.associateBy { it.boardId }
-            val ordered = boardIds.mapNotNull { map[it] }
-            val rest = current.boards.filter { it.boardId !in boardIds }
-            current.copy(boards = ordered + rest)
-        }
     }
 
     override suspend fun setLastBoard(boardId: String?) {

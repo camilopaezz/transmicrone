@@ -99,3 +99,23 @@ At 08:19 Bogota, simultaneous S43 / TM0069 requests disagreed: the service summa
 Fetch time and source report time are separate. `lasttime` is interpreted as a Bogota clock time on the most recent date with five minutes of clock-skew tolerance. Reports older than two minutes are visibly stale even when fetched successfully. Missing source time is displayed as unavailable. Time ranges remain server phrases, without an invented countdown. Any failed variant request preserves the last complete board, with its failure state.
 
 A successful `/getServicios` response can also have an empty body rather than `[]`, observed for S48 / TM0069 on 2026-10-02. Android treats that vehicle-endpoint response as no nearby results, matching the PC script. Blank service-summary bodies remain malformed; non-200 statuses remain failures.
+
+## Composite catalog selections, 2026-10-09
+
+The packaged GTFS-derived catalog has `FZ63 / F63 Pradera || Z63 Tibanica / 13789`
+at `TM90009`. That line code is not a valid directional arrival selector. An
+immediate `/getServicios` request with `Z63`, `Tibanica`, and `13789` returned
+three vehicles. `/location/ruta` reported Z63 vehicles on `13789`, while F63
+vehicles used `13167`. GIS Servicios still lists F63/Pradera as `13167` and
+Z63/Tibanica as `13168`; its older Z63 ID must not replace the observed live ID.
+These IDs are separate from the public route-details API namespace.
+
+`FeedSelection` therefore resolves only the exact verified composite tuple to
+`Z63 / Tibanica / 13789`. It does not assign that ID to F63, add unselected IDs,
+or rewrite saved boards. Station requests and stop-summary filtering share the
+resolution. Unknown composite mappings return Unsupported for station requests
+rather than a successful empty board. Add mappings only with directional live
+ID evidence; paired headsign text alone is insufficient. Ordinary service code,
+destination, and route ID guards remain in place. Composite rows additionally
+require the reported route ID. Requests remain limited to two at a time and any
+failed request preserves the previous complete board.

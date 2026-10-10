@@ -19,6 +19,8 @@ class FileArrivalsCache(
     private val dir: File,
     private val json: Json,
 ) : ArrivalsCache {
+    private val cacheJson = Json(json) { ignoreUnknownKeys = true }
+
     init {
         dir.mkdirs()
     }
@@ -27,11 +29,10 @@ class FileArrivalsCache(
         val file = fileFor(boardId) ?: return null
         if (!file.isFile) return null
         return runCatching {
-            val stored = json.decodeFromString(StoredCache.serializer(), file.readText())
+            val stored = cacheJson.decodeFromString(StoredCache.serializer(), file.readText())
             CachedArrivals(
                 arrivals = stored.arrivals.map { it.toArrival() },
                 fetchedAt = Instant.ofEpochMilli(stored.fetchedAtEpochMs),
-                emptySuccess = stored.emptySuccess,
             )
         }.getOrNull()
     }
@@ -40,7 +41,6 @@ class FileArrivalsCache(
         val file = fileFor(boardId) ?: return
         val stored = StoredCache(
             fetchedAtEpochMs = cached.fetchedAt.toEpochMilli(),
-            emptySuccess = cached.emptySuccess,
             arrivals = cached.arrivals.map { it.toStored() },
         )
         file.writeText(json.encodeToString(StoredCache.serializer(), stored))
@@ -59,7 +59,6 @@ class FileArrivalsCache(
 @Serializable
 private data class StoredCache(
     val fetchedAtEpochMs: Long,
-    val emptySuccess: Boolean,
     val arrivals: List<StoredArrival> = emptyList(),
 )
 
@@ -73,7 +72,6 @@ private data class StoredArrival(
     val distanceLabel: String? = null,
     val occupancy: String = Occupancy.UNKNOWN.name,
     val colorRuta: String? = null,
-    val colorTexto: String? = null,
     val identity: String = ArrivalIdentity.SERVICIO_ESTIMATE.name,
     val vehicleId: String? = null,
     val label: String? = null,
@@ -91,7 +89,6 @@ private data class StoredArrival(
         distanceLabel = distanceLabel,
         occupancy = runCatching { Occupancy.valueOf(occupancy) }.getOrDefault(Occupancy.UNKNOWN),
         colorRuta = colorRuta,
-        colorTexto = colorTexto,
         identity = runCatching { ArrivalIdentity.valueOf(identity) }
             .getOrDefault(ArrivalIdentity.SERVICIO_ESTIMATE),
     )
@@ -106,7 +103,6 @@ private fun Arrival.toStored() = StoredArrival(
     distanceLabel = distanceLabel,
     occupancy = occupancy.name,
     colorRuta = colorRuta,
-    colorTexto = colorTexto,
     identity = identity.name,
     vehicleId = vehicleId,
     label = label,

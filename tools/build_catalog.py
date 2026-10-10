@@ -196,6 +196,22 @@ def catalog_info(id_ruta: str, nombre: str, codigo: str) -> dict:
     return data
 
 
+def info_route_stops(info: object) -> list[dict]:
+    """Read stop rows from either observed infoRuta recorrido shape."""
+    if not isinstance(info, dict):
+        raise ValueError("infoRuta response must be an object")
+    recorrido = info.get("recorrido")
+    if isinstance(recorrido, list):
+        stops = recorrido
+    elif isinstance(recorrido, dict) and "data" in recorrido:
+        stops = recorrido["data"]
+    else:
+        raise ValueError("infoRuta recorrido must be an array or an object with data")
+    if not isinstance(stops, list) or any(not isinstance(stop, dict) for stop in stops):
+        raise ValueError("infoRuta recorrido rows must be objects in an array")
+    return stops
+
+
 def wagon_from_platform_name(name: str) -> str | None:
     m = WAGON_RE.search(nfc(name))
     return m.group(1).upper() if m else None
@@ -354,7 +370,6 @@ def main() -> int:
 
     # infoRuta for troncal/dual: TM codes live here, not in GIS/GTFS
     tm_by_nodo: dict[int, dict] = {}
-    serving_info: list[dict] = []
     info_ok = 0
     info_fail = 0
     if not args.skip_info_ruta:
@@ -370,7 +385,7 @@ def main() -> int:
         for i, r in enumerate(candidates, 1):
             try:
                 info = catalog_info(str(r.get("id")), nfc(r.get("nombre")), str(r.get("codigo")))
-                rec = (info.get("recorrido") or {}).get("data") or []
+                rec = info_route_stops(info)
                 info_ok += 1
                 for stop in rec:
                     try:
@@ -395,16 +410,6 @@ def main() -> int:
                                     "b": codigo,
                                 }
                             )
-                    serving_info.append(
-                        {
-                            "catalog_id": str(r.get("id")),
-                            "painted": str(r.get("codigo")),
-                            "nodo": nodo,
-                            "tm_code": codigo if str(codigo).startswith("TM") else None,
-                            "wagon": stop.get("vagon"),
-                            "name": nfc(stop.get("nombre")),
-                        }
-                    )
             except Exception as e:
                 info_fail += 1
                 failures.append(

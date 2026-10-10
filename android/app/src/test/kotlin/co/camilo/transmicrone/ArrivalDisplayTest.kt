@@ -9,7 +9,7 @@ import org.junit.Test
 class ArrivalDisplayTest {
     private fun arrival(phrase: String, distance: String? = null) = Arrival(
         "S43", "San Mateo", 13278, null, phrase, distance,
-        Occupancy.UNKNOWN, null, null,
+        Occupancy.UNKNOWN, null,
     )
 
     @Test fun repairsJoinedFeedWordsAndSuppressesMatchingDistanceOnly() {

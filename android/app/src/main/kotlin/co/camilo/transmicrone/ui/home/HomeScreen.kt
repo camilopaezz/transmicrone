@@ -58,6 +58,7 @@ fun HomeScreen(
     loadingBoards: Boolean = false,
     swipeHintDismissal: MutableState<Boolean> = rememberSaveable { mutableStateOf(false) },
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
+    onSearch: () -> Unit = {},
 ) {
     if (loadingBoards) {
         Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { insets ->
@@ -69,7 +70,7 @@ fun HomeScreen(
         }
         return
     }
-    if (boards.isEmpty()) { EmptyHome(onAdd, snackbarHostState); return }
+    if (boards.isEmpty()) { EmptyHome(onAdd, snackbarHostState, onSearch); return }
     val index = pageIndex.coerceIn(0, boards.lastIndex)
     val current = boards[index]
     val listStates = boards.map { view -> key(view.board.boardId) { rememberLazyListState() } }
@@ -128,8 +129,11 @@ fun HomeScreen(
                     if (!compactAppBar) Icon(Icons.Default.DirectionsBus, null, Modifier.padding(start = 20.dp, end = 12.dp), tint = MaterialTheme.colorScheme.primary)
                 },
                 actions = {
-                    IconButton(onClick = { boards.getOrNull(pager.currentPage)?.board?.boardId?.let(onEdit) }, modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)) {
+                    if (headerGone) IconButton(onClick = { onEdit(current.board.boardId) }) {
                         Icon(Icons.Default.Edit, stringResource(R.string.edit_board))
+                    }
+                    IconButton(onClick = onSearch) {
+                        Icon(Icons.Default.Search, stringResource(R.string.catalog_search))
                     }
                 },
             )
@@ -194,7 +198,7 @@ fun HomeScreen(
                         }
                         ArrivalList(
                             view.arrivals, empty, Modifier.weight(1f).fillMaxWidth().testTag("arrival-viewport").topFade { fade }, state = listState,
-                            header = { StationHeader(view, page, boards.size, onRefresh) },
+                            header = { StationHeader(view, page, boards.size, onRefresh, onEdit) },
                             bottomContentPadding = 24.dp,
                             colorForArrival = { arrival -> routeColor(view, arrival.painted, arrival.routeId) },
                         )
@@ -215,7 +219,7 @@ fun HomeScreen(
 }
 
 @Composable
-private fun StationHeader(view: BoardView, index: Int, boardCount: Int, onRefresh: () -> Unit) {
+private fun StationHeader(view: BoardView, index: Int, boardCount: Int, onRefresh: () -> Unit, onEdit: (String) -> Unit) {
     Column(Modifier.padding(horizontal = 4.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -229,6 +233,12 @@ private fun StationHeader(view: BoardView, index: Int, boardCount: Int, onRefres
                     }
                     FreshnessLine(view.freshness, onRetry = onRefresh)
                 }
+            }
+            IconButton(
+                onClick = { onEdit(view.board.boardId) },
+                modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
+            ) {
+                Icon(Icons.Default.Edit, stringResource(R.string.edit_board))
             }
         }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -278,9 +288,10 @@ private fun Modifier.topFade(fraction: () -> Float): Modifier =
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EmptyHome(onAdd: () -> Unit, snackbarHostState: SnackbarHostState = remember { SnackbarHostState() }) {
+fun EmptyHome(onAdd: () -> Unit, snackbarHostState: SnackbarHostState = remember { SnackbarHostState() }, onSearch: () -> Unit = {}) {
     Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }, topBar = {
-        TopAppBar(title = { Text(stringResource(R.string.app_name), style = TransmicroneBrandStyle) })
+        TopAppBar(title = { Text(stringResource(R.string.app_name), style = TransmicroneBrandStyle) },
+            actions = { IconButton(onClick = onSearch) { Icon(Icons.Default.Search, stringResource(R.string.catalog_search)) } })
     }) { insets ->
         Column(
             Modifier.fillMaxSize().padding(insets).verticalScroll(rememberScrollState()).padding(horizontal = 28.dp),

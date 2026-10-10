@@ -76,7 +76,22 @@ def get_servicios(estacion: str, ruta: str, route_id: int, nombre: str) -> list[
         "Distancia": 12000,
     }
     out = bodega("/getServicios", body)
-    return out if isinstance(out, list) else []
+    if not isinstance(out, list) or any(not isinstance(row, dict) for row in out):
+        raise SystemExit("/getServicios: expected an array of objects")
+    return out
+
+
+def matching_services(
+    servicios: list[dict], ruta: str, route_id: int, nombre: str
+) -> list[dict]:
+    """Keep only rows for the selected painted service and GTFS variant."""
+    return [
+        row
+        for row in servicios
+        if str(row.get("ruta_sae")) == str(route_id)
+        and row.get("ruta_extraida") == ruta
+        and nfc(row.get("destino_limpio") or "") == nombre
+    ]
 
 
 def pick_variant(buses: list[dict]) -> tuple[int, str]:
@@ -108,7 +123,12 @@ def main() -> int:
         for b in buses
         if b["route_id"] == route_id and nfc(b["destino_limpio"]) == nombre
     ]
-    servicios = get_servicios(args.estacion, args.ruta, route_id, nombre)
+    servicios = matching_services(
+        get_servicios(args.estacion, args.ruta, route_id, nombre),
+        args.ruta,
+        route_id,
+        nombre,
+    )
 
     occ_by_id = {str(b["id"]): b.get("ocupacion_bus") or "" for b in inbound}
     for s in servicios:

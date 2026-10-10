@@ -59,7 +59,6 @@ data class Arrival(
     val distanceLabel: String?,
     val occupancy: Occupancy,
     val colorRuta: String?,
-    val colorTexto: String?,
     val identity: ArrivalIdentity = ArrivalIdentity.SERVICIO_ESTIMATE,
     val vehicleId: String? = null,
     val label: String? = null,
@@ -69,7 +68,6 @@ data class Arrival(
 data class CachedArrivals(
     val arrivals: List<Arrival>,
     val fetchedAt: Instant,
-    val emptySuccess: Boolean,
 )
 
 sealed class FetchResult {

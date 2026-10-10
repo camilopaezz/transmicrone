@@ -8,6 +8,7 @@ import co.camilo.transmicrone.data.local.BoardRepository
 import co.camilo.transmicrone.data.local.BoardSnapshot
 import co.camilo.transmicrone.data.local.FileArrivalsCache
 import co.camilo.transmicrone.data.local.saving
+import co.camilo.transmicrone.data.local.restoringDeleted
 import co.camilo.transmicrone.domain.Arrival
 import co.camilo.transmicrone.domain.Board
 import co.camilo.transmicrone.domain.CachedArrivals
@@ -78,6 +79,299 @@ class AppViewModelTest {
                 stores.clear()
             }
         }
+
+    @Test
+    fun catalogDetailsReturnThroughHistoryAndKeepSearchQuery() = vmTest {
+        val vm = viewModel(ScriptedFeed(), MemoryBoards(listOf(leonBoard())))
+        runCurrent()
+        vm.openSearch()
+        vm.searchCatalog("leon")
+        advanceTimeBy(151)
+        runCurrent()
+        val place = vm.state.value.catalogResults.places.single()
+        vm.openDetails(co.camilo.transmicrone.domain.CatalogEntry.Location(place))
+        vm.openService(place.servicios.first())
+        runCurrent()
+        assertEquals(2, vm.state.value.details.size)
+        vm.backSetup()
+        assertEquals(Screen.DETAILS, vm.state.value.screen)
+        vm.backSetup()
+        assertEquals(Screen.SEARCH, vm.state.value.screen)
+        assertEquals("leon", vm.state.value.catalogQuery)
+        assertEquals(listOf(place), vm.state.value.catalogResults.places)
+        vm.openDetails(co.camilo.transmicrone.domain.CatalogEntry.Location(place))
+        vm.createBoardFrom(place)
+        assertEquals(Screen.SETUP, vm.state.value.screen)
+        assertEquals(place, vm.state.value.setupPlace)
+        assertTrue(vm.state.value.setupSelected.isEmpty())
+    }
+
+    @Test
+    fun latestServiceTapWinsAndBackInvalidatesPendingLookup() = vmTest {
+        val first = leonPlace().servicios.single()
+        val second = first.copy(painted = "E42", destino = "7 de Agosto")
+        val place = leonPlace().copy(servicios = listOf(first, second))
+        val catalog = FakeCatalog(listOf(place), serviceDelays = mapOf("E48" to 1000L, "E42" to 100L))
+        val vm = viewModel(ScriptedFeed(), MemoryBoards(), catalog = catalog)
+        runCurrent()
+        vm.openSearch()
+        vm.openDetails(co.camilo.transmicrone.domain.CatalogEntry.Location(place))
+        vm.openService(first)
+        runCurrent()
+        vm.openService(second)
+        advanceTimeBy(101)
+        runCurrent()
+        assertEquals(second, (vm.state.value.details.last() as co.camilo.transmicrone.domain.CatalogEntry.Service).option)
+        advanceTimeBy(1000)
+        runCurrent()
+        assertEquals(2, vm.state.value.details.size)
+        vm.backSetup()
+        vm.openService(first)
+        runCurrent()
+        vm.backSetup()
+        vm.openDetails(co.camilo.transmicrone.domain.CatalogEntry.Location(place))
+        advanceTimeBy(1001)
+        runCurrent()
+        assertEquals(listOf(co.camilo.transmicrone.domain.CatalogEntry.Location(place)), vm.state.value.details)
+    }
+
+    @Test
+    fun routeSelectionSurvivesOpeningStopAndReturning() = vmTest {
+        val option = leonPlace().servicios.single()
+        val routes = co.camilo.transmicrone.data.catalog.RouteRepository {
+            listOf("one", "two").map { id -> co.camilo.transmicrone.domain.ServiceRoute(id,
+                listOf(co.camilo.transmicrone.domain.RouteStop("TM0101", "León XIII"))) }
+        }
+        val vm = viewModel(ScriptedFeed(), MemoryBoards(), routeRepository = routes)
+        runCurrent()
+        val entry = co.camilo.transmicrone.domain.CatalogEntry.Service(option, listOf(leonPlace()))
+        vm.openDetails(entry)
+        runCurrent()
+        vm.selectRoute(option, 1)
+        vm.openDetails(co.camilo.transmicrone.domain.CatalogEntry.Location(leonPlace()))
+        vm.backSetup()
+        assertEquals(entry, vm.state.value.details.last())
+        assertEquals(1, vm.state.value.selectedRoutes[option.key()])
+        vm.selectRoute(option, 10)
+        assertEquals(1, vm.state.value.selectedRoutes[option.key()])
+    }
+
+    @Test
+    fun cancelBoardCreationReturnsToDetailsIncludingAfterChangingPlace() = vmTest {
+        val vm = viewModel(ScriptedFeed(), MemoryBoards())
+        runCurrent()
+        vm.openSearch()
+        val entry = co.camilo.transmicrone.domain.CatalogEntry.Location(leonPlace())
+        vm.openDetails(entry)
+        repeat(2) { attempt ->
+            vm.createBoardFrom(leonPlace())
+            if (attempt == 1) vm.changeSetupPlace()
+            vm.backSetup()
+            assertEquals(Screen.DETAILS, vm.state.value.screen)
+            assertEquals(listOf(entry), vm.state.value.details)
+            assertNull(vm.state.value.setupPlace)
+        }
+    }
+
+    @Test
+    fun catalogSearchDoesNotShowOldResultsAfterQueryChanges() = vmTest {
+        val catalog = FakeCatalog(listOf(leonPlace(), ricaurtePlace()), searchDelays = mapOf("leon" to 1000L))
+        val vm = viewModel(ScriptedFeed(), MemoryBoards(), catalog = catalog)
+        runCurrent()
+        vm.openSearch()
+        vm.searchCatalog("leon")
+        advanceTimeBy(200)
+        vm.searchCatalog("ricaurte")
+        advanceTimeBy(1200)
+        runCurrent()
+        assertEquals("Ricaurte - NQS", vm.state.value.catalogResults.places.single().name)
+        vm.searchCatalog("")
+        assertTrue(vm.state.value.catalogResults.places.isEmpty())
+        assertFalse(vm.state.value.catalogSearching)
+    }
+
+    @Test
+    fun failedRouteCanBeRetriedAndSuccessfulRouteKeepsStopOrder() = vmTest {
+        var calls = 0
+        val routes = co.camilo.transmicrone.data.catalog.RouteRepository {
+            calls++
+            if (calls == 1) throw java.io.IOException("offline")
+            listOf(co.camilo.transmicrone.domain.ServiceRoute("12444", listOf(
+                co.camilo.transmicrone.domain.RouteStop("TM0101", "León XIII"),
+                co.camilo.transmicrone.domain.RouteStop("TM0069", "Ricaurte"),
+            )))
+        }
+        val vm = viewModel(ScriptedFeed(), MemoryBoards(), routeRepository = routes)
+        runCurrent()
+        val option = leonPlace().servicios.first()
+        vm.openDetails(co.camilo.transmicrone.domain.CatalogEntry.Service(option, listOf(leonPlace())))
+        assertEquals(co.camilo.transmicrone.ui.RouteState.Loading, vm.state.value.routes[option.key()])
+        runCurrent()
+        assertEquals(co.camilo.transmicrone.ui.RouteState.Failed, vm.state.value.routes[option.key()])
+        vm.loadRoute(option, retry = true)
+        runCurrent()
+        val loaded = vm.state.value.routes[option.key()] as co.camilo.transmicrone.ui.RouteState.Loaded
+        assertEquals(listOf("TM0101", "TM0069"), loaded.routes.single().stops.map { it.code })
+        assertEquals("estacion:TM0101", loaded.routes.single().stops.first().place!!.placeId)
+        vm.loadRoute(option)
+        runCurrent()
+        assertEquals(2, calls)
+    }
+
+    @Test
+    fun staleRouteFailureCannotReplaceNewerRetrySuccess() = vmTest {
+        var calls = 0
+        val routes = co.camilo.transmicrone.data.catalog.RouteRepository {
+            calls++
+            if (calls == 1) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                    delay(1_000)
+                }
+                throw java.io.IOException("stale failure")
+            }
+            listOf(co.camilo.transmicrone.domain.ServiceRoute("new", emptyList()))
+        }
+        val vm = viewModel(ScriptedFeed(), MemoryBoards(), routeRepository = routes)
+        runCurrent()
+        val option = leonPlace().servicios.single()
+        vm.loadRoute(option)
+        runCurrent()
+        vm.loadRoute(option, retry = true)
+        runCurrent()
+        assertTrue(vm.state.value.routes[option.key()] is co.camilo.transmicrone.ui.RouteState.Loaded)
+        advanceTimeBy(1_000)
+        runCurrent()
+        val state = vm.state.value.routes[option.key()] as co.camilo.transmicrone.ui.RouteState.Loaded
+        assertEquals("new", state.routes.single().catalogId)
+    }
+
+    @Test
+    fun setupSearchFailureLeavesLoadingAndSetsErrorState() = vmTest {
+        val catalog = FakeCatalog(listOf(leonPlace()), searchFailure = java.io.IOException("offline"))
+        val vm = viewModel(ScriptedFeed(), MemoryBoards(), catalog = catalog)
+        runCurrent()
+        vm.openSetup()
+        vm.onSearch("leon")
+        runCurrent()
+        assertFalse(vm.state.value.setupSearching)
+        assertTrue(vm.state.value.setupSearchFailed)
+        assertTrue(vm.state.value.setupResults.isEmpty())
+    }
+
+    @Test
+    fun invalidPlaceSaveKeepsSetupOpenAndSetsErrorState() = vmTest {
+        val place = leonPlace().copy(queryParadero = "invalid code")
+        val vm = viewModel(ScriptedFeed(), MemoryBoards(), catalog = FakeCatalog(listOf(place)))
+        runCurrent()
+        vm.openSetup()
+        vm.pickPlace(place)
+        vm.toggleServicio(place.servicios.single().key())
+        vm.saveSetup()
+        runCurrent()
+        assertEquals(Screen.SETUP, vm.state.value.screen)
+        assertTrue(vm.state.value.setupSaveFailed)
+        assertTrue(vm.state.value.boards.isEmpty())
+    }
+
+    @Test
+    fun deletingBoardRemovesItsArrivalCache() = vmTest {
+        val board = leonBoard()
+        val cache = FileArrivalsCache(File(System.getProperty("java.io.tmpdir"), "tm-vm-${System.nanoTime()}"), json)
+        cache.write(board.boardId, CachedArrivals(listOf(arrival("E48", "Entre 2 y 4 min")), clock.now()))
+        val vm = viewModel(ScriptedFeed(), MemoryBoards(listOf(board)), cache)
+        runCurrent()
+        assertTrue(cache.read(board.boardId) != null)
+        vm.deleteBoard(board.boardId)
+        runCurrent()
+        assertNull(cache.read(board.boardId))
+    }
+
+    @Test
+    fun catalogLoadFailureDoesNotMarkCatalogReady() = vmTest {
+        val catalog = FakeCatalog(listOf(leonPlace()), generatedAtFailure = java.io.IOException("offline"))
+        val vm = viewModel(ScriptedFeed(), MemoryBoards(), catalog = catalog)
+        runCurrent()
+        assertFalse(vm.state.value.catalogReady)
+        assertTrue(vm.state.value.catalogLoadFailed)
+        vm.openSetup()
+        assertTrue(vm.state.value.catalogLoadFailed)
+    }
+
+    @Test
+    fun editingBoardSurvivesCatalogPlaceLookupFailure() = vmTest {
+        val catalog = FakeCatalog(listOf(leonPlace()), placeFailure = java.io.IOException("broken catalog"))
+        val vm = viewModel(ScriptedFeed(), MemoryBoards(listOf(leonBoard())), catalog = catalog)
+        runCurrent()
+        vm.openSetup("leon")
+        assertEquals(Screen.SETUP, vm.state.value.screen)
+        assertEquals("leon", vm.state.value.editingBoardId)
+        assertNull(vm.state.value.setupPlace)
+        assertEquals(setOf(leonPlace().servicios.single().key()), vm.state.value.setupSelected)
+        assertTrue(vm.state.value.setupSearchFailed)
+        assertTrue(vm.state.value.catalogLoadFailed)
+    }
+
+    @Test
+    fun serviceLookupFailureKeepsDetailsHistoryWithoutGlobalCatalogError() = vmTest {
+        val place = leonPlace()
+        val catalog = FakeCatalog(listOf(place), serviceFailure = java.io.IOException("broken catalog"))
+        val vm = viewModel(ScriptedFeed(), MemoryBoards(), catalog = catalog)
+        runCurrent()
+        val history = listOf(co.camilo.transmicrone.domain.CatalogEntry.Location(place))
+        vm.openSearch()
+        vm.searchCatalog("leon")
+        vm.openDetails(history.single())
+        vm.openService(place.servicios.single())
+        runCurrent()
+        assertEquals(Screen.DETAILS, vm.state.value.screen)
+        assertEquals(history, vm.state.value.details)
+        assertFalse("A details lookup failure needs its own retry state", vm.state.value.catalogLoadFailed)
+        assertEquals(place.servicios.single(), vm.state.value.serviceLookup!!.option)
+        assertTrue(vm.state.value.serviceLookup!!.failed)
+        catalog.serviceFailure = null
+        vm.retryServiceLookup()
+        assertFalse(vm.state.value.serviceLookup!!.failed)
+        runCurrent()
+        assertNull(vm.state.value.serviceLookup)
+        assertEquals(2, vm.state.value.details.size)
+        assertEquals("leon", vm.state.value.catalogQuery)
+        vm.backSetup()
+        assertEquals(history, vm.state.value.details)
+        vm.retryServiceLookup()
+        runCurrent()
+        assertEquals(history, vm.state.value.details)
+    }
+
+    @Test
+    fun failedLookupClearsOnNewTapAndNavigationAndMissingServiceCanRetry() = vmTest {
+        val place = leonPlace()
+        val option = place.servicios.single()
+        val catalog = FakeCatalog(listOf(place), serviceFailure = java.io.IOException("unavailable"))
+        val vm = viewModel(ScriptedFeed(), MemoryBoards(listOf(leonBoard())), catalog = catalog)
+        runCurrent()
+        vm.openDetails(co.camilo.transmicrone.domain.CatalogEntry.Location(place))
+        vm.openService(option)
+        runCurrent()
+        assertTrue(vm.state.value.serviceLookup!!.failed)
+        catalog.serviceFailure = null
+        catalog.serviceDelays = mapOf(option.painted to 1000L)
+        vm.openService(option)
+        assertFalse(vm.state.value.serviceLookup!!.failed)
+        vm.backSetup()
+        assertNull(vm.state.value.serviceLookup)
+        vm.retryServiceLookup()
+        advanceTimeBy(1001)
+        runCurrent()
+        assertEquals(Screen.SEARCH, vm.state.value.screen)
+        assertTrue(vm.state.value.details.isEmpty())
+        vm.openDetails(co.camilo.transmicrone.domain.CatalogEntry.Location(place))
+        vm.openService(option.copy(painted = "missing"))
+        runCurrent()
+        assertTrue(vm.state.value.serviceLookup!!.failed)
+        vm.goHome()
+        assertNull(vm.state.value.serviceLookup)
+        assertEquals(1, vm.state.value.boards.size)
+    }
 
     @Test
     fun coldStartDoesNotTripleFetchSamePage() = vmTest {
@@ -156,7 +450,7 @@ class AppViewModelTest {
         val cache = FileArrivalsCache(cacheDir, json)
         cache.write(
             "leon",
-            CachedArrivals(listOf(arrival("E48", "Entre 2 y 4 min")), clock.now(), emptySuccess = false),
+            CachedArrivals(listOf(arrival("E48", "Entre 2 y 4 min")), clock.now()),
         )
         val feed = ScriptedFeed()
         feed.enqueue(60_000, FetchResult.Success(listOf(arrival("E48", "Entre 5 y 7 min")), clock.now()))
@@ -356,6 +650,7 @@ class AppViewModelTest {
             json,
         ),
         catalog: CatalogRepository = FakeCatalog(listOf(leonPlace(), ricaurtePlace())),
+        routeRepository: co.camilo.transmicrone.data.catalog.RouteRepository = co.camilo.transmicrone.data.catalog.RouteRepository { emptyList() },
     ): AppViewModel {
         val store = ViewModelStore()
         stores += store
@@ -365,10 +660,11 @@ class AppViewModelTest {
                 return AppViewModel(
                     catalog = catalog,
                     boards = boards,
-                    arrivals = ArrivalsRepository(feed, cache, clock),
+                    arrivals = ArrivalsRepository(feed, cache),
                     clock = clock,
                     io = dispatcher,
                     compute = dispatcher,
+                    routeRepository = routeRepository,
                 ) as T
             }
         }
@@ -424,7 +720,6 @@ class AppViewModelTest {
         distanceLabel = null,
         occupancy = Occupancy.UNKNOWN,
         colorRuta = null,
-        colorTexto = null,
     )
 }
 
@@ -442,9 +737,8 @@ private class MemoryBoards(initial: List<Board> = emptyList()) : BoardRepository
         val boards = state.value.boards.filterNot { it.boardId == boardId }
         state.value = state.value.copy(boards = boards, lastBoardId = boards.firstOrNull()?.boardId)
     }
-    override suspend fun reorder(boardIds: List<String>) {
-        val map = state.value.boards.associateBy { it.boardId }
-        state.value = state.value.copy(boards = boardIds.mapNotNull { map[it] })
+    override suspend fun restoreDeleted(board: Board, originalOrder: List<String>, previousLastBoardId: String?, lastBoardIdAfterDelete: String?) {
+        state.value = state.value.restoringDeleted(board, originalOrder, previousLastBoardId, lastBoardIdAfterDelete)
     }
     override suspend fun setLastBoard(boardId: String?) {
         state.value = state.value.copy(lastBoardId = boardId)
@@ -473,8 +767,22 @@ private class FakeCatalog(
     private val places: List<Place>,
     var generatedAtDelayMs: Long = 0,
     var searchDelays: Map<String, Long> = emptyMap(),
+    var serviceDelays: Map<String, Long> = emptyMap(),
+    var generatedAtFailure: Exception? = null,
+    var searchFailure: Exception? = null,
+    var placeFailure: Exception? = null,
+    var serviceFailure: Exception? = null,
 ) : CatalogRepository {
+    override suspend fun explore(query: String, limit: Int) = co.camilo.transmicrone.domain.CatalogResults(places = search(query, limit))
+    override suspend fun service(painted: String, destino: String): co.camilo.transmicrone.domain.CatalogEntry.Service? {
+        serviceFailure?.let { throw it }
+        delay(serviceDelays[painted] ?: 0)
+        val served = places.filter { p -> p.servicios.any { it.painted == painted && it.destino == destino } }
+        val option = served.firstOrNull()?.servicios?.find { it.painted == painted && it.destino == destino } ?: return null
+        return co.camilo.transmicrone.domain.CatalogEntry.Service(option, served)
+    }
     override suspend fun search(query: String, limit: Int): List<Place> {
+        searchFailure?.let { throw it }
         val key = query.trim().lowercase()
         delay(searchDelays[key] ?: 0)
         val q = TextNorm.fold(query).trim()
@@ -482,10 +790,14 @@ private class FakeCatalog(
         return places.filter { it.fold.contains(q) }.take(limit)
     }
 
-    override fun place(placeId: String): Place? = places.find { it.placeId == placeId }
+    override fun place(placeId: String): Place? {
+        placeFailure?.let { throw it }
+        return places.find { it.placeId == placeId }
+    }
 
     override suspend fun generatedAt(): String? {
         delay(generatedAtDelayMs)
+        generatedAtFailure?.let { throw it }
         return "test"
     }
 }

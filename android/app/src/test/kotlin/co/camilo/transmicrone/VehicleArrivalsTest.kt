@@ -18,6 +18,96 @@ class VehicleArrivalsTest {
         listOf(SelectedServicio("S43", "San Mateo", listOf(13278))))
 
     @Test
+    fun realCompositeSelectionRequestsAndKeepsObservedZ63Vehicles() = runBlocking {
+        val packed = co.camilo.transmicrone.data.catalog.JsonCatalogRepository(json, true) {
+            java.io.File("src/main/assets/catalog.json.gz").inputStream()
+        }
+        val place = packed.place("estacion:TM90009")!!
+        val option = place.servicios.single { it.painted == "FZ63" }
+        assertEquals(listOf(13789), option.routeIds)
+        val composite = board.copy(queryParadero = place.queryParadero,
+            servicios = listOf(SelectedServicio(option.painted, option.destino, option.routeIds)))
+        val server = MockWebServer()
+        server.enqueue(MockResponse().setBody(javaClass.classLoader!!.getResource("nearby-Z63.json")!!.readText()))
+        server.start()
+        try {
+            val client = BodegaFeedClient(server.url("/").toString(), "test-appid", "test-installation",
+                ArrivalsParser(json), Clock { now }, BodegaFeedClient.httpClient(2000, 2000))
+            val result = client.fetchArrivals(composite)
+            assertTrue("The real FZ63 selection must retain the three Z63 vehicles", result is FetchResult.Success)
+            assertEquals(3, (result as FetchResult.Success).arrivals.size)
+            assertEquals(3, ArrivalReducer.prepare(result.arrivals, composite.servicios).size)
+            val body = json.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject
+            assertEquals("Z63", body["ruta"]!!.jsonPrimitive.content)
+            assertEquals("Tibanica", body["Nombre"]!!.jsonPrimitive.content)
+            assertEquals(13789, body["idRuta"]!!.jsonPrimitive.int)
+            assertEquals(1, server.requestCount)
+        } finally { server.shutdown() }
+    }
+
+    @Test
+    fun compositeAndOrdinarySelectionDeduplicateAndUnverifiedIdsStayUnsupported() = runBlocking {
+        val composite = SelectedServicio("FZ63", "F63 Pradera || Z63 Tibanica", listOf(13789))
+        val server = MockWebServer()
+        val fixture = javaClass.classLoader!!.getResource("nearby-Z63.json")!!.readText()
+        server.enqueue(MockResponse().setBody(fixture))
+        server.start()
+        try {
+            val client = BodegaFeedClient(server.url("/").toString(), "test-appid", "test-installation",
+                ArrivalsParser(json), Clock { now }, BodegaFeedClient.httpClient(2000, 2000))
+            val services = listOf(composite, SelectedServicio("Z63", "Tibanica", listOf(13789)))
+            val result = client.fetchArrivals(board.copy(servicios = services)) as FetchResult.Success
+            assertEquals(3, ArrivalReducer.prepare(result.arrivals + result.arrivals, services).size)
+            assertEquals(1, server.requestCount)
+            assertTrue(client.fetchArrivals(board.copy(servicios = listOf(composite.copy(routeIds = listOf(13789, 99999))))) is FetchResult.Unsupported)
+            assertEquals(1, server.requestCount)
+        } finally { server.shutdown() }
+    }
+
+    @Test
+    fun stopSummaryUsesTheSameCompositeGuardsAndKeepsSavedSelection() = runBlocking {
+        val selected = SelectedServicio("FZ63", "F63 Pradera || Z63 Tibanica", listOf(13789))
+        val stop = board.copy(kind = PlaceKind.PARADERO, queryParadero = "080A01", servicios = listOf(selected))
+        val server = MockWebServer()
+        server.enqueue(MockResponse().setBody("""[
+            {"ruta_extraida":"Z63","destino_limpio":"Tibanica","ruta_sae":13789,"labeltiempo":"Servicio llegando"},
+            {"ruta_extraida":"Z63","destino_limpio":"Pradera","ruta_sae":13789,"labeltiempo":"Servicio llegando"},
+            {"ruta_extraida":"F63","destino_limpio":"Pradera","ruta_sae":13789,"labeltiempo":"Servicio llegando"},
+            {"ruta_extraida":"Z63","destino_limpio":"Tibanica","ruta_sae":13168,"labeltiempo":"Servicio llegando"}
+        ]"""))
+        server.start()
+        val dir = java.nio.file.Files.createTempDirectory("composite-summary").toFile()
+        try {
+            val client = BodegaFeedClient(server.url("/").toString(), "test-appid", "test-installation",
+                ArrivalsParser(json), Clock { now }, BodegaFeedClient.httpClient(2000, 2000))
+            val repository = co.camilo.transmicrone.data.ArrivalsRepository(client,
+                co.camilo.transmicrone.data.local.FileArrivalsCache(dir, json))
+            val result = repository.refresh(stop) as FetchResult.Success
+            assertEquals(1, result.arrivals.size)
+            assertEquals("Z63", result.arrivals.single().painted)
+            assertEquals("/paradero/buses", server.takeRequest().path)
+            assertEquals(selected, stop.servicios.single())
+            assertEquals(result.arrivals, repository.cached(stop)!!.arrivals)
+        } finally { server.shutdown(); dir.deleteRecursively() }
+    }
+
+    @Test
+    fun compositeSuccessAndAnotherVariantFailureRemainAFailure() = runBlocking {
+        val server = MockWebServer()
+        server.enqueue(MockResponse().setBody(javaClass.classLoader!!.getResource("nearby-Z63.json")!!.readText()))
+        server.enqueue(MockResponse().setResponseCode(403))
+        server.start()
+        try {
+            val client = BodegaFeedClient(server.url("/").toString(), "test-appid", "test-installation",
+                ArrivalsParser(json), Clock { now }, BodegaFeedClient.httpClient(2000, 2000))
+            val services = listOf(SelectedServicio("FZ63", "F63 Pradera || Z63 Tibanica", listOf(13789)), board.servicios.single())
+            val result = client.fetchArrivals(board.copy(servicios = services)) as FetchResult.Failure
+            assertEquals(FailureKind.HOST_REJECTED, result.kind)
+            assertEquals(2, server.requestCount)
+        } finally { server.shutdown() }
+    }
+
+    @Test
     fun stationUsesIdentifiedVehicleArrivalsRatherThanServiceSummary() = runBlocking {
         val server = MockWebServer()
         server.enqueue(MockResponse().setBody(javaClass.classLoader!!.getResource("nearby-S43.json")!!.readText()))
@@ -50,7 +140,7 @@ class VehicleArrivalsTest {
         val dir = java.nio.file.Files.createTempDirectory("vehicle-cache").toFile()
         try {
             val cache = co.camilo.transmicrone.data.local.FileArrivalsCache(dir, json)
-            cache.write("test", CachedArrivals(rows, now, false))
+            cache.write("test", CachedArrivals(rows, now))
             assertEquals(rows, cache.read("test")!!.arrivals)
         } finally { dir.deleteRecursively() }
     }

@@ -23,6 +23,10 @@ import co.camilo.transmicrone.ui.AppViewModel
 import co.camilo.transmicrone.ui.Screen
 import co.camilo.transmicrone.ui.home.HomeScreen
 import co.camilo.transmicrone.ui.setup.SetupScreen
+import co.camilo.transmicrone.ui.search.CatalogSearchScreen
+import co.camilo.transmicrone.ui.search.CatalogDetailsScreen
+import co.camilo.transmicrone.domain.CatalogEntry
+import co.camilo.transmicrone.ui.key
 import co.camilo.transmicrone.ui.theme.TransmicroneTheme
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.launch
@@ -74,6 +78,7 @@ class MainActivity : ComponentActivity() {
                         onRefresh = vm::manualRefresh,
                         loadingBoards = !state.boardsReady,
                         snackbarHostState = snackbarHostState,
+                        onSearch = vm::openSearch,
                     )
                     Screen.SETUP -> SetupScreen(
                         query = state.setupQuery,
@@ -81,7 +86,10 @@ class MainActivity : ComponentActivity() {
                         place = state.setupPlace,
                         selected = state.setupSelected,
                         catalogReady = state.catalogReady,
+                        catalogLoadFailed = state.catalogLoadFailed,
                         searching = state.setupSearching,
+                        searchFailed = state.setupSearchFailed,
+                        saveFailed = state.setupSaveFailed,
                         onQuery = vm::onSearch,
                         onPick = vm::pickPlace,
                         onToggle = vm::toggleServicio,
@@ -93,6 +101,21 @@ class MainActivity : ComponentActivity() {
                         onChangePlace = vm::changeSetupPlace,
                         snackbarHostState = snackbarHostState,
                     )
+                    Screen.SEARCH -> CatalogSearchScreen(
+                        query = state.catalogQuery, results = state.catalogResults,
+                        searching = state.catalogSearching, failed = state.catalogSearchFailed,
+                        onQuery = vm::searchCatalog, onDetails = vm::openDetails, onBack = vm::backSetup,
+                    )
+                    Screen.DETAILS -> state.details.lastOrNull()?.let { entry ->
+                        CatalogDetailsScreen(entry, onBack = vm::backSetup,
+                            onPlace = { vm.openDetails(CatalogEntry.Location(it)) },
+                            onService = vm::openService, onAdd = vm::createBoardFrom,
+                            serviceLookup = state.serviceLookup, onRetryService = vm::retryServiceLookup,
+                            routeState = (entry as? CatalogEntry.Service)?.option?.let { state.routes[it.key()] },
+                            routeIndex = (entry as? CatalogEntry.Service)?.option?.let { state.selectedRoutes[it.key()] } ?: 0,
+                            onSelectRoute = { index -> (entry as? CatalogEntry.Service)?.option?.let { vm.selectRoute(it, index) } },
+                            onRetryRoute = { (entry as? CatalogEntry.Service)?.option?.let { vm.loadRoute(it, retry = true) } })
+                    }
                 }
             }
         }

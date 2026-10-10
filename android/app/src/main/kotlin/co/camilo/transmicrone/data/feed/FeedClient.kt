@@ -7,6 +7,7 @@ import co.camilo.transmicrone.domain.FetchResult
 import co.camilo.transmicrone.domain.Paradero
 import co.camilo.transmicrone.domain.PlaceKind
 import co.camilo.transmicrone.domain.ArrivalReducer
+import co.camilo.transmicrone.domain.FeedSelection
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -45,9 +46,12 @@ class BodegaFeedClient(
         val code = Paradero.normalize(board.queryParadero)
             ?: return@withContext FetchResult.Unsupported(clock.now())
         if (board.servicios.any { it.routeIds.isEmpty() }) return@withContext FetchResult.Unsupported(clock.now())
+        val resolved = board.servicios.map(FeedSelection::resolve)
+        if (resolved.any { it.isEmpty() }) return@withContext FetchResult.Unsupported(clock.now())
+        val services = resolved.flatten().distinctBy { Triple(it.painted, it.destino, it.routeIds.toSet()) }
         val semaphore = Semaphore(2)
         val results = coroutineScope {
-            board.servicios.flatMap { service ->
+            services.flatMap { service ->
                 service.routeIds.distinct().map { routeId ->
                     async { semaphore.withPermit {
                         val body = buildJsonObject {

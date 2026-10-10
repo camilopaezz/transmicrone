@@ -1,6 +1,8 @@
 package co.camilo.transmicrone.domain
 
 object ArrivalReducer {
+    private val leadingServiceCode = Regex("^[A-Z][0-9]{1,3}\\s+")
+
     fun filter(
         rows: List<Arrival>,
         selected: List<SelectedServicio>,
@@ -11,14 +13,46 @@ object ArrivalReducer {
 
     fun matches(arrival: Arrival, selected: List<SelectedServicio>): Boolean {
         val painted = arrival.painted
-        val destino = TextNorm.nfc(arrival.destino)
-        return selected.any { sel ->
-            if (sel.painted != painted) return@any false
-            if (sel.destino.isNotEmpty() && TextNorm.nfc(sel.destino) != destino) return@any false
-            val rid = arrival.routeId
-            if (rid == null) return@any true
-            sel.routeIds.isEmpty() || rid in sel.routeIds
+        val destino = normalizeDestination(arrival.destino)
+        return selected.any { original ->
+            FeedSelection.resolve(original).any { sel ->
+                val rid = arrival.routeId
+                sel.painted == painted &&
+                    (sel.destino.isEmpty() || destino in destinationOptions(sel.destino, sel.painted)) &&
+                    (rid != null || !FeedSelection.isComposite(original)) &&
+                    (rid == null || sel.routeIds.isEmpty() || rid in sel.routeIds)
+            }
         }
+    }
+
+    private fun destinationOptions(value: String, painted: String): Set<String> = value
+        .split("||")
+        .mapNotNull { side ->
+            val normalized = normalizeDestination(side)
+            val prefix = leadingServiceCode.find(normalized)
+            when {
+                prefix == null -> normalized
+                prefix.value.trim() == painted -> normalized.removeRange(prefix.range)
+                else -> null
+            }
+        }
+        .filter(String::isNotEmpty)
+        .toSet()
+
+    private fun normalizeDestination(value: String): String {
+        val nfc = TextNorm.nfc(value)
+        val result = StringBuilder(nfc.length)
+        var pendingSpace = false
+        for (character in nfc) {
+            if (character.isWhitespace() || Character.isSpaceChar(character)) {
+                pendingSpace = result.isNotEmpty()
+            } else {
+                if (pendingSpace) result.append(' ')
+                result.append(character)
+                pendingSpace = false
+            }
+        }
+        return result.toString()
     }
 
     /**

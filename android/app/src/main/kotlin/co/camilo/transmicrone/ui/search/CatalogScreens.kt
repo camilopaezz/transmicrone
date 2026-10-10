@@ -1,0 +1,299 @@
+package co.camilo.transmicrone.ui.search
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.dp
+import co.camilo.transmicrone.R
+import co.camilo.transmicrone.domain.*
+import co.camilo.transmicrone.ui.board.ServicioBadge
+import co.camilo.transmicrone.ui.RouteState
+import co.camilo.transmicrone.ui.ServiceLookupState
+import co.camilo.transmicrone.ui.ServiceDestinationList
+import co.camilo.transmicrone.ui.destinationOptions
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CatalogSearchScreen(
+    query: String, results: CatalogResults, searching: Boolean, failed: Boolean,
+    onQuery: (String) -> Unit, onDetails: (CatalogEntry) -> Unit, onBack: () -> Unit,
+) {
+    val focus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    Scaffold(topBar = {
+        TopAppBar(title = { Text(stringResource(R.string.catalog_search)) }, navigationIcon = {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
+        })
+    }) { insets ->
+        Column(Modifier.fillMaxSize().padding(insets).imePadding()) {
+            TextField(
+                value = query, onValueChange = onQuery,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp).fillMaxWidth().focusRequester(focus),
+                label = { Text(stringResource(R.string.catalog_search_hint)) },
+                leadingIcon = { Icon(Icons.Default.Search, null) },
+                trailingIcon = if (query.isNotEmpty()) ({
+                    IconButton(onClick = { onQuery("") }) { Icon(Icons.Default.Close, stringResource(R.string.clear_search)) }
+                }) else null,
+                singleLine = true, shape = CircleShape,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
+                colors = TextFieldDefaults.colors(focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent),
+            )
+            LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                when {
+                    query.isBlank() -> item { Message(stringResource(R.string.catalog_search_example)) }
+                    searching -> item {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                            Message(stringResource(R.string.searching_places))
+                        }
+                    }
+                    failed -> item {
+                        Message(stringResource(R.string.catalog_search_failed))
+                        TextButton(onClick = { onQuery(query) }) { Text(stringResource(R.string.retry_refresh)) }
+                    }
+                    results.services.isEmpty() && results.places.isEmpty() -> item { Message(stringResource(R.string.catalog_no_results)) }
+                    else -> {
+                        if (results.services.isNotEmpty()) {
+                            item { SectionTitle(stringResource(R.string.catalog_services)) }
+                            items(results.services, key = { "service:${it.option.painted}\u0001${it.option.destino}" }) { entry ->
+                                ServiceRow(entry.option) { keyboard?.hide(); onDetails(entry) }
+                            }
+                        }
+                        results.places.groupBy { it.kind }.forEach { (kind, places) ->
+                            item { SectionTitle(stringResource(if (kind == PlaceKind.ESTACION) R.string.search_stations else R.string.search_stops)) }
+                            items(places, key = { it.placeId }) { place ->
+                                LocationRow(place) { keyboard?.hide(); onDetails(CatalogEntry.Location(place)) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CatalogDetailsScreen(
+    entry: CatalogEntry, onBack: () -> Unit, onPlace: (Place) -> Unit,
+    onService: (ServicioOption) -> Unit, onAdd: (Place) -> Unit,
+    routeState: RouteState? = null, onRetryRoute: () -> Unit = {},
+    routeIndex: Int = 0, onSelectRoute: (Int) -> Unit = {},
+    serviceLookup: ServiceLookupState? = null, onRetryService: () -> Unit = {},
+) {
+    val location = (entry as? CatalogEntry.Location)?.place
+    val service = entry as? CatalogEntry.Service
+    val routes = (routeState as? RouteState.Loaded)?.routes.orEmpty()
+    val route = routes.getOrNull(routeIndex) ?: routes.firstOrNull()
+    Scaffold(
+        topBar = {
+            TopAppBar(title = { Text(stringResource(if (location != null) {
+                if (location.kind == PlaceKind.ESTACION) R.string.kind_estacion else R.string.kind_paradero
+            } else R.string.catalog_service)) }, navigationIcon = {
+                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
+            })
+        },
+        bottomBar = {
+            if (location != null) Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
+                Button(onClick = { onAdd(location) }, modifier = Modifier.navigationBarsPadding().padding(20.dp).fillMaxWidth().heightIn(min = 56.dp)) {
+                    Icon(Icons.Default.Add, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.add_board))
+                }
+            }
+        },
+    ) { insets ->
+        LazyColumn(Modifier.fillMaxSize().padding(insets), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(if (service != null) 0.dp else 10.dp)) {
+            item {
+                Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+                    Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        if (location != null) {
+                            Icon(if (location.kind == PlaceKind.ESTACION) Icons.Default.Tram else Icons.Default.DirectionsBus, null,
+                                tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
+                            Text(location.name, style = MaterialTheme.typography.headlineLarge)
+                            location.disambiguator?.let { Message(it) }
+                            Message(stringResource(R.string.setup_place_code, location.queryParadero))
+                        } else if (service != null) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                ServicioBadge(service.option.painted, service.option.color)
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    if (route != null) {
+                                        Text(stringResource(R.string.route_from), style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(route.stops.first().name, style = MaterialTheme.typography.titleLarge)
+                                        Icon(Icons.Default.South, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                                    }
+                                    if (route == null) {
+                                        if (destinationOptions(service.option.destino).size <= 1) {
+                                            Text(stringResource(R.string.route_to), style = MaterialTheme.typography.labelLarge,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                        ServiceDestinationList(service.option.destino, R.string.route_to, MaterialTheme.typography.titleLarge)
+                                    } else {
+                                        Text(stringResource(R.string.route_to), style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(route.stops.last().name, style = MaterialTheme.typography.titleLarge)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            serviceLookup?.let { lookup ->
+                item {
+                    if (lookup.failed) {
+                        Message(stringResource(R.string.service_lookup_failed, lookup.option.painted))
+                        TextButton(onClick = onRetryService) { Text(stringResource(R.string.retry_refresh)) }
+                    } else {
+                        Message(stringResource(R.string.service_lookup_loading, lookup.option.painted))
+                    }
+                }
+            }
+            if (location != null) {
+                item { SectionTitle(stringResource(R.string.choose_servicios)) }
+                items(location.servicios, key = { "${it.painted}\u0001${it.destino}" }) { option ->
+                    ServiceRow(option) { onService(option) }
+                }
+            } else if (service != null) {
+                item { SectionTitle(stringResource(R.string.route_title)) }
+                when (routeState) {
+                    null, RouteState.Loading -> item {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                            Message(stringResource(R.string.route_loading))
+                        }
+                    }
+                    RouteState.Failed, RouteState.Unavailable -> item {
+                        Message(stringResource(if (routeState == RouteState.Failed) R.string.route_failed else R.string.route_unavailable))
+                        TextButton(onClick = onRetryRoute) { Text(stringResource(R.string.retry_refresh)) }
+                    }
+                    is RouteState.Loaded -> {
+                        if (routes.size > 1) item {
+                            Row(Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                routes.forEachIndexed { index, variant ->
+                                    FilterChip(selected = routeIndex == index, onClick = { onSelectRoute(index) },
+                                        label = { Text(stringResource(R.string.route_variant_destination, variant.stops.last().name, index + 1)) })
+                                }
+                            }
+                        }
+                        if (route != null) {
+                            item { Message(stringResource(R.string.route_stop_count, route.stops.count { it.stopsHere })) }
+                            items(route.stops.size, key = { "${route.catalogId}:$it" }) { index ->
+                                RouteStopRow(route.stops[index], index, route.stops.lastIndex) { place -> onPlace(place) }
+                            }
+                        }
+                    }
+                }
+                if (routeState is RouteState.Failed || routeState is RouteState.Unavailable) {
+                    if (service.places.isNotEmpty()) {
+                        item { SectionTitle(stringResource(R.string.service_served_places)) }
+                        items(service.places, key = { "served:${it.placeId}" }) { place ->
+                            LocationRow(place) { onPlace(place) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RouteStopRow(stop: RouteStop, index: Int, lastIndex: Int, onPlace: (Place) -> Unit) {
+    val lineColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)
+        .then(if (stop.place != null) Modifier.clickable { onPlace(stop.place) } else Modifier),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Box(Modifier.width(32.dp).fillMaxHeight()) {
+            Canvas(Modifier.fillMaxSize()) {
+                val center = 24.dp.toPx()
+                if (index > 0) drawLine(lineColor, Offset(size.width / 2, 0f), Offset(size.width / 2, center), strokeWidth = 2.dp.toPx())
+                if (index < lastIndex) drawLine(lineColor, Offset(size.width / 2, center), Offset(size.width / 2, size.height), strokeWidth = 2.dp.toPx())
+            }
+            Surface(Modifier.align(Alignment.TopCenter).padding(top = 12.dp).size(24.dp), shape = CircleShape,
+                color = if (index == 0 || index == lastIndex) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer) {
+                Box(contentAlignment = Alignment.Center) { Text("${index + 1}", style = MaterialTheme.typography.labelSmall) }
+            }
+        }
+        Column(Modifier.weight(1f).padding(vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (index == 0 || index == lastIndex) Text(stringResource(if (index == 0) R.string.route_origin else R.string.route_destination),
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            Text(stop.name, style = MaterialTheme.typography.titleMedium)
+            Message(listOfNotNull(stop.code.takeIf { it.isNotBlank() },
+                stop.wagon?.let { stringResource(R.string.route_wagon, it) },
+                if (!stop.stopsHere) stringResource(R.string.route_no_stop) else null).joinToString(" · "))
+        }
+        if (stop.place != null) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null,
+            modifier = Modifier.padding(top = 18.dp).size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun ServiceRow(option: ServicioOption, onClick: () -> Unit) {
+    Surface(onClick = onClick, shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            ServicioBadge(option.painted, option.color)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                val destinations = option.destino.split("||").map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+                if (destinations.size <= 1) {
+                    Text(stringResource(R.string.destination_prefix), style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(destinations.firstOrNull().orEmpty(), style = MaterialTheme.typography.titleMedium)
+                } else {
+                    ServiceDestinationList(option.destino, R.string.destination_prefix, MaterialTheme.typography.titleMedium)
+                }
+            }
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun LocationRow(place: Place, onClick: () -> Unit) {
+    Surface(onClick = onClick, shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Icon(if (place.kind == PlaceKind.ESTACION) Icons.Default.Tram else Icons.Default.DirectionsBus, null,
+                tint = MaterialTheme.colorScheme.primary)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(place.name, style = MaterialTheme.typography.titleMedium)
+                Message(listOfNotNull(stringResource(if (place.kind == PlaceKind.ESTACION) R.string.kind_estacion else R.string.kind_paradero),
+                    place.disambiguator, place.queryParadero).joinToString(" · "))
+            }
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun Message(text: String) {
+    Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+@Composable
+private fun SectionTitle(text: String) {
+    Text(text, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
+}

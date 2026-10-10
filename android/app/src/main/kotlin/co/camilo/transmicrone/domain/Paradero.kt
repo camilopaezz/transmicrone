@@ -1,7 +1,7 @@
 package co.camilo.transmicrone.domain
 
 object Paradero {
-    private val TM = Regex("^TM\\d{4}$")
+    private val TM = Regex("^TM\\d{4,5}$")
     private val CENEFA = Regex("^[0-9]{3}[A-Z][0-9]{2}$")
     private val CENEFA_LOOSE = Regex("^[0-9A-Z]{4,12}$")
 

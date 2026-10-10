@@ -2,6 +2,8 @@
 
 Local tooling against Bogotá TransMilenio / SITP live bus positions.
 
+Builds, previews, and device installs: follow [AGENTS.md](AGENTS.md) for live data and mock fallback rules.
+
 Live positions come from TransMiApp's Bodega host (unofficial). Contract, fields, failure modes: [docs/feed.md](docs/feed.md). Read it before calling the feed, verifying it still answers, or mapping a response into types.
 
 How to call (base URL, `appid`, curl): [docs/feed.md](docs/feed.md).

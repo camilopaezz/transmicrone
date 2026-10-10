@@ -1,5 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="catalog_search">Buscar</string>
+    <string name="catalog_search_hint">Servicio o código de estación/paradero</string>
+    <string name="catalog_search_example">Busca por código, destino o nombre. Por ejemplo, E48, CAD o León XIII.</string>
+    <string name="catalog_services">Servicios</string>
+    <string name="catalog_service">Servicio</string>
+    <string name="catalog_no_results">No encontramos servicios ni lugares. Prueba con otro código o nombre.</string>
+    <string name="catalog_search_failed">No se pudo cargar el catálogo.</string>
+    <string name="route_title">Recorrido</string>
+    <string name="route_loading">Cargando recorrido…</string>
+    <string name="route_failed">No se pudo cargar el recorrido. Revisa tu conexión e intenta de nuevo.</string>
+    <string name="route_unavailable">No hay un recorrido disponible para este servicio.</string>
+    <string name="route_from">Desde</string>
+    <string name="route_to">Hasta</string>
+    <string name="route_origin">Origen</string>
+    <string name="route_destination">Destino</string>
+    <string name="route_wagon">Vagón %1$s</string>
+    <string name="route_no_stop">Sin parada</string>
+    <string name="route_stop_count">%1$d paradas</string>
     <string name="app_name">Transmicrone</string>
     <string name="sample_data">Datos de ejemplo</string>
     <string name="empty_boards_title">Sin tableros</string>
@@ -9,17 +27,14 @@
     <string name="swipe_board_hint">Desliza para cambiar de tablero</string>
     <string name="board_page_description">Tablero %1$d de %2$d</string>
     <string name="edit_board">Editar tablero</string>
-    <string name="manage_boards">Tableros</string>
     <string name="delete_board">Eliminar tablero</string>
     <string name="save_board">Guardar tablero</string>
-    <string name="search_hint">Nombre del lugar</string>
+    <string name="search_hint">Nombre o código de estación/paradero</string>
     <string name="kind_estacion">Estación</string>
     <string name="kind_paradero">Paradero</string>
     <string name="choose_servicios">Servicios en este lugar</string>
     <string name="no_place_results">No hay lugares con ese nombre en el catálogo.</string>
     <string name="need_servicio">Elige al menos un servicio.</string>
-    <string name="previous_board">Tablero anterior</string>
-    <string name="next_board">Tablero siguiente</string>
     <string name="freshness_updating">Actualizando…</string>
     <string name="freshness_updated">Actualizado %1$s</string>
     <string name="freshness_less_than_minute">hace menos de un minuto</string>
@@ -43,8 +58,6 @@
     <string name="occupancy_vacio">Vacío</string>
     <string name="occupancy_medio">Medio</string>
     <string name="occupancy_lleno">Lleno</string>
-    <string name="move_up">Subir</string>
-    <string name="move_down">Bajar</string>
     <string name="cancel">Cancelar</string>
     <string name="back">Atrás</string>
     <string name="unofficial_notice">Fuente no oficial. Las frases de llegada no son un reloj.</string>
@@ -62,8 +75,6 @@
     <string name="search_example">Por ejemplo, León XIII o Ricaurte</string>
     <string name="setup_step_services">Paso 2 de 2</string>
     <string name="setup_services_body">Elige los servicios que tomarías. Los verás juntos en tu tablero.</string>
-    <string name="your_boards">Tus tableros</string>
-    <string name="board_options">Opciones de %1$s</string>
     <string name="delete_action">Eliminar</string>
     <string name="vehicle_estimate_label">Estimación reportada para un bus</string>
     <string name="report_age_minutes">hace %1$d min</string>
@@ -74,4 +85,11 @@
     <string name="freshness_updating_cached">Actualizando… Mostrando datos anteriores (%1$s)</string>
     <string name="search_stations">Estaciones</string>
     <string name="search_stops">Paraderos</string>
+    <string name="route_variant_destination">Hacia %1$s · Recorrido %2$d</string>
+    <string name="catalog_load_failed">No se pudo cargar el catálogo.</string>
+    <string name="setup_search_failed">No se pudo buscar en el catálogo.</string>
+    <string name="setup_save_failed">No se pudo guardar el tablero. Inténtalo de nuevo.</string>
+    <string name="service_served_places">Lugares atendidos por el servicio</string>
+    <string name="service_lookup_failed">No se pudo abrir el servicio %1$s.</string>
+    <string name="service_lookup_loading">Abriendo servicio %1$s…</string>
 </resources>

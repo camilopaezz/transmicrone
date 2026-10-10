@@ -25,7 +25,6 @@ class MockFeedClient(private val clock: Clock) : FeedClient {
                     distanceLabel = "${800 + offset * 400 + busIndex * 2200} m",
                     occupancy = Occupancy.entries[(serviceIndex + busIndex + 2) % Occupancy.entries.size],
                     colorRuta = service.color,
-                    colorTexto = null,
                     identity = if (vehicles) ArrivalIdentity.VEHICLE else ArrivalIdentity.SERVICIO_ESTIMATE,
                     vehicleId = if (vehicles) "demo-$serviceIndex-$busIndex" else null,
                     label = if (vehicles) "T${10412 + serviceIndex * 10 + busIndex}" else null,
