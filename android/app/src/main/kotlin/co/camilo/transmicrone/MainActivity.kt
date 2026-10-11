@@ -1,6 +1,13 @@
 package co.camilo.transmicrone
 
 import android.os.Bundle
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import co.camilo.transmicrone.data.local.SettingsStore
+import co.camilo.transmicrone.data.local.AppSettings
+import co.camilo.transmicrone.data.local.ThemeMode
+import co.camilo.transmicrone.ui.settings.SettingsScreen
 import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -50,8 +57,18 @@ class MainActivity : ComponentActivity() {
             }
         }
         setContent {
-            TransmicroneTheme {
-                val state by vm.state.collectAsStateWithLifecycle()
+            val context = LocalContext.current
+            val settingsStore = remember { SettingsStore(context.applicationContext) }
+            val settings by settingsStore.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
+            val state by vm.state.collectAsStateWithLifecycle()
+            val scope = rememberCoroutineScope()
+            val settingsFailure = stringResource(R.string.settings_save_failed)
+            val dark = when (settings.theme) {
+                ThemeMode.SYSTEM -> isSystemInDarkTheme()
+                ThemeMode.LIGHT -> false
+                ThemeMode.DARK -> true
+            }
+            TransmicroneTheme(darkTheme = dark, dynamicColor = settings.dynamicColor) {
                 val swipeHintDismissal = rememberSaveable { mutableStateOf(false) }
                 val snackbarHostState = remember { SnackbarHostState() }
                 val deletedMessage = state.pendingDeletion?.let { stringResource(R.string.manage_deleted_message, it.displayName) }
@@ -79,6 +96,7 @@ class MainActivity : ComponentActivity() {
                         loadingBoards = !state.boardsReady,
                         snackbarHostState = snackbarHostState,
                         onSearch = vm::openSearch,
+                        onSettings = vm::openSettings,
                     )
                     Screen.SETUP -> SetupScreen(
                         query = state.setupQuery,
@@ -94,11 +112,28 @@ class MainActivity : ComponentActivity() {
                         onPick = vm::pickPlace,
                         onToggle = vm::toggleServicio,
                         onSave = vm::saveSetup,
+                        customName = state.setupCustomName,
+                        onCustomName = vm::onSetupCustomName,
                         onBack = vm::backSetup,
                         isEditing = state.editingBoardId != null,
                         editingBoardName = state.boards.find { it.board.boardId == state.editingBoardId }?.board?.displayName,
                         onDelete = { state.editingBoardId?.let(vm::deleteBoard) },
                         onChangePlace = vm::changeSetupPlace,
+                        snackbarHostState = snackbarHostState,
+                    )
+                    Screen.SETTINGS -> SettingsScreen(
+                        settings = settings, boards = state.boards, saveFailed = state.settingsSaveFailed,
+                        onTheme = { mode -> scope.launch {
+                            try { settingsStore.setTheme(mode) }
+                            catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                            catch (_: Exception) { snackbarHostState.showSnackbar(settingsFailure) }
+                        } },
+                        onDynamicColor = { enabled -> scope.launch {
+                            try { settingsStore.setDynamicColor(enabled) }
+                            catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                            catch (_: Exception) { snackbarHostState.showSnackbar(settingsFailure) }
+                        } },
+                        onMove = vm::moveBoard, onBack = vm::backSetup,
                         snackbarHostState = snackbarHostState,
                     )
                     Screen.SEARCH -> CatalogSearchScreen(

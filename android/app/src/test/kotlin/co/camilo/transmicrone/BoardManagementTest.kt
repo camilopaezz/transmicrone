@@ -7,6 +7,7 @@ import co.camilo.transmicrone.data.ArrivalsRepository
 import co.camilo.transmicrone.data.catalog.CatalogRepository
 import co.camilo.transmicrone.data.feed.FeedClient
 import co.camilo.transmicrone.data.local.ArrivalsCache
+import co.camilo.transmicrone.data.local.moving
 import co.camilo.transmicrone.data.local.BoardRepository
 import co.camilo.transmicrone.data.local.BoardSnapshot
 import co.camilo.transmicrone.data.local.restoringDeleted
@@ -28,6 +29,32 @@ import java.time.Instant
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class BoardManagementTest {
+    @Test
+    fun movingBoardsRetainsSelectionAndRejectsInvalidMoves() {
+        val initial = BoardSnapshot(listOf(board("a"), board("b"), board("c")), "b")
+        val moved = initial.moving("b", 1)
+        assertEquals(listOf("a", "c", "b"), moved.boards.map { it.boardId })
+        assertEquals("b", moved.lastBoardId)
+        assertEquals(initial, initial.moving("a", -1))
+        assertEquals(initial, initial.moving("c", 1))
+        assertEquals(initial, initial.moving("missing", 1))
+        assertEquals(initial, initial.moving("a", 2))
+    }
+
+    @Test
+    fun settingsReorderKeepsSelectedBoardAndBackReturnsHome() = withVm { vm, repository ->
+        vm.onPage(1)
+        runCurrent()
+        vm.openSettings()
+        assertEquals(co.camilo.transmicrone.ui.Screen.SETTINGS, vm.state.value.screen)
+        vm.moveBoard("b", 1)
+        runCurrent()
+        assertEquals(listOf("a", "c", "b"), repository.snapshot().boards.map { it.boardId })
+        assertEquals("b", vm.state.value.boards[vm.state.value.pageIndex].board.boardId)
+        vm.backSetup()
+        assertEquals(co.camilo.transmicrone.ui.Screen.HOME, vm.state.value.screen)
+    }
+
     @Test
     fun deletingSelectedBoardChoosesClampedNeighborAndUndoRestoresIt() {
         val initial = BoardSnapshot(listOf(board("a"), board("b"), board("c")), "b")
@@ -196,6 +223,9 @@ private class ManagementBoards(initial: BoardSnapshot) : BoardRepository {
     override fun observe() = state
     override suspend fun snapshot() = state.value
     override suspend fun save(board: Board) { state.value = state.value.saving(board) }
+    override suspend fun move(boardId: String, offset: Int) {
+        state.value = state.value.moving(boardId, offset)
+    }
     override suspend fun delete(boardId: String) { state.value = state.value.deleting(boardId) }
     suspend fun reorder(boardIds: List<String>) {
         val byId = state.value.boards.associateBy { it.boardId }

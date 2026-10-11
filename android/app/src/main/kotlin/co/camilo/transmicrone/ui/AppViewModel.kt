@@ -35,7 +35,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.time.Instant
 
-enum class Screen { HOME, SETUP, SEARCH, DETAILS }
+enum class Screen { HOME, SETUP, SEARCH, DETAILS, SETTINGS }
 
 data class DeletedBoard(val boardId: String, val displayName: String)
 
@@ -80,6 +80,7 @@ data class ServiceLookupState(
 
 data class UiState(
     val screen: Screen = Screen.HOME,
+    val settingsSaveFailed: Boolean = false,
     val boards: List<BoardView> = emptyList(),
     val boardsReady: Boolean = false,
     val pageIndex: Int = 0,
@@ -89,6 +90,7 @@ data class UiState(
     val setupSearching: Boolean = false,
     val setupPlace: Place? = null,
     val setupSelected: Set<String> = emptySet(),
+    val setupCustomName: String = "",
     val editingBoardId: String? = null,
     val catalogReady: Boolean = false,
     val catalogLoadFailed: Boolean = false,
@@ -176,34 +178,53 @@ class AppViewModel(
 
     fun openSetup(editId: String? = null) {
         cancelServiceLookup()
+        val generation = navigationGeneration
         setupReturnsToDetails = false
         val editing = editId?.let { id -> _state.value.boards.find { it.board.boardId == id }?.board }
-        var placeLookupFailed = false
-        val editingPlace = try {
-            editing?.let { catalog.place(it.placeId) }
+
+        fun lookupPlace(): Pair<Place?, Boolean> = try {
+            editing?.let { catalog.place(it.placeId) } to false
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
         } catch (_: Exception) {
-            placeLookupFailed = true
-            null
+            null to true
         }
-        setupDraftPlaceId = editing?.placeId
-        _state.update {
-            it.copy(
-                screen = Screen.SETUP,
-                editingBoardId = editId,
-                setupQuery = "",
-                setupResults = emptyList(),
-                setupSearching = false,
-                setupSearchFailed = placeLookupFailed,
-                setupSaveFailed = false,
-                catalogLoadFailed = it.catalogLoadFailed || placeLookupFailed,
-                catalogReady = it.catalogReady && !placeLookupFailed,
-                setupPlace = editingPlace,
-                setupSelected = editing?.servicios?.map { s -> s.key() }?.toSet() ?: emptySet(),
-            )
+
+        fun applySetup(editingPlace: Place?, placeLookupFailed: Boolean) {
+            var applied = false
+            _state.update {
+                applied = navigationGeneration == generation
+                if (!applied) it else it.copy(
+                    screen = Screen.SETUP,
+                    editingBoardId = editId,
+                    setupQuery = "",
+                    setupResults = emptyList(),
+                    setupSearching = false,
+                    setupSearchFailed = placeLookupFailed,
+                    setupSaveFailed = false,
+                    catalogLoadFailed = it.catalogLoadFailed || placeLookupFailed,
+                    catalogReady = it.catalogReady && !placeLookupFailed,
+                    setupPlace = editingPlace,
+                    setupCustomName = editing?.displayName?.takeIf { it != editingPlace?.name }.orEmpty(),
+                    setupSelected = editing?.servicios?.map { s -> s.key() }?.toSet() ?: emptySet(),
+                )
+            }
+            if (applied) {
+                setupDraftPlaceId = editing?.placeId
+                stopPolling()
+            }
         }
-        stopPolling()
+
+        val st = _state.value
+        if (editing == null || (st.catalogReady && !st.catalogLoadFailed)) {
+            val (place, failed) = lookupPlace()
+            applySetup(place, failed)
+        } else {
+            viewModelScope.launch {
+                val (place, failed) = withContext(io) { lookupPlace() }
+                applySetup(place, failed)
+            }
+        }
     }
 
     fun backSetup() {
@@ -223,11 +244,33 @@ class AppViewModel(
                 }
                 return
             }
+            Screen.SETTINGS -> { goHome(); return }
             Screen.SEARCH -> { catalogSearchJob?.cancel(); goHome(); return }
             else -> Unit
         }
         if (_state.value.editingBoardId == null && _state.value.setupPlace != null) changeSetupPlace()
         else goHome()
+    }
+
+    fun openSettings() {
+        cancelServiceLookup()
+        _state.update { it.copy(screen = Screen.SETTINGS, settingsSaveFailed = false) }
+        stopPolling()
+    }
+
+    fun moveBoard(boardId: String, offset: Int) {
+        viewModelScope.launch {
+            boardMutation.withLock {
+                try {
+                    boards.move(boardId, offset)
+                    _state.update { it.copy(settingsSaveFailed = false) }
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    _state.update { it.copy(settingsSaveFailed = true) }
+                }
+            }
+        }
     }
 
     fun openSearch() {
@@ -416,6 +459,10 @@ class AppViewModel(
         }
     }
 
+    fun onSetupCustomName(name: String) {
+        _state.update { it.copy(setupCustomName = name.replace('\n', ' ').replace('\r', ' '), setupSaveFailed = false) }
+    }
+
     fun saveSetup() {
         val st = _state.value
         val place = st.setupPlace ?: return
@@ -431,7 +478,7 @@ class AppViewModel(
             placeId = place.placeId,
             kind = place.kind,
             queryParadero = place.queryParadero,
-            displayName = place.name,
+            displayName = st.setupCustomName.trim().ifEmpty { place.name },
             disambiguator = place.disambiguator,
             servicios = selected.map {
                 SelectedServicio(it.painted, it.destino, it.routeIds, it.color)

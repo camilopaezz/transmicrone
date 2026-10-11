@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="256" android:viewportHeight="256">
+    <!-- Inset artwork to remain inside adaptive launcher masks. -->
+    <group android:scaleX="0.72" android:scaleY="0.72" android:translateX="35.84" android:translateY="35.84">
+        <path android:pathData="M192,86a77,77 0,1 0,12 62" android:fillColor="#00000000" android:strokeColor="#FFF3DF" android:strokeWidth="13" android:strokeLineCap="round" />
+        <path android:pathData="M185,86a13,13 0,1 0,26 0a13,13 0,1 0,-26 0" android:fillColor="#FFD36B" />
+        <path android:pathData="M112,87H144Q163,87 163,106V160Q163,179 144,179H112Q93,179 93,160V106Q93,87 112,87Z" android:fillColor="#FFF3DF" />
+        <path android:pathData="M112,100H144Q153,100 153,109V125Q153,134 144,134H112Q103,134 103,125V109Q103,100 112,100Z" android:fillColor="#B92F3F" />
+        <path android:pathData="M107,154h5m32,0h5" android:fillColor="#00000000" android:strokeColor="#B92F3F" android:strokeWidth="9" android:strokeLineCap="round" />
+        <path android:pathData="M107,177v8m42,-8v8" android:fillColor="#00000000" android:strokeColor="#FFF3DF" android:strokeWidth="10" android:strokeLineCap="round" />
+    </group>
+</vector>

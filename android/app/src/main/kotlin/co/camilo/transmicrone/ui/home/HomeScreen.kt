@@ -1,21 +1,21 @@
 package co.camilo.transmicrone.ui.home
 
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
-import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.saveable.rememberSaveable
 import kotlinx.coroutines.delay
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -28,6 +28,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -59,6 +60,7 @@ fun HomeScreen(
     swipeHintDismissal: MutableState<Boolean> = rememberSaveable { mutableStateOf(false) },
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
     onSearch: () -> Unit = {},
+    onSettings: () -> Unit = {},
 ) {
     if (loadingBoards) {
         Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { insets ->
@@ -70,11 +72,15 @@ fun HomeScreen(
         }
         return
     }
-    if (boards.isEmpty()) { EmptyHome(onAdd, snackbarHostState, onSearch); return }
+    if (boards.isEmpty()) { EmptyHome(onAdd, snackbarHostState, onSearch, onSettings); return }
     val index = pageIndex.coerceIn(0, boards.lastIndex)
-    val current = boards[index]
+    val pager = rememberPagerState(initialPage = index, pageCount = { boards.size })
+    val visibleIndex = pager.currentPage.coerceIn(boards.indices)
+    val current = boards[visibleIndex]
+    val scope = rememberCoroutineScope()
+    var choosingBoard by remember { mutableStateOf(false) }
     val listStates = boards.map { view -> key(view.board.boardId) { rememberLazyListState() } }
-    val currentListState = listStates[index]
+    val currentListState = listStates[visibleIndex]
     val windowWidth = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }
     val fontScale = LocalDensity.current.fontScale
     val compactAppBar = fontScale > 1.2f || windowWidth < 400.dp
@@ -82,11 +88,10 @@ fun HomeScreen(
         currentListState.firstVisibleItemIndex > 0 ||
             currentListState.layoutInfo.visibleItemsInfo.firstOrNull()?.let { it.offset < -it.size / 2 } == true
     } }
-    val pager = rememberPagerState(initialPage = index, pageCount = { boards.size })
     var swipeHintDismissed by swipeHintDismissal
     val dragging by pager.interactionSource.collectIsDraggedAsState()
-    LaunchedEffect(dragging) {
-        if (dragging) swipeHintDismissed = true
+    LaunchedEffect(dragging, pager.isScrollInProgress) {
+        if (dragging || pager.isScrollInProgress) swipeHintDismissed = true
     }
     LaunchedEffect(boards.size > 1) {
         if (boards.size > 1) {
@@ -95,78 +100,62 @@ fun HomeScreen(
         }
     }
     val showSwipeHint = boards.size > 1 && !swipeHintDismissed
-    LaunchedEffect(index) {
-        if (pager.currentPage != index) pager.animateScrollToPage(index)
+    val boardIds = boards.map { it.board.boardId }
+    var synchronizingSelection by remember { mutableStateOf(false) }
+    LaunchedEffect(index, boardIds) {
+        synchronizingSelection = true
+        try {
+            if (pager.currentPage != index) pager.animateScrollToPage(index)
+        } finally {
+            synchronizingSelection = false
+        }
     }
-    LaunchedEffect(pager) {
-        snapshotFlow { pager.settledPage }.collect { onPage(it) }
+    val latestOnPage by rememberUpdatedState(onPage)
+    val latestIndex by rememberUpdatedState(index)
+    LaunchedEffect(pager, boardIds) {
+        snapshotFlow { Triple(pager.settledPage, pager.isScrollInProgress, synchronizingSelection) }.collect { (page, scrolling, syncing) ->
+            if (!scrolling && !syncing && page in boards.indices && page != latestIndex) latestOnPage(page)
+        }
     }
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
                 title = {
                     Column {
-                        AnimatedContent(
-                            targetState = headerGone,
-                            transitionSpec = { (fadeIn() + slideInVertically { it / 2 }) togetherWith fadeOut() },
-                            label = "stationTitle",
-                        ) { gone ->
-                            Text(
-                                if (gone) current.board.displayName else stringResource(R.string.app_name),
-                                style = if (gone) MaterialTheme.typography.titleMedium else TransmicroneBrandStyle,
-                                maxLines = if (compactAppBar) 2 else 1, overflow = TextOverflow.Ellipsis,
-                            )
-                        }
+                        Text(
+                            text = stringResource(R.string.app_name), style = TransmicroneBrandStyle,
+                            maxLines = if (compactAppBar) 2 else 1, overflow = TextOverflow.Ellipsis,
+                        )
                         if (BuildConfig.DEBUG && BuildConfig.MOCK_FEED) {
                             Text(stringResource(R.string.sample_data), style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary)
                         }
                     }
                 },
-                expandedHeight = if (fontScale >= 2f) 112.dp else if (compactAppBar) 88.dp else 64.dp,
+                expandedHeight = if (fontScale >= 2f) 112.dp else if (fontScale > 1.2f) 88.dp else 64.dp,
                 navigationIcon = {
                     if (!compactAppBar) Icon(Icons.Default.DirectionsBus, null, Modifier.padding(start = 20.dp, end = 12.dp), tint = MaterialTheme.colorScheme.primary)
                 },
                 actions = {
+                    IconButton(onClick = onAdd, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.Add, stringResource(R.string.add_board)) }
                     if (headerGone) IconButton(onClick = { onEdit(current.board.boardId) }) {
                         Icon(Icons.Default.Edit, stringResource(R.string.edit_board))
                     }
                     IconButton(onClick = onSearch) {
                         Icon(Icons.Default.Search, stringResource(R.string.catalog_search))
                     }
+                    IconButton(onClick = onSettings) {
+                        Icon(Icons.Default.Settings, stringResource(R.string.settings_title))
+                    }
                 },
             )
         },
     ) { insets ->
-        Column(Modifier.fillMaxSize().padding(insets)) {
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                boards.forEachIndexed { i, view ->
-                    key(view.board.boardId) {
-                        val chipRequester = remember { BringIntoViewRequester() }
-                        LaunchedEffect(i == index) {
-                            if (i == index) chipRequester.bringIntoView()
-                        }
-                        FilterChip(
-                            selected = i == index, onClick = { onPage(i) },
-                            label = { Text(view.board.displayName) },
-                            leadingIcon = if (i == index) ({ Icon(Icons.Default.Check, null, Modifier.size(18.dp)) }) else null,
-                            modifier = Modifier.bringIntoViewRequester(chipRequester),
-                        )
-                    }
-                }
-                val addLabel = stringResource(R.string.add_board)
-                AssistChip(
-                    onClick = onAdd,
-                    label = { Text(stringResource(R.string.add_board_short)) },
-                    leadingIcon = { Icon(Icons.Default.Add, null, Modifier.size(18.dp)) },
-                    modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = addLabel },
-                )
-            }
-            HorizontalPager(state = pager, modifier = Modifier.weight(1f)) { page ->
+        Column(Modifier.fillMaxSize().padding(insets).roundedHomeBody()) {
+            BoardTitleSelector(boards.map { it.board.displayName }, pager, showSwipeHint) { choosingBoard = true }
+            HorizontalPager(state = pager, key = { boards[it].board.boardId }, modifier = Modifier.weight(1f).testTag("board-pager")) { page ->
                 val view = boards[page]
                 val empty = when (val freshness = view.freshness) {
                     Freshness.Idle, Freshness.Loading -> stringResource(R.string.freshness_updating)
@@ -186,7 +175,8 @@ fun HomeScreen(
                     onRefresh = onRefresh,
                     state = pullState,
                     indicator = {},
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize()
+                        .then(if (page != visibleIndex) Modifier.clearAndSetSemantics {} else Modifier),
                 ) {
                     Column(Modifier.fillMaxSize()) {
                         Box(Modifier.fillMaxWidth().height(4.dp)) {
@@ -198,32 +188,35 @@ fun HomeScreen(
                         }
                         ArrivalList(
                             view.arrivals, empty, Modifier.weight(1f).fillMaxWidth().testTag("arrival-viewport").topFade { fade }, state = listState,
-                            header = { StationHeader(view, page, boards.size, onRefresh, onEdit) },
+                            header = { StationHeader(view, onRefresh, onEdit) },
                             bottomContentPadding = 24.dp,
                             colorForArrival = { arrival -> routeColor(view, arrival.painted, arrival.routeId) },
                         )
                     }
-                    if (showSwipeHint) Surface(
-                        modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp),
-                        shape = MaterialTheme.shapes.large,
-                        color = MaterialTheme.colorScheme.inverseSurface,
-                        contentColor = MaterialTheme.colorScheme.inverseOnSurface,
-                    ) {
-                        Text(stringResource(R.string.swipe_board_hint), Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            style = MaterialTheme.typography.labelSmall)
-                    }
+
                 }
             }
         }
     }
+    if (choosingBoard) BoardPickerSheet(
+        boards = boards, selectedId = current.board.boardId,
+        onDismiss = { choosingBoard = false },
+        onSelect = { boardId ->
+            choosingBoard = false
+            val destination = boards.indexOfFirst { it.board.boardId == boardId }
+            if (destination >= 0) scope.launch { pager.animateScrollToPage(destination) }
+        },
+        onAdd = { choosingBoard = false; onAdd() },
+    )
 }
 
 @Composable
-private fun StationHeader(view: BoardView, index: Int, boardCount: Int, onRefresh: () -> Unit, onEdit: (String) -> Unit) {
+private fun StationHeader(
+    view: BoardView, onRefresh: () -> Unit, onEdit: (String) -> Unit,
+) {
     Column(Modifier.padding(horizontal = 4.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(view.board.displayName, style = MaterialTheme.typography.headlineLarge)
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     view.board.disambiguator?.takeIf { it.isNotBlank() && !view.board.displayName.contains(it, ignoreCase = true) }?.let {
                         Text(
@@ -252,20 +245,7 @@ private fun StationHeader(view: BoardView, index: Int, boardCount: Int, onRefres
                     }
                 }
             }
-            if (boardCount > 1) {
-                val activeDotRequester = remember { BringIntoViewRequester() }
-                LaunchedEffect(index) { activeDotRequester.bringIntoView() }
-                val pageDescription = stringResource(R.string.board_page_description, index + 1, boardCount)
-                Row(Modifier.widthIn(max = 80.dp).horizontalScroll(rememberScrollState(), enabled = false)
-                    .semantics { contentDescription = pageDescription }.testTag("board-page-dots"),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    repeat(boardCount) { dot ->
-                        Box(Modifier.width(if (dot == index) 14.dp else 5.dp).height(5.dp)
-                            .then(if (dot == index) Modifier.bringIntoViewRequester(activeDotRequester) else Modifier)
-                            .background(if (dot == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, CircleShape))
-                    }
-                }
-            }
+
         }
     }
 }
@@ -288,13 +268,16 @@ private fun Modifier.topFade(fraction: () -> Float): Modifier =
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EmptyHome(onAdd: () -> Unit, snackbarHostState: SnackbarHostState = remember { SnackbarHostState() }, onSearch: () -> Unit = {}) {
+fun EmptyHome(onAdd: () -> Unit, snackbarHostState: SnackbarHostState = remember { SnackbarHostState() }, onSearch: () -> Unit = {}, onSettings: () -> Unit = {}) {
     Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }, topBar = {
-        TopAppBar(title = { Text(stringResource(R.string.app_name), style = TransmicroneBrandStyle) },
-            actions = { IconButton(onClick = onSearch) { Icon(Icons.Default.Search, stringResource(R.string.catalog_search)) } })
+        TopAppBar(colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceContainer), title = { Text(stringResource(R.string.app_name), style = TransmicroneBrandStyle) },
+            actions = {
+                IconButton(onClick = onSearch) { Icon(Icons.Default.Search, stringResource(R.string.catalog_search)) }
+                IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, stringResource(R.string.settings_title)) }
+            })
     }) { insets ->
         Column(
-            Modifier.fillMaxSize().padding(insets).verticalScroll(rememberScrollState()).padding(horizontal = 28.dp),
+            Modifier.fillMaxSize().padding(insets).roundedHomeBody().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp),
             verticalArrangement = Arrangement.Center,
         ) {
             Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.primaryContainer) {
@@ -316,6 +299,12 @@ fun EmptyHome(onAdd: () -> Unit, snackbarHostState: SnackbarHostState = remember
         }
     }
 }
+
+@Composable
+private fun Modifier.roundedHomeBody(): Modifier =
+    background(MaterialTheme.colorScheme.surfaceContainer)
+        .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
+        .background(MaterialTheme.colorScheme.surface)
 
 // Saved route colors remain the same when the live feed omits its color.
 internal fun routeColor(view: BoardView, painted: String, routeId: Int?): String? {

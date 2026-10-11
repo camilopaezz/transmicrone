@@ -1,4 +1,4 @@
-# Transmicrone
+# TransMinuto
 
 [![Android CI](https://github.com/camilopaezz/transmicrone/actions/workflows/android.yml/badge.svg)](https://github.com/camilopaezz/transmicrone/actions/workflows/android.yml)
 

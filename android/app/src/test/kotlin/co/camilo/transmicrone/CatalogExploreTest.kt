@@ -51,6 +51,45 @@ class CatalogExploreTest {
         assertEquals(listOf("500", "100"), repo.explore("cad").services.map { it.option.painted })
     }
 
+    @Test fun cachedPlaceFieldsPreserveRanksAndAllTieBreaks() = runBlocking {
+        val source = """{"places":[
+            {"place_id":"contains-b","kind":"estacion","name":"Acadia","fold":"acadia","disambiguator":"B","query_paradero":"01"},
+            {"place_id":"prefix-stop","kind":"paradero","name":"Cadence","fold":"cadence","query_paradero":"02"},
+            {"place_id":"contains-beta","kind":"estacion","name":"Beta Acad","fold":"beta acad","query_paradero":"03"},
+            {"place_id":"exact","kind":"paradero","name":"Zulu","fold":"cád","query_paradero":"04"},
+            {"place_id":"contains-a","kind":"estacion","name":"Acadia","fold":"acadia","disambiguator":"A","query_paradero":"05"},
+            {"place_id":"prefix-station","kind":"estacion","name":"Cadillac","fold":"cadillac","query_paradero":"06"},
+            {"place_id":"contains-null","kind":"estacion","name":"Acadia","fold":"acadia","query_paradero":"07"}
+        ]}"""
+        var opens = 0
+        val repo = JsonCatalogRepository(Json, gzip = false) {
+            opens++
+            source.byteInputStream()
+        }
+        repo.generatedAt()
+        val expected = listOf("exact", "prefix-station", "prefix-stop", "contains-null", "contains-a", "contains-b", "contains-beta")
+
+        assertEquals(expected, repo.search(" CÁD ").map { it.placeId })
+        assertEquals(expected, repo.explore("cad").places.map { it.placeId })
+        assertEquals("contains-null", repo.search("acadia   07").single().placeId)
+        assertEquals(1, opens)
+    }
+
+    @Test fun cachedServiceFieldsPreserveSplitDestinationRanksAndTieBreaks() = runBlocking {
+        val source = """{"places":[{"place_id":"p","kind":"estacion","name":"Portal","fold":"portal","query_paradero":"TM0001","servicios":[
+            {"painted":"200","destino":"Académie"},
+            {"painted":"100","destino":"Cadillac"},
+            {"painted":"900","destino":"Other||  CÁD  "},
+            {"painted":"200","destino":"Acadia"}
+        ]}]}"""
+        val repo = JsonCatalogRepository(Json, gzip = false) { source.byteInputStream() }
+
+        assertEquals(
+            listOf("900" to "Other||  CÁD  ", "100" to "Cadillac", "200" to "Acadia", "200" to "Académie"),
+            repo.explore("cad").services.map { it.option.painted to it.option.destino },
+        )
+    }
+
     @Test fun rejectsUnsupportedPackedSchemaVersion() = runBlocking {
         val source = """{"schema_version":2,"places":[]}"""
         val repo = JsonCatalogRepository(Json, gzip = false) { source.byteInputStream() }

@@ -22,6 +22,20 @@ class ManagementUiTest {
     private val service = ServicioOption("E48", "CAD", listOf(13266), null)
     private val place = Place("estacion:TM0101", PlaceKind.ESTACION, "León XIII", "leon xiii", "Soacha", "TM0101", listOf(service))
 
+    @Test fun optionalBoardNameCanBeEnteredAndClearedWithoutChangingStation() {
+        val name = mutableStateOf("")
+        compose.setContent { TransmicroneTheme {
+            SetupScreen("", emptyList(), place, setOf(service.key()), true, false,
+                onQuery = {}, onPick = {}, onToggle = {}, onSave = {}, onBack = {},
+                customName = name.value, onCustomName = { name.value = it })
+        } }
+        compose.onNodeWithText("Nombre del tablero (opcional)").performScrollTo().performTextInput("Casa")
+        compose.runOnIdle { assertEquals("Casa", name.value) }
+        compose.onNodeWithText("Nombre del tablero (opcional)").performTextClearance()
+        compose.runOnIdle { assertEquals("", name.value) }
+        compose.onNodeWithText("Déjalo vacío para usar «León XIII».").assertIsDisplayed()
+    }
+
     @Test fun editDeletionNamesSavedBoardAndRequiresConfirmation() {
         var deleted = 0
         compose.setContent { TransmicroneTheme {

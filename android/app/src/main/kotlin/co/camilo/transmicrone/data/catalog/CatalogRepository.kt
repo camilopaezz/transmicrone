@@ -8,7 +8,6 @@ import co.camilo.transmicrone.domain.CatalogEntry
 import co.camilo.transmicrone.domain.CatalogResults
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.Transient
 import kotlinx.serialization.json.Json
 import java.io.InputStream
 import java.util.zip.GZIPInputStream
@@ -32,13 +31,24 @@ private fun foldSearchText(value: String): String {
 }
 
 private fun relevanceRank(value: String, query: String): Int {
-    val folded = foldSearchText(value)
     return when {
-        folded == query -> 0
-        folded.startsWith(query) -> 1
+        value == query -> 0
+        value.startsWith(query) -> 1
         else -> 2
     }
 }
+
+private data class SearchEntry<T>(val value: T, val foldedFields: List<String>)
+private data class SearchHit<T>(val value: T, val rank: Int)
+
+private fun <T> matchingHits(index: List<SearchEntry<T>>, query: String): List<SearchHit<T>> =
+    index.mapNotNull { entry ->
+        if (entry.foldedFields.any { it.contains(query) }) {
+            SearchHit(entry.value, entry.foldedFields.minOf { relevanceRank(it, query) })
+        } else {
+            null
+        }
+    }
 
 interface CatalogRepository {
     suspend fun search(query: String, limit: Int = 40): List<Place>
@@ -54,13 +64,16 @@ class JsonCatalogRepository(
     private val opener: () -> InputStream,
 ) : CatalogRepository {
     @Volatile
-    private var loaded: PackedCatalog? = null
+    private var loaded: CatalogMetadata? = null
 
     @Volatile
     private var byId: Map<String, Place> = emptyMap()
     private var services: List<CatalogEntry.Service> = emptyList()
+    // Published together with services by the volatile write to loaded.
+    private var placeSearchIndex: List<SearchEntry<Place>> = emptyList()
+    private var serviceSearchIndex: List<SearchEntry<CatalogEntry.Service>> = emptyList()
 
-    private fun catalog(): PackedCatalog {
+    private fun catalog(): CatalogMetadata {
         loaded?.let { return it }
         synchronized(this) {
             loaded?.let { return it }
@@ -71,8 +84,32 @@ class JsonCatalogRepository(
                 require(packed.schemaVersion == SUPPORTED_CATALOG_SCHEMA_VERSION) {
                     "Unsupported catalog schema_version: ${packed.schemaVersion}"
                 }
-                val places = packed.places.map { it.toPlace() }
-                packed.resolved = places
+                // These caches are only needed while resolving the packed tree.
+                val options = HashMap<PackedServicio, ServicioOption>()
+                val routeIds = HashMap<List<Int>, List<Int>>()
+                val colors = HashMap<String, String?>()
+                fun resolve(row: PackedServicio): ServicioOption = options.getOrPut(row) {
+                    ServicioOption(
+                        painted = row.painted,
+                        destino = TextNorm.nfc(row.destino),
+                        routeIds = routeIds.getOrPut(row.routeIds) { row.routeIds.distinct() },
+                        color = row.color?.let { color ->
+                            if (!colors.containsKey(color)) colors[color] = TextNorm.hexColor(color)
+                            colors[color]
+                        },
+                    )
+                }
+                val dictionary = packed.servicios.map(::resolve)
+                val places = packed.places.map { place ->
+                    val resolved = place.servicioIndices?.let { indices ->
+                        require(place.servicios.isEmpty()) { "Place ${place.placeId} has both servicio shapes" }
+                        indices.map { index ->
+                            require(index in dictionary.indices) { "Invalid servicio index $index for ${place.placeId}" }
+                            dictionary[index]
+                        }
+                    } ?: place.servicios.map(::resolve)
+                    place.toPlace(resolved)
+                }
                 byId = places.associateBy { it.placeId }
                 services = places.flatMap { place -> place.servicios.map { it to place } }
                     .groupBy { (option, _) -> option.painted to option.destino }
@@ -86,8 +123,12 @@ class JsonCatalogRepository(
                                 .sortedWith(compareBy<Place> { it.kind.ordinal }.thenBy { it.name }.thenBy { it.disambiguator }),
                         )
                     }
-                loaded = packed
-                return packed
+                placeSearchIndex = places.map { SearchEntry(it, placeSearchValues(it).map(::foldSearchText)) }
+                serviceSearchIndex = services.map { SearchEntry(it, serviceSearchValues(it).map(::foldSearchText)) }
+                val metadata = CatalogMetadata(packed.generatedAt)
+                // Publish every domain index before marking the catalog loaded. Do not retain packed data.
+                loaded = metadata
+                return metadata
             }
         }
     }
@@ -95,13 +136,15 @@ class JsonCatalogRepository(
     override suspend fun search(query: String, limit: Int): List<Place> {
         val q = foldSearchText(query)
         if (q.length < 2 || limit <= 0) return emptyList()
-        val hits = catalog().resolvedPlaces().filter { place ->
-            placeSearchValues(place).any { foldSearchText(it).contains(q) }
-        }
-        return hits.sortedWith(compareBy<Place> { place -> placeSearchValues(place).minOf { relevanceRank(it, q) } }
-            .thenBy { it.kind.ordinal }.thenBy { it.name }.thenBy { it.disambiguator })
-            .take(limit)
+        catalog()
+        return matchingPlaces(q, limit)
     }
+
+    private fun matchingPlaces(query: String, limit: Int): List<Place> =
+        matchingHits(placeSearchIndex, query)
+            .sortedWith(compareBy<SearchHit<Place>> { it.rank }
+                .thenBy { it.value.kind.ordinal }.thenBy { it.value.name }.thenBy { it.value.disambiguator })
+            .take(limit).map { it.value }
 
     override fun place(placeId: String): Place? {
         catalog()
@@ -111,19 +154,13 @@ class JsonCatalogRepository(
     override suspend fun explore(query: String, limit: Int): CatalogResults {
         val q = foldSearchText(query)
         if (q.isEmpty() || limit <= 0) return CatalogResults()
-        val places = catalog().resolvedPlaces()
+        catalog()
         return CatalogResults(
-            services = services.filter { service ->
-                serviceSearchValues(service).any { foldSearchText(it).contains(q) }
-            }.sortedWith(compareBy<CatalogEntry.Service> { service ->
-                serviceSearchValues(service).minOf { relevanceRank(it, q) }
-            }
-                    .thenBy { it.option.painted }.thenBy { it.option.destino }).take(limit),
-            places = places.filter { place ->
-                placeSearchValues(place).any { foldSearchText(it).contains(q) }
-            }.sortedWith(compareBy<Place> { place -> placeSearchValues(place).minOf { relevanceRank(it, q) } }
-                    .thenBy { it.kind.ordinal }
-                    .thenBy { it.name }.thenBy { it.disambiguator }).take(limit),
+            services = matchingHits(serviceSearchIndex, q)
+                .sortedWith(compareBy<SearchHit<CatalogEntry.Service>> { it.rank }
+                    .thenBy { it.value.option.painted }.thenBy { it.value.option.destino })
+                .take(limit).map { it.value },
+            places = matchingPlaces(q, limit),
         )
     }
 
@@ -146,18 +183,15 @@ class JsonCatalogRepository(
     override suspend fun generatedAt(): String? = catalog().generatedAt
 }
 
+private data class CatalogMetadata(val generatedAt: String?)
+
 @Serializable
 internal data class PackedCatalog(
     @SerialName("generated_at") val generatedAt: String? = null,
     @SerialName("schema_version") val schemaVersion: Int = 1,
+    val servicios: List<PackedServicio> = emptyList(),
     val places: List<PackedPlace> = emptyList(),
-) {
-    @Transient
-    var resolved: List<Place> = emptyList()
-
-    fun resolvedPlaces(): List<Place> =
-        resolved.ifEmpty { places.map { it.toPlace() } }
-}
+)
 
 @Serializable
 internal data class PackedPlace(
@@ -168,15 +202,16 @@ internal data class PackedPlace(
     val disambiguator: String? = null,
     @SerialName("query_paradero") val queryParadero: String,
     val servicios: List<PackedServicio> = emptyList(),
+    @SerialName("servicio_indices") val servicioIndices: List<Int>? = null,
 ) {
-    fun toPlace(): Place = Place(
+    fun toPlace(options: List<ServicioOption>): Place = Place(
         placeId = placeId,
         kind = if (kind == "estacion") PlaceKind.ESTACION else PlaceKind.PARADERO,
         name = TextNorm.nfc(name),
         fold = fold,
         disambiguator = disambiguator?.let(TextNorm::nfc)?.ifBlank { null },
         queryParadero = queryParadero,
-        servicios = servicios.map { it.toOption() },
+        servicios = options,
     )
 }
 
@@ -186,11 +221,4 @@ internal data class PackedServicio(
     val destino: String,
     @SerialName("route_ids") val routeIds: List<Int> = emptyList(),
     val color: String? = null,
-) {
-    fun toOption(): ServicioOption = ServicioOption(
-        painted = painted,
-        destino = TextNorm.nfc(destino),
-        routeIds = routeIds.distinct(),
-        color = TextNorm.hexColor(color),
-    )
-}
+)

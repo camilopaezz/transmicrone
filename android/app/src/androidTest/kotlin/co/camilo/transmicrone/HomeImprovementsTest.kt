@@ -39,20 +39,20 @@ class HomeImprovementsTest {
         compose.runOnIdle { assertEquals(1, retries) }
     }
 
-    @Test fun singleBoardShowsInlineAddAndEditWithoutPagerControls() {
+    @Test fun singleBoardShowsOneTitleAndToolbarAdd() {
         var adds = 0
         var edits = 0
         compose.setContent { TransmicroneTheme {
             HomeScreen(listOf(BoardView(board, listOf(arrival))), 0, {}, { adds++ }, { edits++ }, {})
         } }
-        compose.onAllNodesWithText("León XIII").assertCountEquals(2)
-        compose.onNodeWithText("Agregar").assertHeightIsAtLeast(48.dp)
+        compose.onAllNodesWithText("León XIII").assertCountEquals(1)
+        compose.onNodeWithContentDescription("Agregar tablero").assertHeightIsAtLeast(48.dp)
             .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button)).performClick()
         compose.onNodeWithContentDescription("Editar tablero")
             .assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp).performClick()
         compose.onNodeWithText("Tableros").assertDoesNotExist()
         compose.onNodeWithTag("board-page-dots").assertDoesNotExist()
-        compose.onNodeWithText("Desliza para cambiar de tablero").assertDoesNotExist()
+        compose.onNodeWithText("· desliza").assertDoesNotExist()
         compose.onNodeWithContentDescription("Tablero siguiente").assertDoesNotExist()
         compose.runOnIdle { assertEquals(1, adds); assertEquals(1, edits) }
     }
@@ -95,13 +95,14 @@ class HomeImprovementsTest {
             HomeScreen(listOf(BoardView(board, listOf(arrival)), BoardView(second, listOf(arrival))),
                 page.intValue, { page.intValue = it }, {}, {}, {})
         } }
-        compose.onNodeWithTag("board-page-dots").assertIsDisplayed()
-        compose.onNodeWithText("Desliza para cambiar de tablero").assertIsDisplayed()
+        compose.onNodeWithTag("board-page-selector").assertIsDisplayed()
+        compose.onNodeWithText("· desliza").assertIsDisplayed()
         compose.onNodeWithTag("arrival-viewport").performTouchInput { swipeLeft() }
         compose.waitForIdle()
         compose.runOnIdle { assertEquals(1, page.intValue) }
-        compose.onNodeWithText("Desliza para cambiar de tablero").assertDoesNotExist()
-        compose.onAllNodesWithText("León XIII")[0].performClick()
+        compose.onNodeWithText("· desliza").assertDoesNotExist()
+        compose.onNodeWithTag("board-title-selector").performClick()
+        compose.onNode(isSelectable() and hasText("León XIII")).performClick()
         compose.waitForIdle()
         compose.runOnIdle { assertEquals(0, page.intValue) }
         compose.onNodeWithContentDescription("Tablero anterior").assertDoesNotExist()
@@ -109,7 +110,7 @@ class HomeImprovementsTest {
         compose.onNodeWithText("1/2").assertDoesNotExist()
     }
 
-    @Test fun selectedChipIsRevealedWhenSwitchingToDistantBoard() {
+    @Test fun titleAndCounterFollowExternalDistantSelection() {
         val page = mutableIntStateOf(0)
         val boards = List(12) { i -> BoardView(board.copy(boardId = "$i", displayName = "Estación $i"), listOf(arrival)) }
         compose.setContent { TransmicroneTheme {
@@ -117,7 +118,8 @@ class HomeImprovementsTest {
         } }
         compose.runOnIdle { page.intValue = 11 }
         compose.waitForIdle()
-        compose.onNode(isSelected() and hasText("Estación 11")).assertIsDisplayed()
+        compose.onNodeWithText("Estación 11").assertIsDisplayed()
+        compose.onNodeWithText("12 de 12").assertIsDisplayed()
     }
 
     @Test fun hintDismissalDoesNotMoveArrivalsAndSurvivesNavigationAndRestoration() {
@@ -132,14 +134,14 @@ class HomeImprovementsTest {
         }
         val before = compose.onNodeWithText("Entre 2 y 4 min", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         compose.mainClock.advanceTimeBy(6000)
-        compose.onNodeWithText("Desliza para cambiar de tablero").assertDoesNotExist()
+        compose.onNodeWithText("· desliza").assertDoesNotExist()
         val after = compose.onNodeWithText("Entre 2 y 4 min", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         assertEquals(before, after)
         compose.runOnIdle { showHome.value = false }
         compose.runOnIdle { showHome.value = true }
-        compose.onNodeWithText("Desliza para cambiar de tablero").assertDoesNotExist()
+        compose.onNodeWithText("· desliza").assertDoesNotExist()
         restoration.emulateSavedInstanceStateRestore()
-        compose.onNodeWithText("Desliza para cambiar de tablero").assertDoesNotExist()
+        compose.onNodeWithText("· desliza").assertDoesNotExist()
     }
 
     @Test fun pencilEditsVisibleBoardAfterSwipe() {

@@ -25,6 +25,7 @@ interface BoardRepository {
     fun observe(): Flow<BoardSnapshot>
     suspend fun snapshot(): BoardSnapshot
     suspend fun save(board: Board)
+    suspend fun move(boardId: String, offset: Int)
     suspend fun delete(boardId: String)
     suspend fun setLastBoard(boardId: String?)
     suspend fun restoreDeleted(board: Board, originalOrder: List<String>, previousLastBoardId: String?, lastBoardIdAfterDelete: String?)
@@ -44,6 +45,13 @@ internal fun BoardSnapshot.saving(cleaned: Board): BoardSnapshot {
         boards + cleaned
     }
     return copy(boards = next, lastBoardId = cleaned.boardId)
+}
+
+internal fun BoardSnapshot.moving(boardId: String, offset: Int): BoardSnapshot {
+    val index = boards.indexOfFirst { it.boardId == boardId }
+    val destination = index + offset
+    if (index < 0 || destination !in boards.indices || offset !in listOf(-1, 1)) return this
+    return copy(boards = boards.toMutableList().also { it.add(destination, it.removeAt(index)) })
 }
 
 internal fun BoardSnapshot.deleting(boardId: String): BoardSnapshot {
@@ -102,6 +110,10 @@ class DataStoreBoardRepository(
             },
         )
         mutate { current -> current.saving(cleaned) }
+    }
+
+    override suspend fun move(boardId: String, offset: Int) {
+        mutate { it.moving(boardId, offset) }
     }
 
     override suspend fun delete(boardId: String) {

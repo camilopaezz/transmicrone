@@ -61,6 +61,8 @@ def pack(src: dict) -> dict:
         edges[e["place_id"]].append(rid)
 
     places = []
+    servicios = []
+    servicio_indices = {}
     hidden = 0
     for pl in src.get("places") or []:
         query = (pl.get("query_paradero") or "").strip()
@@ -111,6 +113,17 @@ def pack(src: dict) -> dict:
                 for g in sorted(groups.values(), key=lambda x: (x["painted"], x["destino"]))
             ],
         }
+        indices = []
+        for servicio in rec.pop("servicios"):
+            key = (
+                servicio["painted"], servicio["destino"],
+                tuple(servicio["route_ids"]), servicio.get("color"),
+            )
+            if key not in servicio_indices:
+                servicio_indices[key] = len(servicios)
+                servicios.append(servicio)
+            indices.append(servicio_indices[key])
+        rec["servicio_indices"] = indices
         if dis:
             rec["disambiguator"] = dis
         places.append(rec)
@@ -125,6 +138,7 @@ def pack(src: dict) -> dict:
             "estaciones": estaciones,
             "paraderos": len(places) - estaciones,
         },
+        "servicios": servicios,
         "places": places,
     }
 

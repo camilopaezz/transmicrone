@@ -48,6 +48,7 @@ fun SetupScreen(
     isEditing: Boolean = false, editingBoardName: String? = null, onDelete: () -> Unit = {}, onChangePlace: () -> Unit = onBack,
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
     catalogLoadFailed: Boolean = false, searchFailed: Boolean = false, saveFailed: Boolean = false,
+    customName: String = "", onCustomName: (String) -> Unit = {},
 ) {
     var confirmingDelete by remember(isEditing, editingBoardName) { mutableStateOf(false) }
     val searchFocus = remember { FocusRequester() }
@@ -86,7 +87,7 @@ fun SetupScreen(
                             else pluralStringResource(R.plurals.setup_selected_services, selected.size, selected.size),
                             style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Button(onClick = onSave, enabled = selected.isNotEmpty(), modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                        Button(onClick = { keyboard?.hide(); onSave() }, enabled = selected.isNotEmpty(), modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
                             Icon(Icons.Default.Check, null)
                             Spacer(Modifier.width(8.dp))
                             Text(stringResource(R.string.save_board))
@@ -102,7 +103,9 @@ fun SetupScreen(
             }
         },
     ) { insets ->
-        Column(Modifier.fillMaxSize().padding(insets).imePadding()) {
+        // The bottom bar includes the IME inset. Consume Scaffold's padding so
+        // the content only adds keyboard space that has not already been reserved.
+        Column(Modifier.fillMaxSize().padding(insets).consumeWindowInsets(insets).imePadding()) {
             if (place == null) {
                 LazyColumn(
                     Modifier.weight(1f),
@@ -209,6 +212,17 @@ fun SetupScreen(
                                 }
                             }
                         }
+                    }
+                    item {
+                        OutlinedTextField(
+                            value = customName, onValueChange = onCustomName,
+                            modifier = Modifier.fillMaxWidth(), singleLine = true,
+                            label = { Text(stringResource(R.string.board_custom_name)) },
+                            placeholder = { Text(place.name) },
+                            supportingText = { Text(stringResource(R.string.board_custom_name_hint, place.name)) },
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = { keyboard?.hide() }),
+                        )
                     }
                     item { Text(stringResource(R.string.choose_servicios), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(4.dp)) }
                     items(orderedServices, key = { it.key() }) { option ->

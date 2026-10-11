@@ -18,7 +18,7 @@
     <string name="route_wagon">Vagón %1$s</string>
     <string name="route_no_stop">Sin parada</string>
     <string name="route_stop_count">%1$d paradas</string>
-    <string name="app_name">Transmicrone</string>
+    <string name="app_name">TransMinuto</string>
     <string name="sample_data">Datos de ejemplo</string>
     <string name="empty_boards_title">Sin tableros</string>
     <string name="empty_boards_body">Busca una estación o un paradero y elige los servicios que quieres ver juntos.</string>
@@ -92,4 +92,38 @@
     <string name="service_served_places">Lugares atendidos por el servicio</string>
     <string name="service_lookup_failed">No se pudo abrir el servicio %1$s.</string>
     <string name="service_lookup_loading">Abriendo servicio %1$s…</string>
+    <string name="settings_title">Ajustes</string>
+    <string name="settings_appearance">Apariencia</string>
+    <string name="settings_theme">Tema</string>
+    <string name="settings_system">Sistema</string>
+    <string name="settings_light">Claro</string>
+    <string name="settings_dark">Oscuro</string>
+    <string name="settings_dynamic">Colores del fondo de pantalla</string>
+    <string name="settings_dynamic_body">Usa los colores de Android para la app.</string>
+    <string name="settings_dynamic_unavailable">Disponible a partir de Android 12.</string>
+    <string name="settings_boards">Orden de los tableros</string>
+    <string name="settings_boards_body">Este orden se usa en tus tableros y al deslizar.</string>
+    <string name="settings_no_boards">Agrega un tablero desde la pantalla de inicio.</string>
+    <string name="settings_up">Subir %1$s</string>
+    <string name="settings_down">Bajar %1$s</string>
+    <string name="settings_help">Cómo leer las llegadas</string>
+    <string name="settings_estimates">Los tiempos son estimaciones del servicio. Los rangos pueden superponerse y no son una cuenta regresiva exacta.</string>
+    <string name="settings_stale">Reporte antiguo indica que la posición del bus tiene más de dos minutos. Los datos guardados pueden haber cambiado.</string>
+    <string name="settings_occupancy">Ocupación desconocida significa que el servicio no informó cuántas personas hay en el bus.</string>
+    <string name="settings_about">Acerca de</string>
+    <string name="settings_version">Versión %1$s</string>
+    <string name="settings_source">Catálogo de TransMilenio y SITP. Llegadas de un servicio no oficial que puede fallar o no devolver buses.</string>
+    <plurals name="settings_refresh">
+        <item quantity="one">Las llegadas se actualizan cada %1$d segundo mientras el tablero está abierto.</item>
+        <item quantity="other">Las llegadas se actualizan cada %1$d segundos mientras el tablero está abierto.</item>
+    </plurals>
+    <string name="settings_save_failed">No se pudo guardar el cambio. Inténtalo de nuevo.</string>
+    <string name="settings_back">Volver</string>
+    <string name="choose_board">Cambiar tablero</string>
+    <string name="choose_board_title">Tus tableros</string>
+    <string name="board_page_count">%1$d de %2$d</string>
+    <string name="board_swipe_short"> · desliza</string>
+    <string name="board_selected">Seleccionado</string>
+    <string name="board_custom_name">Nombre del tablero (opcional)</string>
+    <string name="board_custom_name_hint">Déjalo vacío para usar «%1$s».</string>
 </resources>

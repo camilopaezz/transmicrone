@@ -1,4 +1,4 @@
-# Transmicrone Android
+# TransMinuto Android
 
 Personal arrivals boards for TransMilenio / SITP. Unofficial Bodega host. Spanish UI. No accounts, maps, notifications, or location.
 

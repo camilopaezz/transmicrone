@@ -4,6 +4,7 @@ import co.camilo.transmicrone.data.ArrivalsRepository
 import co.camilo.transmicrone.data.catalog.CatalogRepository
 import co.camilo.transmicrone.data.feed.FeedClient
 import co.camilo.transmicrone.data.local.ArrivalsCache
+import co.camilo.transmicrone.data.local.moving
 import co.camilo.transmicrone.data.local.BoardRepository
 import co.camilo.transmicrone.data.local.BoardSnapshot
 import co.camilo.transmicrone.data.local.FileArrivalsCache
@@ -298,6 +299,86 @@ class AppViewModelTest {
     }
 
     @Test
+    fun editingAfterCatalogLoadFailureWaitsForPlaceLookup() = vmTest {
+        val place = leonPlace()
+        val board = leonBoard().copy(displayName = "Mi estación")
+        val catalog = FakeCatalog(listOf(place), generatedAtFailure = java.io.IOException("offline"))
+        val vm = viewModel(ScriptedFeed(), MemoryBoards(listOf(board)), catalog = catalog)
+        runCurrent()
+        assertFalse(vm.state.value.catalogReady)
+        assertTrue(vm.state.value.catalogLoadFailed)
+
+        vm.openSetup(board.boardId)
+        assertEquals(Screen.HOME, vm.state.value.screen)
+        assertEquals(0, catalog.placeCalls)
+        assertNull(vm.state.value.setupPlace)
+        runCurrent()
+
+        assertEquals(1, catalog.placeCalls)
+        assertEquals(Screen.SETUP, vm.state.value.screen)
+        assertEquals(board.boardId, vm.state.value.editingBoardId)
+        assertEquals(place, vm.state.value.setupPlace)
+        assertEquals(board.displayName, vm.state.value.setupCustomName)
+        assertEquals(board.servicios.map { it.key() }.toSet(), vm.state.value.setupSelected)
+        assertFalse(vm.state.value.setupSearchFailed)
+        assertFalse(vm.state.value.setupSaveFailed)
+        assertTrue(vm.state.value.catalogLoadFailed)
+        assertFalse(vm.state.value.catalogReady)
+
+        vm.changeSetupPlace()
+        vm.pickPlace(place)
+        assertEquals(board.servicios.map { it.key() }.toSet(), vm.state.value.setupSelected)
+    }
+
+    @Test
+    fun editingAfterCatalogLoadFailureAppliesPlaceLookupFailure() = vmTest {
+        val board = leonBoard().copy(displayName = "Mi estación")
+        val catalog = FakeCatalog(
+            listOf(leonPlace()),
+            generatedAtFailure = java.io.IOException("offline"),
+            placeFailure = java.io.IOException("broken catalog"),
+        )
+        val vm = viewModel(ScriptedFeed(), MemoryBoards(listOf(board)), catalog = catalog)
+        runCurrent()
+        assertFalse(vm.state.value.catalogReady)
+        assertTrue(vm.state.value.catalogLoadFailed)
+
+        vm.openSetup(board.boardId)
+        assertEquals(Screen.HOME, vm.state.value.screen)
+        assertEquals(0, catalog.placeCalls)
+        runCurrent()
+
+        assertEquals(1, catalog.placeCalls)
+        assertEquals(Screen.SETUP, vm.state.value.screen)
+        assertEquals(board.boardId, vm.state.value.editingBoardId)
+        assertNull(vm.state.value.setupPlace)
+        assertEquals(board.displayName, vm.state.value.setupCustomName)
+        assertEquals(board.servicios.map { it.key() }.toSet(), vm.state.value.setupSelected)
+        assertTrue(vm.state.value.setupSearchFailed)
+        assertFalse(vm.state.value.setupSaveFailed)
+        assertTrue(vm.state.value.catalogLoadFailed)
+        assertFalse(vm.state.value.catalogReady)
+    }
+
+    @Test
+    fun delayedEditLookupDoesNotReplaceSearch() = vmTest {
+        val catalog = FakeCatalog(listOf(leonPlace()), generatedAtFailure = java.io.IOException("offline"))
+        val vm = viewModel(ScriptedFeed(), MemoryBoards(listOf(leonBoard())), catalog = catalog)
+        runCurrent()
+
+        vm.openSetup("leon")
+        assertEquals(Screen.HOME, vm.state.value.screen)
+        assertEquals(0, catalog.placeCalls)
+        vm.openSearch()
+        val searchState = vm.state.value
+        assertEquals(Screen.SEARCH, searchState.screen)
+        runCurrent()
+
+        assertEquals(1, catalog.placeCalls)
+        assertEquals(searchState, vm.state.value)
+    }
+
+    @Test
     fun editingBoardSurvivesCatalogPlaceLookupFailure() = vmTest {
         val catalog = FakeCatalog(listOf(leonPlace()), placeFailure = java.io.IOException("broken catalog"))
         val vm = viewModel(ScriptedFeed(), MemoryBoards(listOf(leonBoard())), catalog = catalog)
@@ -583,6 +664,40 @@ class AppViewModelTest {
     }
 
     @Test
+    fun customBoardNameIsTrimmedRetainedOnEditAndClearedBackToStationName() = vmTest {
+        val vm = viewModel(ScriptedFeed(), MemoryBoards())
+        runCurrent()
+        val place = leonPlace()
+        vm.openSetup()
+        vm.pickPlace(place)
+        vm.toggleServicio(place.servicios.single().key())
+        vm.onSetupCustomName("  Casa  ")
+        vm.saveSetup()
+        runCurrent()
+        val saved = vm.state.value.boards.single().board
+        assertEquals("Casa", saved.displayName)
+        assertEquals(place.placeId, saved.placeId)
+        assertEquals(place.queryParadero, saved.queryParadero)
+        vm.openSetup(saved.boardId)
+        assertEquals("Casa", vm.state.value.setupCustomName)
+        vm.onSetupCustomName("   ")
+        vm.saveSetup()
+        runCurrent()
+        assertEquals(place.name, vm.state.value.boards.single().board.displayName)
+        vm.openSetup(saved.boardId)
+        assertEquals("", vm.state.value.setupCustomName)
+        vm.onSetupCustomName("Abandoned draft")
+        vm.goHome()
+        vm.openSetup()
+        assertEquals("", vm.state.value.setupCustomName)
+        vm.pickPlace(place)
+        vm.toggleServicio(place.servicios.single().key())
+        vm.saveSetup()
+        runCurrent()
+        assertTrue(vm.state.value.boards.all { it.board.displayName == place.name })
+    }
+
+    @Test
     fun openingNewSetupDoesNotRestoreAbandonedDraft() = vmTest {
         val vm = viewModel(ScriptedFeed(), MemoryBoards())
         runCurrent()
@@ -733,6 +848,9 @@ private class MemoryBoards(initial: List<Board> = emptyList()) : BoardRepository
     override suspend fun save(board: Board) {
         state.value = state.value.saving(board)
     }
+    override suspend fun move(boardId: String, offset: Int) {
+        state.value = state.value.moving(boardId, offset)
+    }
     override suspend fun delete(boardId: String) {
         val boards = state.value.boards.filterNot { it.boardId == boardId }
         state.value = state.value.copy(boards = boards, lastBoardId = boards.firstOrNull()?.boardId)
@@ -773,6 +891,9 @@ private class FakeCatalog(
     var placeFailure: Exception? = null,
     var serviceFailure: Exception? = null,
 ) : CatalogRepository {
+    var placeCalls = 0
+        private set
+
     override suspend fun explore(query: String, limit: Int) = co.camilo.transmicrone.domain.CatalogResults(places = search(query, limit))
     override suspend fun service(painted: String, destino: String): co.camilo.transmicrone.domain.CatalogEntry.Service? {
         serviceFailure?.let { throw it }
@@ -791,6 +912,7 @@ private class FakeCatalog(
     }
 
     override fun place(placeId: String): Place? {
+        placeCalls++
         placeFailure?.let { throw it }
         return places.find { it.placeId == placeId }
     }
