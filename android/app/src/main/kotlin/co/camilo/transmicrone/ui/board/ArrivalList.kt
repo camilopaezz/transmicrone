@@ -36,8 +36,11 @@ fun ArrivalList(
     state: LazyListState = rememberLazyListState(), header: (@Composable () -> Unit)? = null,
     bottomContentPadding: Dp = 104.dp,
     colorForArrival: (Arrival) -> String? = { it.colorRuta },
+    active: Boolean = true,
 ) {
-    val now by produceState(Instant.now()) {
+    val now by produceState(Instant.now(), active) {
+        if (!active) return@produceState
+        value = Instant.now()
         while (true) { delay(5_000); value = Instant.now() }
     }
     val keys = remember(arrivals) { arrivalListKeys(arrivals) }

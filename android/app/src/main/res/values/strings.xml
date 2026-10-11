@@ -120,6 +120,8 @@
     <string name="settings_save_failed">No se pudo guardar el cambio. Inténtalo de nuevo.</string>
     <string name="settings_back">Volver</string>
     <string name="choose_board">Cambiar tablero</string>
+    <string name="previous_board">Tablero anterior</string>
+    <string name="next_board">Tablero siguiente</string>
     <string name="choose_board_title">Tus tableros</string>
     <string name="board_page_count">%1$d de %2$d</string>
     <string name="board_swipe_short"> · desliza</string>

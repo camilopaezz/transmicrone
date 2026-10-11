@@ -1,5 +1,7 @@
 package co.camilo.transmicrone.ui.search
 
+import co.camilo.transmicrone.ui.common.LocalScreenEntered
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
@@ -41,7 +43,8 @@ fun CatalogSearchScreen(
 ) {
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
-    LaunchedEffect(Unit) { focus.requestFocus() }
+    val screenEntered = LocalScreenEntered.current
+    LaunchedEffect(screenEntered) { if (screenEntered) focus.requestFocus() }
     Scaffold(topBar = {
         TopAppBar(title = { Text(stringResource(R.string.catalog_search)) }, navigationIcon = {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }

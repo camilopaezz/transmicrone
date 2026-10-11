@@ -125,6 +125,7 @@ class HomeUiTest {
             }
         }
         compose.onAllNodesWithText("León XIII")[0].assertIsDisplayed()
+        compose.onAllNodesWithText("Soacha").assertCountEquals(0)
         compose.onAllNodesWithText("E48", useUnmergedTree = true)[0].assertIsDisplayed()
         compose.onNodeWithText("CAD", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithText("Entre 2 y 4 min", useUnmergedTree = true).assertIsDisplayed()
@@ -139,7 +140,7 @@ class HomeUiTest {
     }
 
     @Test
-    fun failedCachedShowsFailureKindNotOnlyStale() {
+    fun homeOmitsRefreshStatusWhileArrivalsAreShown() {
         compose.setContent {
             TransmicroneTheme {
                 HomeScreen(
@@ -161,13 +162,14 @@ class HomeUiTest {
                 )
             }
         }
-        compose.onNodeWithText("el servidor rechazó la consulta", substring = true).assertIsDisplayed()
-        compose.onNodeWithText("Mostrando datos anteriores", substring = true).assertIsDisplayed()
+        compose.onAllNodesWithText("el servidor rechazó la consulta", substring = true).assertCountEquals(0)
+        compose.onAllNodesWithText("Mostrando datos anteriores", substring = true).assertCountEquals(0)
         compose.onAllNodesWithText("Actualizado", substring = true).assertCountEquals(0)
+        compose.onAllNodesWithText("Reintentar").assertCountEquals(0)
     }
 
     @Test
-    fun updatingCachedDoesNotLookLikeFailure() {
+    fun updatingCachedDoesNotShowAStatusLine() {
         compose.setContent {
             TransmicroneTheme {
                 HomeScreen(
@@ -186,7 +188,8 @@ class HomeUiTest {
                 )
             }
         }
-        compose.onNodeWithText("Mostrando datos anteriores", substring = true).assertIsDisplayed()
+        compose.onAllNodesWithText("Mostrando datos anteriores", substring = true).assertCountEquals(0)
+        compose.onAllNodesWithText("Actualizado", substring = true).assertCountEquals(0)
         compose.onAllNodesWithText("el servidor rechazó la consulta", substring = true).assertCountEquals(0)
         compose.onAllNodesWithText("No se pudo actualizar", substring = true).assertCountEquals(0)
     }

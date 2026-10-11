@@ -23,6 +23,12 @@ adb shell am start -n co.camilo.transmicrone.debug/co.camilo.transmicrone.MainAc
 
 For UI work without the service, build with `./gradlew :app:assembleDebug -PmockFeed=true`. Sample data is labeled in the app and uses a separate arrivals cache. Rebuild without that flag to return to live data.
 
+For physical-device performance checks, use `./gradlew :app:assembleDevice -PmockFeed=false`
+and `app/build/outputs/apk/device/app-device.apk`. This build disables debugging and uses
+the development package and signing key, so installing it with `-r` preserves saved
+boards and settings. It always uses the live feed. Stop screen mirroring before
+measuring frame timing; the capture process can add display-buffer stalls on the Xiaomi.
+
 ## Continuous integration
 
 GitHub Actions runs unit tests, Android lint, debug assembly, and instrumented tests on an Android 15 emulator for pushes and pull requests. It also checks Python syntax and publishes the debug APK and test reports as build artifacts. CI uses no live-feed credentials; its APK needs a locally configured build for live access.

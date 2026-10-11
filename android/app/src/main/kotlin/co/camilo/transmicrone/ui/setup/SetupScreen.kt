@@ -1,5 +1,7 @@
 package co.camilo.transmicrone.ui.setup
 
+import co.camilo.transmicrone.ui.common.LocalScreenEntered
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.*
@@ -57,11 +59,12 @@ fun SetupScreen(
     val repeatedLocations = remember(results) {
         results.groupingBy { Triple(it.name, it.kind, it.disambiguator?.trim().orEmpty()) }.eachCount()
     }
-    LaunchedEffect(place == null) {
-        if (place == null) {
+    val screenEntered = LocalScreenEntered.current
+    LaunchedEffect(place == null, screenEntered) {
+        if (place == null && screenEntered) {
             searchFocus.requestFocus()
             keyboard?.show()
-        } else {
+        } else if (place != null) {
             keyboard?.hide()
         }
     }

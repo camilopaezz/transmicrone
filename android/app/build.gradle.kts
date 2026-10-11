@@ -87,6 +87,14 @@ android {
             applicationIdSuffix = ".debug"
             buildConfigField("boolean", "MOCK_FEED", providers.gradleProperty("mockFeed").orElse("false").get().toBoolean().toString())
         }
+        create("device") {
+            initWith(getByName("release"))
+            // Update the development app in place without debugger overhead.
+            applicationIdSuffix = ".debug"
+            signingConfig = signingConfigs.getByName("debug")
+            isDebuggable = false
+            matchingFallbacks += "release"
+        }
     }
 
     compileOptions {

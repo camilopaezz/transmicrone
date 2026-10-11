@@ -32,11 +32,10 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,7 +45,6 @@ import co.camilo.transmicrone.ui.BoardView
 import co.camilo.transmicrone.ui.Freshness
 import co.camilo.transmicrone.ui.board.ArrivalList
 import co.camilo.transmicrone.ui.board.parseColor
-import co.camilo.transmicrone.ui.common.FreshnessLine
 import co.camilo.transmicrone.ui.common.relativeTime
 import co.camilo.transmicrone.ui.theme.TransmicroneBrandStyle
 
@@ -75,19 +73,21 @@ fun HomeScreen(
     if (boards.isEmpty()) { EmptyHome(onAdd, snackbarHostState, onSearch, onSettings); return }
     val index = pageIndex.coerceIn(0, boards.lastIndex)
     val pager = rememberPagerState(initialPage = index, pageCount = { boards.size })
+    val boardIds = boards.map { it.board.boardId }
+    val scrolling = pager.isScrollInProgress
+    var settledBoards by remember { mutableStateOf(boards) }
+    LaunchedEffect(boards, scrolling) {
+        if (!scrolling) settledBoards = boards
+    }
+    val displayedBoards = if (scrolling && settledBoards.map { it.board.boardId } == boardIds) settledBoards else boards
     val visibleIndex = pager.currentPage.coerceIn(boards.indices)
-    val current = boards[visibleIndex]
+    val current = displayedBoards[visibleIndex]
     val scope = rememberCoroutineScope()
     var choosingBoard by remember { mutableStateOf(false) }
     val listStates = boards.map { view -> key(view.board.boardId) { rememberLazyListState() } }
-    val currentListState = listStates[visibleIndex]
     val windowWidth = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }
     val fontScale = LocalDensity.current.fontScale
     val compactAppBar = fontScale > 1.2f || windowWidth < 400.dp
-    val headerGone by remember(currentListState) { derivedStateOf {
-        currentListState.firstVisibleItemIndex > 0 ||
-            currentListState.layoutInfo.visibleItemsInfo.firstOrNull()?.let { it.offset < -it.size / 2 } == true
-    } }
     var swipeHintDismissed by swipeHintDismissal
     val dragging by pager.interactionSource.collectIsDraggedAsState()
     LaunchedEffect(dragging, pager.isScrollInProgress) {
@@ -100,7 +100,6 @@ fun HomeScreen(
         }
     }
     val showSwipeHint = boards.size > 1 && !swipeHintDismissed
-    val boardIds = boards.map { it.board.boardId }
     var synchronizingSelection by remember { mutableStateOf(false) }
     LaunchedEffect(index, boardIds) {
         synchronizingSelection = true
@@ -140,7 +139,7 @@ fun HomeScreen(
                 },
                 actions = {
                     IconButton(onClick = onAdd, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.Add, stringResource(R.string.add_board)) }
-                    if (headerGone) IconButton(onClick = { onEdit(current.board.boardId) }) {
+                    IconButton(onClick = { onEdit(current.board.boardId) }, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.Default.Edit, stringResource(R.string.edit_board))
                     }
                     IconButton(onClick = onSearch) {
@@ -154,9 +153,13 @@ fun HomeScreen(
         },
     ) { insets ->
         Column(Modifier.fillMaxSize().padding(insets).roundedHomeBody()) {
-            BoardTitleSelector(boards.map { it.board.displayName }, pager, showSwipeHint) { choosingBoard = true }
-            HorizontalPager(state = pager, key = { boards[it].board.boardId }, modifier = Modifier.weight(1f).testTag("board-pager")) { page ->
-                val view = boards[page]
+            BoardTitleSelector(displayedBoards.map { it.board.displayName }, pager, showSwipeHint) { choosingBoard = true }
+            // Prepare neighbors before a tap starts moving the pager.
+            HorizontalPager(
+                state = pager, beyondViewportPageCount = 1, key = { boards[it].board.boardId },
+                modifier = Modifier.weight(1f).testTag("board-pager"),
+            ) { page ->
+                val view = displayedBoards[page]
                 val empty = when (val freshness = view.freshness) {
                     Freshness.Idle, Freshness.Loading -> stringResource(R.string.freshness_updating)
                     is Freshness.Cached -> stringResource(R.string.freshness_stale, relativeTime(freshness.cachedAt))
@@ -180,7 +183,7 @@ fun HomeScreen(
                 ) {
                     Column(Modifier.fillMaxSize()) {
                         Box(Modifier.fillMaxWidth().height(4.dp)) {
-                            if (refreshing) {
+                            if (refreshing && page == visibleIndex && !pager.isScrollInProgress) {
                                 LinearProgressIndicator(Modifier.fillMaxSize())
                             } else if (pullState.distanceFraction > 0f) {
                                 LinearProgressIndicator(progress = { pullState.distanceFraction.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxSize())
@@ -188,9 +191,10 @@ fun HomeScreen(
                         }
                         ArrivalList(
                             view.arrivals, empty, Modifier.weight(1f).fillMaxWidth().testTag("arrival-viewport").topFade { fade }, state = listState,
-                            header = { StationHeader(view, onRefresh, onEdit) },
+                            header = { StationHeader(view) },
                             bottomContentPadding = 24.dp,
                             colorForArrival = { arrival -> routeColor(view, arrival.painted, arrival.routeId) },
+                            active = page == visibleIndex && !scrolling,
                         )
                     }
 
@@ -211,60 +215,38 @@ fun HomeScreen(
 }
 
 @Composable
-private fun StationHeader(
-    view: BoardView, onRefresh: () -> Unit, onEdit: (String) -> Unit,
-) {
-    Column(Modifier.padding(horizontal = 4.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    view.board.disambiguator?.takeIf { it.isNotBlank() && !view.board.displayName.contains(it, ignoreCase = true) }?.let {
-                        Text(
-                            it, style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    FreshnessLine(view.freshness, onRetry = onRefresh)
-                }
+private fun StationHeader(view: BoardView) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 12.dp).horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        view.board.servicios.forEach { servicio ->
+            val color = parseColor(routeColor(view, servicio.painted, servicio.routeIds.firstOrNull()))
+                ?: MaterialTheme.colorScheme.primary
+            Surface(shape = CircleShape, color = color) {
+                Text(servicio.painted, Modifier.padding(horizontal = 12.dp, vertical = 6.dp), style = MaterialTheme.typography.labelLarge,
+                    color = if (color.luminance() > 0.179f) Color.Black else Color.White)
             }
-            IconButton(
-                onClick = { onEdit(view.board.boardId) },
-                modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
-            ) {
-                Icon(Icons.Default.Edit, stringResource(R.string.edit_board))
-            }
-        }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                view.board.servicios.forEach { servicio ->
-                    val color = parseColor(routeColor(view, servicio.painted, servicio.routeIds.firstOrNull()))
-                        ?: MaterialTheme.colorScheme.primary
-                    Surface(shape = CircleShape, color = color) {
-                        Text(servicio.painted, Modifier.padding(horizontal = 12.dp, vertical = 6.dp), style = MaterialTheme.typography.labelLarge,
-                            color = if (color.luminance() > 0.179f) Color.Black else Color.White)
-                    }
-                }
-            }
-
         }
     }
 }
 
-private fun Modifier.topFade(fraction: () -> Float): Modifier =
-    graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-        .drawWithContent {
+@Composable
+private fun Modifier.topFade(fraction: () -> Float): Modifier {
+    val surface = MaterialTheme.colorScheme.surface
+    // Fade into the board background without a full-size offscreen mask.
+    return graphicsLayer().drawWithCache {
+        val fadeHeight = 24.dp.toPx()
+        val brush = Brush.verticalGradient(listOf(surface, surface.copy(alpha = 0f)), endY = fadeHeight)
+        onDrawWithContent {
             drawContent()
             val fade = fraction()
             if (fade > 0f) {
-                drawRect(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(Color.Black.copy(alpha = 1f - fade), Color.Black),
-                        endY = 24.dp.toPx(),
-                    ),
-                    blendMode = BlendMode.DstIn,
-                )
+                drawRect(brush, alpha = fade, size = Size(size.width, fadeHeight))
             }
         }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

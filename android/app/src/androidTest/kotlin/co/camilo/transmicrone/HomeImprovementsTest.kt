@@ -27,16 +27,15 @@ class HomeImprovementsTest {
         listOf(SelectedServicio("E48", "CAD", listOf(13266))))
     private val arrival = Arrival("E48", "CAD", 13266, 62282, "Entre 2 y 4 min", "200 mts", Occupancy.UNKNOWN, null)
 
-    @Test fun failedCacheKeepsAgeAndOffersRetry() {
-        var retries = 0
+    @Test fun homeOmitsRefreshStatusAndRetry() {
         compose.setContent { TransmicroneTheme {
             HomeScreen(listOf(BoardView(board, listOf(arrival), Freshness.FailedCached(Instant.now().minusSeconds(180), FailureKind.TIMEOUT))),
-                0, {}, {}, {}, { retries++ })
+                0, {}, {}, {}, {})
         } }
-        compose.onNodeWithText("se agotó el tiempo", substring = true).assertIsDisplayed()
-        compose.onNodeWithText("Mostrando datos anteriores", substring = true).assertIsDisplayed()
-        compose.onNodeWithText("Reintentar").performClick()
-        compose.runOnIdle { assertEquals(1, retries) }
+        compose.onAllNodesWithText("se agotó el tiempo", substring = true).assertCountEquals(0)
+        compose.onAllNodesWithText("Mostrando datos anteriores", substring = true).assertCountEquals(0)
+        compose.onAllNodesWithText("Actualizado", substring = true).assertCountEquals(0)
+        compose.onAllNodesWithText("Reintentar").assertCountEquals(0)
     }
 
     @Test fun singleBoardShowsOneTitleAndToolbarAdd() {
@@ -105,8 +104,8 @@ class HomeImprovementsTest {
         compose.onNode(isSelectable() and hasText("León XIII")).performClick()
         compose.waitForIdle()
         compose.runOnIdle { assertEquals(0, page.intValue) }
-        compose.onNodeWithContentDescription("Tablero anterior").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Tablero siguiente").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Tablero anterior").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Tablero siguiente").assertIsEnabled()
         compose.onNodeWithText("1/2").assertDoesNotExist()
     }
 
@@ -132,10 +131,10 @@ class HomeImprovementsTest {
                 if (showHome.value) HomeScreen(boards, 0, {}, {}, {}, {}, swipeHintDismissal = dismissal)
             }
         }
-        val before = compose.onNodeWithText("Entre 2 y 4 min", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val before = visibleArrivalBounds()
         compose.mainClock.advanceTimeBy(6000)
         compose.onNodeWithText("· desliza").assertDoesNotExist()
-        val after = compose.onNodeWithText("Entre 2 y 4 min", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val after = visibleArrivalBounds()
         assertEquals(before, after)
         compose.runOnIdle { showHome.value = false }
         compose.runOnIdle { showHome.value = true }
@@ -157,6 +156,10 @@ class HomeImprovementsTest {
         compose.onNodeWithContentDescription("Editar tablero").assertIsDisplayed().performClick()
         compose.runOnIdle { assertEquals("2", edited); assertEquals(1, settled) }
     }
+
+    private fun visibleArrivalBounds() =
+        compose.onAllNodesWithText("Entre 2 y 4 min", useUnmergedTree = true)
+            .fetchSemanticsNodes().minBy { it.boundsInRoot.left }.boundsInRoot
 
     @Test fun emptyHomeIsScrollableAtDoubleFont() {
         compose.setContent {

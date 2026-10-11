@@ -10,6 +10,7 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.semantics.SemanticsActions
 import co.camilo.transmicrone.domain.*
 import co.camilo.transmicrone.ui.BoardView
+import co.camilo.transmicrone.ui.Freshness
 import co.camilo.transmicrone.ui.home.HomeScreen
 import co.camilo.transmicrone.ui.theme.TransmicroneTheme
 import org.junit.Assert.assertTrue
@@ -21,6 +22,74 @@ class BoardSelectorUiTest {
     @get:Rule val compose = createComposeRule()
     private fun boards(count: Int) = List(count) { i -> BoardView(Board("$i", "place:$i", PlaceKind.ESTACION,
         "TM$i", "Estación $i", "Localidad $i", listOf(SelectedServicio("E48", "CAD", listOf(13266))))) }
+
+    @Test fun titleTapSettlesWithin350Milliseconds() {
+        val page = mutableIntStateOf(0)
+        compose.mainClock.autoAdvance = false
+        compose.setContent { TransmicroneTheme {
+            HomeScreen(boards(3), page.intValue, { page.intValue = it }, {}, {}, {})
+        } }
+        compose.onNodeWithTag("board-title-next").performClick()
+        compose.mainClock.advanceTimeBy(350)
+        compose.runOnIdle { assertEquals(1, page.intValue) }
+    }
+
+    @Test fun arrivalUpdateWaitsUntilTheBoardSlideFinishes() {
+        val views = mutableStateOf(boards(3))
+        val page = mutableIntStateOf(0)
+        compose.mainClock.autoAdvance = false
+        compose.setContent { TransmicroneTheme {
+            HomeScreen(views.value, page.intValue, { page.intValue = it }, {}, {}, {})
+        } }
+        compose.onNodeWithTag("board-title-next").performClick()
+        compose.mainClock.advanceTimeBy(160)
+        compose.runOnIdle {
+            views.value = views.value.mapIndexed { index, view ->
+                if (index != 1) view else view.copy(
+                    arrivals = listOf(Arrival("E48", "Live update sentinel", 13266, null,
+                        "Entre 2 y 4 min", null, Occupancy.UNKNOWN, null)),
+                    freshness = Freshness.Updated(java.time.Instant.now()),
+                )
+            }
+        }
+        compose.onAllNodesWithContentDescription("Live update sentinel", substring = true).assertCountEquals(0)
+        compose.mainClock.advanceTimeBy(400)
+        compose.onNodeWithContentDescription("Live update sentinel", substring = true).assertIsDisplayed()
+    }
+
+    @Test fun titleSideTapsNavigateAndCenterStillOpensPicker() {
+        val page = mutableIntStateOf(1)
+        compose.setContent { TransmicroneTheme {
+            HomeScreen(boards(3), page.intValue, { page.intValue = it }, {}, {}, {})
+        } }
+        compose.onNodeWithTag("board-title-selector").performTouchInput {
+            click(androidx.compose.ui.geometry.Offset(width * .15f, height / 2f))
+        }
+        compose.onNodeWithText("1 de 3").assertIsDisplayed()
+        compose.onNodeWithTag("board-picker-list").assertDoesNotExist()
+        compose.onNodeWithTag("board-title-selector").performTouchInput {
+            click(androidx.compose.ui.geometry.Offset(width * .85f, height / 2f))
+        }
+        compose.onNodeWithText("2 de 3").assertIsDisplayed()
+        compose.onNodeWithTag("board-picker-list").assertDoesNotExist()
+        compose.onNodeWithTag("board-title-selector").performTouchInput { click(center) }
+        compose.onNodeWithTag("board-picker-list").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(1, page.intValue) }
+    }
+
+    @Test fun titleSideTapsStopAtFirstAndLastBoard() {
+        val page = mutableIntStateOf(0)
+        compose.setContent { TransmicroneTheme {
+            HomeScreen(boards(2), page.intValue, { page.intValue = it }, {}, {}, {})
+        } }
+        compose.onNodeWithTag("board-title-selector").performTouchInput { click(centerLeft) }
+        compose.onNodeWithText("1 de 2").assertIsDisplayed()
+        compose.onNodeWithTag("board-picker-list").assertDoesNotExist()
+        compose.runOnIdle { page.intValue = 1 }
+        compose.onNodeWithTag("board-title-selector").performTouchInput { click(centerRight) }
+        compose.onNodeWithText("2 de 2").assertIsDisplayed()
+        compose.onNodeWithTag("board-picker-list").assertDoesNotExist()
+    }
 
     @Test fun pickerJumpsToDistantBoardAndOnlyPublishesFinalSelection() {
         val page = mutableIntStateOf(0)
