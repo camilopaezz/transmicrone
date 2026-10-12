@@ -163,12 +163,15 @@ fun HomeScreen(
                 val empty = when (val freshness = view.freshness) {
                     Freshness.Idle, Freshness.Loading -> stringResource(R.string.freshness_updating)
                     is Freshness.Cached -> stringResource(R.string.freshness_stale, relativeTime(freshness.cachedAt))
-                    is Freshness.UpdatingCached -> stringResource(R.string.freshness_updating)
+                    is Freshness.UpdatingCached -> stringResource(
+                        if (freshness.quiet) R.string.arrivals_empty else R.string.freshness_updating,
+                    )
                     is Freshness.Failed, is Freshness.FailedCached -> stringResource(R.string.freshness_failed)
                     Freshness.Unsupported -> stringResource(R.string.freshness_unsupported)
                     is Freshness.Empty, is Freshness.Updated -> stringResource(R.string.arrivals_empty)
                 }
                 val refreshing = view.freshness == Freshness.Loading || view.freshness is Freshness.UpdatingCached
+                val quietRefresh = (view.freshness as? Freshness.UpdatingCached)?.quiet == true
                 val pullState = rememberPullToRefreshState()
                 val listState = listStates[page]
                 val hasScrolled by remember(listState) { derivedStateOf { listState.canScrollBackward } }
@@ -182,10 +185,11 @@ fun HomeScreen(
                         .then(if (page != visibleIndex) Modifier.clearAndSetSemantics {} else Modifier),
                 ) {
                     Column(Modifier.fillMaxSize()) {
+                        // Reserve the strip even when idle so progress never moves the list.
                         Box(Modifier.fillMaxWidth().height(4.dp)) {
-                            if (refreshing && page == visibleIndex && !pager.isScrollInProgress) {
+                            if (refreshing && !quietRefresh && page == visibleIndex && !pager.isScrollInProgress) {
                                 LinearProgressIndicator(Modifier.fillMaxSize())
-                            } else if (pullState.distanceFraction > 0f) {
+                            } else if (!quietRefresh && pullState.distanceFraction > 0f) {
                                 LinearProgressIndicator(progress = { pullState.distanceFraction.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxSize())
                             }
                         }
@@ -195,6 +199,7 @@ fun HomeScreen(
                             bottomContentPadding = 24.dp,
                             colorForArrival = { arrival -> routeColor(view, arrival.painted, arrival.routeId) },
                             active = page == visibleIndex && !scrolling,
+                            initialLoading = view.cache == null && view.freshness == Freshness.Loading,
                         )
                     }
 

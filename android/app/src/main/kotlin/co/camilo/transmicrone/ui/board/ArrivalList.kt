@@ -12,6 +12,11 @@ import androidx.compose.material.icons.filled.DirectionsBus
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.Duration
@@ -19,8 +24,10 @@ import co.camilo.transmicrone.domain.ArrivalIdentity
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -37,6 +44,7 @@ fun ArrivalList(
     bottomContentPadding: Dp = 104.dp,
     colorForArrival: (Arrival) -> String? = { it.colorRuta },
     active: Boolean = true,
+    initialLoading: Boolean = false,
 ) {
     val now by produceState(Instant.now(), active) {
         if (!active) return@produceState
@@ -50,7 +58,16 @@ fun ArrivalList(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         header?.let { item(key = "station-header", contentType = "header") { it() } }
-        if (arrivals.isEmpty()) item {
+        if (arrivals.isEmpty() && initialLoading) {
+            item(key = "loading-message") {
+                Text(emptyMessage, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 4.dp))
+            }
+            items(3, key = { "loading-skeleton-$it" }, contentType = { "skeleton" }) {
+                ArrivalSkeleton(active)
+            }
+        } else if (arrivals.isEmpty()) item {
             Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Icon(Icons.Default.DirectionsBus, null, Modifier.size(32.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -66,6 +83,25 @@ fun ArrivalList(
                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp, vertical = 12.dp))
         }
     }
+}
+
+@Composable
+private fun ArrivalSkeleton(active: Boolean) {
+    val alpha = if (active) {
+        val transition = rememberInfiniteTransition(label = "arrivalSkeleton")
+        val pulse by transition.animateFloat(
+            initialValue = 0.65f, targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(1200), RepeatMode.Reverse),
+            label = "arrivalSkeletonAlpha",
+        )
+        pulse
+    } else 1f
+    Surface(
+        modifier = Modifier.fillMaxWidth().height(96.dp)
+            .graphicsLayer { this.alpha = alpha }.clearAndSetSemantics {}.testTag("arrival-skeleton"),
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    ) {}
 }
 
 @Composable

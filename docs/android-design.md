@@ -38,7 +38,7 @@ The pencil opens the current board's service selection. “Cambiar” opens stat
 
 Interactive targets remain at least 48 dp. Text and containers grow with font scale. Presentation repairs missing spaces and standardizes metric units without changing the stored feed phrase. It removes only equivalent duplicate distance suffixes; no precise countdown is derived. Cache, loading, successful empty results, unsupported queries, and failures retain distinct messages. Missing occupancy remains unknown. TalkBack arrival descriptions preserve servicio, destination, phrase, occupancy, and the appropriate vehicle or service estimate caveat.
 
-Polling remains 25 seconds for the visible board while started, with an 8-second manual-refresh throttle after successful refreshes. Failed requests can retry immediately, while an in-flight guard prevents duplicate requests. This UI change does not alter feed identifiers, installation IDs, or request semantics.
+Polling remains 25 seconds for the visible board while started, with an 8-second manual-refresh throttle after successful refreshes. Failed requests can retry immediately, while an in-flight guard prevents duplicate requests. Switching boards fetches immediately but hides refresh progress when cached results exist, including cached empty results. A board without cache shows “Actualizando…” and three rounded skeleton cards with a soft pulse during its first fetch. Skeletons are decorative and only appear without cached results. The 4 dp progress strip always reserves its space, including while invisible, so loading never moves the list. Opening, manual refresh, and periodic refresh retain their loading feedback. This UI change does not alter feed identifiers, installation IDs, or request semantics.
 
 ## Settings
 

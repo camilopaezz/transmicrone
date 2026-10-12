@@ -80,6 +80,32 @@ class HomeImprovementsTest {
         assertEquals(before, during)
     }
 
+    @Test fun firstLoadShowsSkeletonsAndKeepsStripSpaceAfterLoading() {
+        val view = mutableStateOf(BoardView(board, freshness = Freshness.Loading))
+        compose.setContent { TransmicroneTheme {
+            HomeScreen(listOf(view.value), 0, {}, {}, {}, {})
+        } }
+        compose.onNodeWithText("Actualizando…").assertIsDisplayed()
+        compose.onAllNodesWithTag("arrival-skeleton").assertCountEquals(3)
+        val loadingViewport = compose.onNodeWithTag("arrival-viewport").fetchSemanticsNode().boundsInRoot
+        compose.runOnIdle { view.value = BoardView(board, listOf(arrival), Freshness.Updated(Instant.now())) }
+        compose.onAllNodesWithTag("arrival-skeleton").assertCountEquals(0)
+        val loadedViewport = compose.onNodeWithTag("arrival-viewport").fetchSemanticsNode().boundsInRoot
+        assertEquals(loadingViewport, loadedViewport)
+        compose.runOnIdle { view.value = BoardView(board, freshness = Freshness.Empty(Instant.now())) }
+        compose.onAllNodesWithTag("arrival-skeleton").assertCountEquals(0)
+        assertEquals(loadingViewport, compose.onNodeWithTag("arrival-viewport").fetchSemanticsNode().boundsInRoot)
+    }
+
+    @Test fun cachedEmptyRefreshDoesNotShowSkeletons() {
+        compose.setContent { TransmicroneTheme {
+            HomeScreen(listOf(BoardView(board, freshness = Freshness.UpdatingCached(Instant.now(), quiet = true),
+                cache = CachedArrivals(emptyList(), Instant.now()))), 0, {}, {}, {}, {})
+        } }
+        compose.onAllNodesWithTag("arrival-skeleton").assertCountEquals(0)
+        compose.onAllNodesWithText("Actualizando…").assertCountEquals(0)
+    }
+
     @Test fun savedRouteColorIsUsedWhenLiveColorIsMissingOrDifferent() {
         val savedBoard = board.copy(servicios = listOf(board.servicios.single().copy(color = "#00B8D4")))
         assertEquals("#00B8D4", routeColor(BoardView(savedBoard, listOf(arrival)), "E48", arrival.routeId))

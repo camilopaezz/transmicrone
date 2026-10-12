@@ -58,7 +58,7 @@ sealed class Freshness {
     data object Loading : Freshness()
     data class Updated(val at: Instant) : Freshness()
     data class Cached(val cachedAt: Instant) : Freshness()
-    data class UpdatingCached(val cachedAt: Instant) : Freshness()
+    data class UpdatingCached(val cachedAt: Instant, val quiet: Boolean = false) : Freshness()
     data class FailedCached(val cachedAt: Instant, val kind: FailureKind) : Freshness()
     data class Failed(val kind: FailureKind) : Freshness()
     data class Empty(val at: Instant) : Freshness()
@@ -169,7 +169,7 @@ class AppViewModel(
         val pageChanged = index != st.pageIndex
         if (pageChanged) {
             _state.update { it.copy(pageIndex = index) }
-            restartLoop()
+            restartLoop(quiet = true)
         }
         if (lastPersistedId != id) {
             viewModelScope.launch { boards.setLastBoard(id) }
@@ -582,7 +582,7 @@ class AppViewModel(
         refreshJob = null
     }
 
-    private fun restartLoop() {
+    private fun restartLoop(quiet: Boolean = false) {
         loop?.cancel()
         val st = _state.value
         if (!st.started || st.screen != Screen.HOME || st.boards.isEmpty()) {
@@ -591,7 +591,7 @@ class AppViewModel(
             return
         }
         loop = viewModelScope.launch {
-            refreshVisible()
+            refreshVisible(quiet = quiet)
             while (isActive) {
                 delay(BuildConfig.AUTO_REFRESH_MS)
                 val now = _state.value
@@ -601,7 +601,7 @@ class AppViewModel(
         }
     }
 
-    private fun refreshVisible() {
+    private fun refreshVisible(quiet: Boolean = false) {
         val st = _state.value
         if (!st.started || st.screen != Screen.HOME) return
         val view = st.boards.getOrNull(st.pageIndex) ?: return
@@ -618,8 +618,8 @@ class AppViewModel(
                             cache = cached ?: bv.cache,
                             arrivals = (cached ?: bv.cache)?.arrivals ?: bv.arrivals,
                             freshness = when {
-                                cached != null -> Freshness.UpdatingCached(cached.fetchedAt)
-                                bv.cache != null -> Freshness.UpdatingCached(bv.cache.fetchedAt)
+                                cached != null -> Freshness.UpdatingCached(cached.fetchedAt, quiet)
+                                bv.cache != null -> Freshness.UpdatingCached(bv.cache.fetchedAt, quiet)
                                 else -> Freshness.Loading
                             },
                         )

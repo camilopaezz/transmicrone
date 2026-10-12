@@ -526,6 +526,72 @@ class AppViewModelTest {
     }
 
     @Test
+    fun cachedBoardSwitchFetchesQuietlyButOpeningAndManualRefreshShowProgress() = vmTest {
+        val cache = FileArrivalsCache(File(System.getProperty("java.io.tmpdir"), "tm-switch-${System.nanoTime()}"), json)
+        cache.write("leon", CachedArrivals(listOf(arrival("E48", "Entre 2 y 4 min")), clock.now()))
+        cache.write(ricaurteBoard().boardId, CachedArrivals(listOf(arrival("S43", "Entre 5 y 7 min")), clock.now()))
+        val feed = ScriptedFeed()
+        feed.enqueue(1_000, FetchResult.Success(listOf(arrival("E48", "Llegando")), clock.now()))
+        feed.enqueue(1_000, FetchResult.Success(listOf(arrival("S43", "Llegando")), clock.now()))
+        feed.enqueue(1_000, FetchResult.Failure(FailureKind.TIMEOUT, null))
+        val vm = viewModel(feed, MemoryBoards(listOf(leonBoard(), ricaurteBoard())), cache)
+        runCurrent()
+        vm.setStarted(true)
+        runCurrent()
+        assertFalse((vm.state.value.boards[0].freshness as Freshness.UpdatingCached).quiet)
+        vm.onPage(1)
+        runCurrent()
+        val switching = vm.state.value.boards[1]
+        assertTrue((switching.freshness as Freshness.UpdatingCached).quiet)
+        assertEquals("Entre 5 y 7 min", switching.arrivals.single().etaPhrase)
+        assertEquals(2, feed.calls.size)
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertTrue(vm.state.value.boards[1].freshness is Freshness.Updated)
+        vm.manualRefresh()
+        runCurrent()
+        assertFalse((vm.state.value.boards[1].freshness as Freshness.UpdatingCached).quiet)
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertTrue(vm.state.value.boards[1].freshness is Freshness.FailedCached)
+        assertEquals("Llegando", vm.state.value.boards[1].arrivals.single().etaPhrase)
+    }
+
+    @Test
+    fun cachedEmptyBoardSwitchAlsoFetchesQuietly() = vmTest {
+        val cache = FileArrivalsCache(File(System.getProperty("java.io.tmpdir"), "tm-empty-switch-${System.nanoTime()}"), json)
+        cache.write(ricaurteBoard().boardId, CachedArrivals(emptyList(), clock.now()))
+        val feed = ScriptedFeed()
+        feed.enqueue(0, FetchResult.Empty(clock.now()))
+        feed.enqueue(1_000, FetchResult.Empty(clock.now()))
+        val vm = viewModel(feed, MemoryBoards(listOf(leonBoard(), ricaurteBoard())), cache)
+        runCurrent()
+        vm.setStarted(true)
+        runCurrent()
+        vm.onPage(1)
+        runCurrent()
+        assertTrue((vm.state.value.boards[1].freshness as Freshness.UpdatingCached).quiet)
+        assertTrue(vm.state.value.boards[1].arrivals.isEmpty())
+    }
+
+    @Test
+    fun uncachedBoardSwitchStillShowsInitialLoading() = vmTest {
+        val feed = ScriptedFeed()
+        feed.enqueue(0, FetchResult.Empty(clock.now()))
+        feed.enqueue(1_000, FetchResult.Empty(clock.now()))
+        val vm = viewModel(feed, MemoryBoards(listOf(leonBoard(), ricaurteBoard())))
+        runCurrent()
+        vm.setStarted(true)
+        runCurrent()
+        vm.onPage(1)
+        runCurrent()
+        assertEquals(Freshness.Loading, vm.state.value.boards[1].freshness)
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertTrue(vm.state.value.boards[1].freshness is Freshness.Empty)
+    }
+
+    @Test
     fun diskCacheIsStaleUntilThisProcessRefresh() = vmTest {
         val cacheDir = File(System.getProperty("java.io.tmpdir"), "tm-vm-${System.nanoTime()}")
         val cache = FileArrivalsCache(cacheDir, json)
