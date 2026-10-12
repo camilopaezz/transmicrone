@@ -98,7 +98,7 @@ private fun ArrivalSkeleton(active: Boolean) {
     } else 1f
     Surface(
         modifier = Modifier.fillMaxWidth().height(96.dp)
-            .graphicsLayer { this.alpha = alpha }.clearAndSetSemantics {}.testTag("arrival-skeleton"),
+            .graphicsLayer { this.alpha = alpha }.testTag("arrival-skeleton").clearAndSetSemantics {},
         shape = MaterialTheme.shapes.extraLarge,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
     ) {}
