@@ -11,14 +11,14 @@ Verified against GTFS `GTFS_20260904.zip`, GIS Servicios, Flota Vinculada (dic 2
 | live | official | quality |
 | --- | --- | --- |
 | `ruta` / `ruta_extraida` | GTFS `route_short_name` | best human key. Painted code. Case-sensitive on the live host |
-| `route_id` | GTFS `route_id` (integer string) | strong on current GTFS. B23 → 12819 in the live feed, today's `routes.txt`, and GIS Servicios |
+| `route_id` | GTFS `route_id` (integer string) | strong on current GTFS. B23 → 12819 in the live feed, the checked `routes.txt`, and GIS Servicios |
 | `route_id` | GIS `Consulta_Planificacion_SITP/FeatureServer/15` `route_id` | same integer when GIS is current. GIS can lag GTFS (C15 live/GTFS 13311 vs GIS 12467) |
 | `destino_limpio` | GIS `dest_ruta`, GTFS `route_long_name` | cleaned / truncated. B23 GIS dest `Alcalá - Colegio S. To` → live `Alcalá`. Wire is NFD |
 | `label` | Flota Vinculada `codigo_bus` | match after normalizing zeros. Live `D0032` vs flota `D032`. Zonal `Z10-2258` is exact |
 | `id` | historical fleet numeric id | zonal: digits of `label` minus hyphen. Troncal: old `buses-en-operacion` id (`10032` with `D0032` in the oct 2021 CSV). Current flota CSV dropped that column |
 | `accesibilidad` | flota `accesible` | same strings except live `NINGUNA` vs flota `NO ACCESIBLE` |
 | `nombre_sistema` | GTFS `agency_id` | collapsed. `TransMilenio` ≈ troncal (1) + dual (6). `TransMiZonal` ≈ alimentador (2) + zonal (3/4/5). Not a 1:1 |
-| `posicion` | GTFS `shapes.txt` along `shape_id` | metres from origin. `shape_id` equals `route_id` for every route in today's GTFS. B23 `posicion` 0 sat on shape point 1 |
+| `posicion` | GTFS `shapes.txt` along `shape_id` | metres from origin. `shape_id` equals `route_id` for every route in the checked GTFS. B23 `posicion` 0 sat on shape point 1 |
 
 Do not join current live `route_id` to old GTFS snapshots that used `Z_6970`-style ids (e.g. `GTFS-2024-02-21.zip`).
 
@@ -34,7 +34,7 @@ Do not join current live `route_id` to old GTFS snapshots that used `Z_6970`-sty
 
 ## `ruta` is not unique
 
-GTFS `route_short_name` repeats. Today's feed: 667 unique short names, 243 duplicates. Live `route_id` picks one variant; some `ruta` values still return two `route_id`s at once (E44, K86, ruta `1`).
+GTFS `route_short_name` repeats. The checked snapshot: 667 unique short names, 243 duplicates. Live `route_id` picks one variant; some `ruta` values still return two `route_id`s at once (E44, K86, ruta `1`).
 
 The same painted code can exist in two systems. Live `C15` on 2026-09-04 was TransMiZonal (16 vehicles). GTFS also has a troncal C15 (`route_id` 13311, Portal Suba). Querying `C15` does not fetch that troncal service.
 
@@ -50,7 +50,7 @@ GIS `cod_ruta` is not always the painted code:
 
 Prefer GTFS `route_short_name` + current `route_id` over GIS `cod_ruta` when they disagree.
 
-## Agency taxonomy (current GTFS)
+## Agency taxonomy, September 2026 snapshot
 
 `agency.txt` in `GTFS_20260904.zip`. Transitland's older agency mapping is stale; do not use it.
 

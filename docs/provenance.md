@@ -1,6 +1,6 @@
 # Provenance
 
-Who runs the live host, who first published the call, what the official app is, and what the ToS actually say. Field contract: [feed.md](feed.md).
+Historical source notes from 2026-09-04, with later observations dated explicitly. Field contract: [feed.md](feed.md).
 
 ## Chain
 
@@ -14,14 +14,14 @@ Fleet GNSS on the buses → cellular → TMSA backend → TransMiApp "Ubica tu b
 | 2026 planner | Maas (LPG Colombia) + Siemens Mobility / Hacon | bogota.gov.co 2026-04-29; Hacon press 2026-05-27. Journey planning, not a replacement for the Bodega AVL host |
 | Live host | Google App Engine, project name `tmsa-transmiapp-shvpc`, region `uc` (us-central) | hostname + Spring Boot actuator + `server: Google Frontend` |
 
-The 2026 renovation added a trip planner. The Bodega position API still answers the 2022-era iOS UA and `appid`. Treat Bodega as a surviving Nexura-era service, not as Hacon.
+The 2026 renovation added a trip planner. The September verification found that the Bodega position API accepted the 2022-era iOS UA and `appid`. Treat Bodega as a surviving Nexura-era service, not as Hacon.
 
 ## Official app
 
 - Display name: TransMi App
 - iOS: [id 1195720094](https://apps.apple.com/app/transmi-app/id1195720094), first release 2017-06-02, version 2.9.9 (2026-08-20)
 - Play: [com.nexura.transmilenio](https://play.google.com/store/apps/details?id=com.nexura.transmilenio), 5M+ installs, updated 2026-08-12
-- Old client product name in the UA: `MetroBus/1.9.7` (build 276, Alamofire). Still accepted. Store version is 2.9.x. The curl in [feed.md](feed.md) omits it.
+- Old client product name in the UA: `MetroBus/1.9.7` (build 276, Alamofire). Accepted in the September verification. The curl in [feed.md](feed.md) omits it.
 - APK v2.9.6 teardown (jadx `APIServiceInterface.java`): [estebantorrg/transmilenio spec §5.8](https://github.com/estebantorrg/transmilenio/blob/main/spec.md)
 
 Play copy advertises real-time SITP location with distance, approximate time, and occupancy. Occupancy is the live `ocupacion_bus` field; it is empty on most vehicles.
@@ -47,16 +47,4 @@ Page: [Política de privacidad y condiciones de uso TransMiApp](https://www.tran
 
 The page authorizes personal, private, non-commercial use of contents (view / print / download with attribution). It forbids copying or altering TMSA internet contents to associate them with other sites, and forbids use that risks correct operation of the app. TMSA may suspend or block access. There is no sentence that says "no scraping" or "no reverse engineering" by those words. IP stays with Distrito / TRANSMILENIO.
 
-This project is local tooling. Do not republish the `appid` as a public API key; it is already in the APK and in the GitHub consumers above.
-
-## Dates
-
-| when | what |
-| --- | --- |
-| 2017-06-02 | iOS first published |
-| 2023-09-04 | first public `/location/ruta` client |
-| 2024-07-09 | ENTER.CO GNSS / 1 min lag |
-| 2025-12-02 | TransMiApp ToS update |
-| 2026-04-29 | planner renovación (Maas / Siemens) |
-| 2026-08-20 | iOS 2.9.9 |
-| 2026-09-04 | this repo's live verification |
+Feed credentials belong in ignored local configuration. Do not republish the `appid` as a public API key; it is already in the APK and in the GitHub consumers above.

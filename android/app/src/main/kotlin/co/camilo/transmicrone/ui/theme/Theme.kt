@@ -47,6 +47,7 @@ internal val DarkColors = darkColorScheme(
     errorContainer = Color(0xFF93000A), onErrorContainer = Color(0xFFFFDAD6),
 )
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun TransmicroneTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -56,7 +57,7 @@ fun TransmicroneTheme(
     val colors = if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         if (darkTheme) dynamicDarkColorScheme(LocalContext.current) else dynamicLightColorScheme(LocalContext.current)
     } else if (darkTheme) DarkColors else LightColors
-    MaterialTheme(
+    MaterialExpressiveTheme(
         colorScheme = colors,
         typography = AppTypography,
         shapes = Shapes(

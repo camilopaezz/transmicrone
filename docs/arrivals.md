@@ -2,7 +2,7 @@
 
 Same unofficial Bodega host as live positions. Reuse `BASE_URL` and `appid` from [feed.md](feed.md), and send the persistent per-installation `uuid` header now required by the host. Auth, Content-Length, CORS, and 401/411 behaviour there apply here too. On 2026-10-02 a TM0069 arrivals POST with this UUID returned 200; the earlier empty-body 403 was resolved by this header.
 
-Verified 2026-09-04.
+Endpoint examples were verified on 2026-09-04. Later Android-specific observations are dated below.
 
 ## Live board: `POST /paradero/buses`
 
@@ -36,7 +36,7 @@ JSON array of approaching services. Keys observed:
 | `color_ruta` | string | hex (`#7AC143`) |
 | `color_texto` | string | hex |
 
-No vehicle `id` / `label` on this board. For the buses themselves use [feed.md](feed.md).
+No vehicle `id` / `label` on this board. For identified nearby buses use `/getServicios` below; for route-wide positions use [feed.md](feed.md).
 
 Wire JSON is pretty-printed (spaces around `:`), unlike the compact position array. Parse it as JSON anyway.
 
@@ -96,7 +96,7 @@ Use this to calibrate clocks. Do not treat it as a live position.
 
 At 08:19 Bogota, simultaneous S43 / TM0069 requests disagreed: the service summary said “Servicio llegando”, 563 m, while the nearest identified vehicle was 41405 / T10405 at 2594 m with “Entre 4 min. y 7 min. a: 2Km” and source report 08:18:07 AM. Android station boards now query `/getServicios` for all selected route IDs with `Nombre` set to the destination and `Distancia: 12000`, matching the working PC script. Results are filtered to the selected service/destination/route IDs and deduplicated by vehicle identity. Stop boards retain service summaries.
 
-Fetch time and source report time are separate. `lasttime` is interpreted as a Bogota clock time on the most recent date with five minutes of clock-skew tolerance. Reports older than two minutes are visibly stale even when fetched successfully. Missing source time is displayed as unavailable. Time ranges remain server phrases, without an invented countdown. Any failed variant request preserves the last complete board, with its failure state.
+Fetch time and source report time are separate. `lasttime` is interpreted as a Bogota clock time on the most recent date with five minutes of clock-skew tolerance. Reports older than two minutes are visibly stale even when fetched successfully. The parser retains missing or invalid source times as unavailable; the current cards omit individual source timestamps and ages. Only known reports older than two minutes receive the stale label. Time ranges remain server phrases, without an invented countdown. Any failed variant request preserves the last complete board, with its failure state.
 
 A successful `/getServicios` response can also have an empty body rather than `[]`, observed for S48 / TM0069 on 2026-10-02. Android treats that vehicle-endpoint response as no nearby results, matching the PC script. Blank service-summary bodies remain malformed; non-200 statuses remain failures.
 

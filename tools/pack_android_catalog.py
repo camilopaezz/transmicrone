@@ -132,6 +132,8 @@ def pack(src: dict) -> dict:
     return {
         "generated_at": src.get("generated_at"),
         "schema_version": 1,
+        "service_hours": src.get("service_hours") or [],
+        "service_routes": src.get("service_routes") or [],
         "hidden_unqueryable": hidden,
         "counts": {
             "places": len(places),

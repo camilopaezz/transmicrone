@@ -1,47 +1,47 @@
-# Android UI, Material 3 refresh
+# Android UI
 
-Updated 2026-10-04. Material 3 with the Expressive design direction: clear type hierarchy, rounded tonal containers, prominent primary actions, and motion that reflects a change of state. Spanish UI, bundled Adwaita Sans typography, edge-to-edge layouts. Domain behavior remains in [app-scope.md](app-scope.md).
-
-References: [Material 3](https://m3.material.io/), [Compose Material 3 release notes](https://developer.android.com/jetpack/androidx/releases/compose-material3). The app uses the current stable Material 3 library, 1.4.0, with Compose BOM 2025.08.01. Expressive-only APIs that are still alpha are not required for this design.
+The current app uses Material 3 Expressive, bundled Adwaita Sans, a Spanish UI, and edge-to-edge layouts. Product boundaries are in [app-scope.md](app-scope.md); builds and verification are in [the Android README](../android/README.md).
 
 ## Theme
 
-Android 12 and newer use the system wallpaper's dynamic light/dark color scheme. Earlier devices use a complete warm transit-red scheme, including surface-container, primary-container, secondary-container, and outline roles. Typography uses MoonMode’s Adwaita Sans regular and medium fonts with medium-weight station headings and stronger ETA phrases. Font licenses are bundled in the app assets. Shapes range from 12 to 32 dp; buttons and selectors use pill shapes.
+System, light, and dark modes are available in Ajustes. Android 12+ wallpaper colors are enabled by default and can be disabled. Other devices, and devices with wallpaper colors disabled, use the transit-red palette. Settings persist separately from saved boards.
 
-Home service chips and arrival badges share the saved catalog route color, falling back to the live route color when needed. Black or white badge text is selected by luminance for contrast, rather than trusting an incompatible or missing upstream text color. JVM tests check foreground/background contrast for fallback themes and the tonal containers used by arrivals and service selection.
+`MaterialExpressiveTheme` supplies the motion scheme. App shapes range from 12 to 32 dp. Medium-weight headings and emphasized destination and operating-time styles establish the text hierarchy. Font licenses are bundled with the app.
 
-## Home
+Service chips and arrival badges use the saved catalog route color, falling back to the live color. Badge text is black or white according to luminance. Theme tests cover text contrast for the fallback palettes and tonal containers.
 
-- The home app bar uses the tonal surface-container color. The body below it uses the base surface with 32 dp rounded top corners, including the empty-board screen.
-- The app bar pencil edits the current board directly, with the accessible name “Editar tablero”. The station name has its own large heading, limited to one line with an ellipsis for long names.
-- The station title is the saved-board selector. A shared title viewport stays above the arrivals. Station names slide, scale and fade continuously with the arrival pager’s position, including when dragging the title itself. Titles use one line and ellipsize when they exceed the available width, reserving space for neighboring hints. Names stay vertically centered and share one text layout each, with no separate hint copy or wrap transition. Later boards retain a muted 32 dp glimpse of the previous name at the left edge. The full station name remains available to accessibility and in the board sheet. A thin progress bar and “1 de 2” control identify the page, with an inline swipe hint that disappears after a drag or five seconds without moving arrivals. Tap the title or page count, or hold the title, to open the board sheet. The sheet shows full station names, location and selected services, plus an add action. The app bar also has a dedicated add button. Board IDs key both the pager and each board’s vertical scroll state. Selection is persisted only when paging settles, so short drags and intermediate pages during a distant jump never select another live feed.
-- Selected servicios appear below the place heading. The home header does not show the corridor or locality. Services scroll with each board’s arrivals; the station selector stays visible. The edit action stays in the app bar. A 24 dp fading edge softens content passing beneath the title selector. Each board keeps its own list scroll position.
-- The home header does not show refresh status, elapsed time, or a retry action. Pull-to-refresh still uses a thin indicator in a reserved strip above the list, so it never covers an arrival or moves the list when refresh starts. How refresh is shown will be redesigned later.
-- Combined arrivals use separate rounded containers. Each shows servicio, destination, the cleaned display ETA phrase, and occupancy. Station vehicle cards also show fleet label and distance. Individual report timestamps and ages are omitted from cards. Reports older than two minutes show “Reporte antiguo” above the last estimate. ETA text sits below the destination so neither competes for a narrow trailing column.
-- Adding lives in the app bar and board sheet, leaving the arrival viewport free of floating buttons and their reserved clearance. Header service chips retain their route colors.
-- The unofficial-feed notice follows the list instead of taking up a fixed bottom bar.
-- Startup shows a loading state until the saved-board snapshot arrives, avoiding the previous empty-board flash.
+## Home and board selection
 
-## Setup
+The tonal app bar contains add, edit, search, and settings actions. The body uses the base surface with rounded top corners. An empty installation shows an add-board action; startup waits for saved boards to load.
 
-Two steps: find a place, then choose servicios. Search focuses automatically and supports the keyboard search action. When adding, back from service selection returns to search with its query retained. When editing, both system back and app-bar back return home without saving. Choosing the same place restores the draft service selection; choosing another place resets it. Editing uses “Editar tablero” in the app bar. Search uses a pill-shaped Material text field with search and clear controls. Result containers show place type, disambiguator, and a directional affordance. Stops sharing both name and address also show their distinct catalog codes.
+The station title stays above the arrivals and moves with the horizontal board pager. Names slide, scale, and fade during gestures; long names ellipsize. Neighboring title hints, a progress bar, a page count, and a temporary swipe hint make additional boards visible. Tap or hold the title, or tap the page count, to open a sheet with full board names, locations, selected services, and an add action.
 
-The service-selection step includes an optional board name. Blank or whitespace-only names use the station or stop name; custom names are trimmed, saved, and can be changed or cleared when editing. They only change the board label, leaving place and feed identifiers intact.
+Paging persists selection only after settling. Board IDs preserve each board's vertical scroll position. Selected services scroll with arrivals while the title selector remains visible. A fading edge softens content passing beneath it.
 
-Service selection shows the selected place in a neutral card with a “Cambiar” action, explanation, and individual service rows. Each row is one accessible toggle; its checkbox does not create a second competing tap target. Selected rows animate to the secondary-container color. Editing places initially selected services first and keeps that order while toggling. A bottom save button shows the pluralized selected-service count, or explains that at least one service is required. It is enabled only when a selection exists.
+Pull-to-refresh uses a reserved 4 dp progress strip. Switching to a cached board fetches quietly; an uncached first fetch shows decorative skeleton cards. The home header omits fetch age and a retry action. Empty, unsupported, and failed requests have distinct empty-list messages. Cached arrivals remain visible after a failure, without a separate visible failure banner. The unofficial-feed notice follows the list.
 
-## Editing and deleting
+Arrival cards show service, destination, the cleaned server ETA phrase, and occupancy. Vehicle cards also show fleet label and distance. Reports older than two minutes show `Reporte antiguo` above the last estimate. Individual source timestamps and ages are omitted. Missing occupancy remains unknown; spacing and metric-unit cleanup preserve the stored feed phrase.
 
-The pencil opens the current board's service selection. “Cambiar” opens station search while retaining the edit draft. Saving returns home with the updated board selected. “Eliminar tablero” lives beneath the save action and names the saved board in a Material confirmation dialog, even if the draft station has changed. Deleting selects the neighbor at the removed board’s index, clamped to the remaining range. Editing still offers deletion if the catalog no longer contains its place. Deleting returns home and offers “Deshacer”, including after deleting the final board. Undo restores only the deleted board, retaining later additions, edits and selection changes. The management screen is removed; saved boards can be reordered in Ajustes.
+## Setup, editing, and deletion
 
-## Behavior and accessibility
+Setup has two steps: choose a place, then select services. Search focuses automatically and supports the keyboard search action. Results show place type and disambiguating information; stops sharing name and address also show catalog codes.
 
-Interactive targets remain at least 48 dp. Text and containers grow with font scale. Presentation repairs missing spaces and standardizes metric units without changing the stored feed phrase. It removes only equivalent duplicate distance suffixes; no precise countdown is derived. Cache, loading, successful empty results, unsupported queries, and failures retain distinct messages. Missing occupancy remains unknown. TalkBack arrival descriptions preserve servicio, destination, phrase, occupancy, and the appropriate vehicle or service estimate caveat.
+When adding, back from service selection returns to the retained search query. When editing, back returns home without saving. Choosing the same place restores the draft selection; a different place resets it. An optional board name is trimmed, and a blank name uses the station or stop name.
 
-Polling remains 25 seconds for the visible board while started, with an 8-second manual-refresh throttle after successful refreshes. Failed requests can retry immediately, while an in-flight guard prevents duplicate requests. Switching boards fetches immediately but hides refresh progress when cached results exist, including cached empty results. A board without cache shows “Actualizando…” and three rounded skeleton cards with a soft pulse during its first fetch. Skeletons are decorative and only appear without cached results. The 4 dp progress strip always reserves its space, including while invisible, so loading never moves the list. Opening, manual refresh, and periodic refresh retain their loading feedback. This UI change does not alter feed identifiers, installation IDs, or request semantics.
+Each service row is one accessible toggle. Selected rows use the secondary-container color. Editing initially lists saved services first and preserves that order while toggling. The bottom save action names the selected-service count and requires at least one selection.
 
-## Settings
+The pencil opens the current board's editor. `Cambiar` opens place search with the edit draft retained. Saving returns home with the updated board selected. `Eliminar tablero` sits beneath save and confirms the saved board's name. Deletion works even when the catalog no longer contains its place, selects a remaining neighbor, and offers undo. Undo restores that board while retaining subsequent edits and selection changes. Ajustes can reorder boards with accessible up/down controls.
 
-The home app bar has an Ajustes gear immediately after search, including when there are no saved boards. Ajustes offers system/light/dark theme selection and an Android 12+ wallpaper-color switch. Choices apply immediately and persist in a separate settings DataStore, preserving boards. Saved boards have accessible up/down controls with disabled boundaries; reordering persists without changing the selected board or its arrivals. Saving failures are shown with retry guidance.
+## Catalog details
 
-The scrollable screen also explains arrival ranges, old reports, and unknown occupancy, and shows the app version, unofficial data-source notice, and foreground refresh interval. Back returns home and resumes arrivals polling. There is no feed-credential or sample-data toggle.
+Place details list serving services and can start a board. Service details show a direction selector, service badge and stop count, destination and origin, published hours, and ordered route stops. Hours and routes come from the packaged catalog and work offline.
+
+The direction selector uses one shared track with 4 dp padding and gaps, 18 dp outer corners, and stable 14 dp segment corners. Two equal-width choices fit each row. `Hacia` sits above the destination; rows share a height of at least 64 dp and grow for wrapped text. Selection uses the secondary-container fill and radio-button semantics. Duplicate destination names include a variant number. Switching variants updates the header, hours, and route together.
+
+## Accessibility and freshness
+
+Interactive targets are at least 48 dp. Containers grow with font scale. Board sheets and accessibility labels expose full names when visible titles ellipsize. Arrival descriptions include service, destination, ETA, occupancy, and the vehicle or service estimate caveat.
+
+The visible board polls every 25 seconds. Successful manual refreshes have an eight-second throttle; failed requests can retry immediately, and an in-flight guard prevents duplicate requests. Fetch time and vehicle source time remain separate. The UI marks known vehicle reports older than two minutes as stale and does not derive a precise countdown.
+
+Ajustes also explains arrival ranges, old reports, and unknown occupancy, and shows the app version and unofficial data-source notice. There is no in-app credential or sample-data toggle.

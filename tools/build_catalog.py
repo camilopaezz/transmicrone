@@ -212,6 +212,55 @@ def info_route_stops(info: object) -> list[dict]:
     return stops
 
 
+def service_operating_hours(rows: list[dict], fetched_at: str) -> list[dict]:
+    """Keep published hours in the catalog API's own direction/variant namespace."""
+    result = []
+    for row in rows:
+        windows = []
+        for window in (row.get("horarios") or {}).get("data") or []:
+            values = [str(window.get(key) or "").strip() for key in
+                      ("convencion", "hora_inicio", "hora_fin")]
+            if not all(values):
+                continue
+            for index in (1, 2):
+                try:
+                    values[index] = datetime.strptime(values[index].upper(), "%I:%M %p").strftime("%H:%M")
+                except ValueError:
+                    pass  # Preserve unfamiliar published formats rather than invent a time.
+            value = dict(zip(("day_group", "start_time", "end_time"), values))
+            if value not in windows:
+                windows.append(value)
+        if windows and row.get("id") and row.get("codigo") and row.get("nombre"):
+            day_order = {day: index for index, day in enumerate(("L-V", "L-S", "L-D", "S", "D", "D-F"))}
+            windows.sort(key=lambda window: (day_order.get(window["day_group"], 99), window["day_group"], window["start_time"]))
+            result.append({
+                "catalog_id": str(row["id"]), "painted": str(row["codigo"]),
+                "destino": nfc(row["nombre"]), "fetched_at": fetched_at,
+                "windows": windows,
+            })
+    return result
+
+
+def service_route(row: dict, info: dict, fetched_at: str) -> dict:
+    stops = info_route_stops(info)
+    try:
+        positions = [float(stop["posicion"]) for stop in stops]
+    except (KeyError, TypeError, ValueError):
+        positions = []
+    if positions:
+        stops = [stop for _, stop in sorted(zip(positions, stops), key=lambda pair: pair[0])]
+    return {
+        "catalog_id": str(row["id"]), "painted": str(row["codigo"]),
+        "destino": nfc(row["nombre"]), "fetched_at": fetched_at,
+        "stops": [{
+            "code": str(stop.get("codigo") or ""), "name": nfc(stop.get("nombre")),
+            "wagon": str(stop.get("vagon") or "").strip() or None,
+            "address": nfc(stop.get("direccion")) or None,
+            "stops_here": str(stop.get("parada")) != "0",
+        } for stop in stops],
+    }
+
+
 def wagon_from_platform_name(name: str) -> str | None:
     m = WAGON_RE.search(nfc(name))
     return m.group(1).upper() if m else None
@@ -239,10 +288,12 @@ def main() -> int:
     p.add_argument("--gtfs-dir", type=Path, help="existing extracted GTFS directory")
     p.add_argument("--gtfs-zip", type=Path, help="existing GTFS zip")
     p.add_argument("--skip-info-ruta", action="store_true", help="do not call infoRuta")
-    p.add_argument("--info-limit", type=int, default=0, help="max infoRuta calls (0 = all troncal)")
+    p.add_argument("--info-limit", type=int, default=0, help="max infoRuta calls (0 = all catalog variants)")
     p.add_argument("--sleep", type=float, default=0.12, help="pause between infoRuta calls")
     p.add_argument("--out", type=Path, default=DATA / "catalog.json")
     args = p.parse_args()
+
+    previous = json.loads(args.out.read_text(encoding="utf-8")) if args.out.exists() else {}
 
     DATA.mkdir(parents=True, exist_ok=True)
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -365,20 +416,20 @@ def main() -> int:
         )
         print(f"catalog lista_rutas={len(lista_rutas)}", file=sys.stderr)
     except Exception as e:
-        failures.append({"source": "catalog-search", "error": str(e)})
-        lista_rutas = []
+        raise RuntimeError("Catalog search failed; existing catalog was not overwritten") from e
 
-    # infoRuta for troncal/dual: TM codes live here, not in GIS/GTFS
+    # Package ordered routes for every system; troncal/dual TM codes also live here.
     tm_by_nodo: dict[int, dict] = {}
     info_ok = 0
     info_fail = 0
+    identities = {str(row["id"]): (str(row["codigo"]), nfc(row["nombre"])) for row in lista_rutas}
+    # Keep usable details for unchanged variants when a request is skipped or fails.
+    service_routes_by_id = {
+        row["catalog_id"]: row for row in previous.get("service_routes", [])
+        if row.get("stops") and identities.get(row["catalog_id"]) == (row["painted"], nfc(row["destino"]))
+    }
     if not args.skip_info_ruta:
-        candidates = [
-            r
-            for r in lista_rutas
-            if (r.get("sistema") == "TransMilenio")
-            or (r.get("tipoServicio") in {"TransMilenio", "TRONCAL"})
-        ]
+        candidates = lista_rutas
         if args.info_limit:
             candidates = candidates[: args.info_limit]
         print(f"infoRuta candidates={len(candidates)}", file=sys.stderr)
@@ -386,6 +437,10 @@ def main() -> int:
             try:
                 info = catalog_info(str(r.get("id")), nfc(r.get("nombre")), str(r.get("codigo")))
                 rec = info_route_stops(info)
+                if not rec:
+                    raise ValueError("No route stops returned")
+                route = service_route(r, info, generated_at)
+                service_routes_by_id[route["catalog_id"]] = route
                 info_ok += 1
                 for stop in rec:
                     try:
@@ -643,6 +698,9 @@ def main() -> int:
     catalog = {
         "generated_at": generated_at,
         "schema_version": 1,
+        "service_hours": service_operating_hours(lista_rutas, generated_at),
+        "service_routes": [service_routes_by_id[str(row["id"])] for row in lista_rutas
+                           if str(row["id"]) in service_routes_by_id],
         "sources": sources,
         "failures": failures,
         "counts": {

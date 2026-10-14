@@ -1,5 +1,6 @@
 package co.camilo.transmicrone.ui.theme
 
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
@@ -21,8 +22,10 @@ val TransmicroneBrandStyle = TextStyle(
     letterSpacing = (-0.6).sp,
 )
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 private val defaults = Typography()
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 internal val AppTypography = Typography(
     displayLarge = defaults.displayLarge.copy(fontFamily = InterfaceFont),
     displayMedium = defaults.displayMedium.copy(fontFamily = InterfaceFont),
@@ -39,4 +42,7 @@ internal val AppTypography = Typography(
     labelLarge = defaults.labelLarge.copy(fontFamily = InterfaceFont, fontWeight = FontWeight.Medium, letterSpacing = 0.sp),
     labelMedium = defaults.labelMedium.copy(fontFamily = InterfaceFont, letterSpacing = 0.sp),
     labelSmall = defaults.labelSmall.copy(fontFamily = InterfaceFont, letterSpacing = 0.sp),
+    headlineSmallEmphasized = defaults.headlineSmallEmphasized.copy(fontFamily = InterfaceFont, fontWeight = FontWeight.Medium),
+    titleSmallEmphasized = defaults.titleSmallEmphasized.copy(fontFamily = InterfaceFont, fontWeight = FontWeight.Medium),
+    labelLargeEmphasized = defaults.labelLargeEmphasized.copy(fontFamily = InterfaceFont, fontWeight = FontWeight.Medium, letterSpacing = 0.sp),
 )

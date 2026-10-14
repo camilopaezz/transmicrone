@@ -5,7 +5,6 @@ import co.camilo.transmicrone.ui.common.LocalScreenEntered
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -33,7 +32,6 @@ import co.camilo.transmicrone.ui.board.ServicioBadge
 import co.camilo.transmicrone.ui.RouteState
 import co.camilo.transmicrone.ui.ServiceLookupState
 import co.camilo.transmicrone.ui.ServiceDestinationList
-import co.camilo.transmicrone.ui.destinationOptions
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -130,41 +128,19 @@ fun CatalogDetailsScreen(
         },
     ) { insets ->
         LazyColumn(Modifier.fillMaxSize().padding(insets), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(if (service != null) 0.dp else 10.dp)) {
-            item {
+            if (location != null) item {
                 Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerLow) {
                     Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        if (location != null) {
-                            Icon(if (location.kind == PlaceKind.ESTACION) Icons.Default.Tram else Icons.Default.DirectionsBus, null,
-                                tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
-                            Text(location.name, style = MaterialTheme.typography.headlineLarge)
-                            location.disambiguator?.let { Message(it) }
-                            Message(stringResource(R.string.setup_place_code, location.queryParadero))
-                        } else if (service != null) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                ServicioBadge(service.option.painted, service.option.color)
-                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    if (route != null) {
-                                        Text(stringResource(R.string.route_from), style = MaterialTheme.typography.labelLarge,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        Text(route.stops.first().name, style = MaterialTheme.typography.titleLarge)
-                                        Icon(Icons.Default.South, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                                    }
-                                    if (route == null) {
-                                        if (destinationOptions(service.option.destino).size <= 1) {
-                                            Text(stringResource(R.string.route_to), style = MaterialTheme.typography.labelLarge,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        }
-                                        ServiceDestinationList(service.option.destino, R.string.route_to, MaterialTheme.typography.titleLarge)
-                                    } else {
-                                        Text(stringResource(R.string.route_to), style = MaterialTheme.typography.labelLarge,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        Text(route.stops.last().name, style = MaterialTheme.typography.titleLarge)
-                                    }
-                                }
-                            }
-                        }
+                        Icon(if (location.kind == PlaceKind.ESTACION) Icons.Default.Tram else Icons.Default.DirectionsBus, null,
+                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
+                        Text(location.name, style = MaterialTheme.typography.headlineLarge)
+                        location.disambiguator?.let { Message(it) }
+                        Message(stringResource(R.string.setup_place_code, location.queryParadero))
                     }
                 }
+            }
+            if (service != null) item {
+                ServiceDetailsHeader(service, routes, routeIndex, onSelectRoute)
             }
             serviceLookup?.let { lookup ->
                 item {
@@ -195,28 +171,10 @@ fun CatalogDetailsScreen(
                         TextButton(onClick = onRetryRoute) { Text(stringResource(R.string.retry_refresh)) }
                     }
                     is RouteState.Loaded -> {
-                        if (routes.size > 1) item {
-                            Row(Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                routes.forEachIndexed { index, variant ->
-                                    FilterChip(selected = routeIndex == index, onClick = { onSelectRoute(index) },
-                                        label = { Text(stringResource(R.string.route_variant_destination, variant.stops.last().name, index + 1)) })
-                                }
-                            }
-                        }
                         if (route != null) {
-                            item { Message(stringResource(R.string.route_stop_count, route.stops.count { it.stopsHere })) }
                             items(route.stops.size, key = { "${route.catalogId}:$it" }) { index ->
                                 RouteStopRow(route.stops[index], index, route.stops.lastIndex) { place -> onPlace(place) }
                             }
-                        }
-                    }
-                }
-                if (routeState is RouteState.Failed || routeState is RouteState.Unavailable) {
-                    if (service.places.isNotEmpty()) {
-                        item { SectionTitle(stringResource(R.string.service_served_places)) }
-                        items(service.places, key = { "served:${it.placeId}" }) { place ->
-                            LocationRow(place) { onPlace(place) }
                         }
                     }
                 }

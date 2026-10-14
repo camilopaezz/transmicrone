@@ -150,12 +150,14 @@ fun ArrivalRow(arrival: Arrival, now: Instant = Instant.now(), routeColor: Strin
 }
 
 @Composable
-fun ServicioBadge(code: String, color: String? = null) {
+fun ServicioBadge(code: String, color: String? = null, compact: Boolean = false) {
     val background = parseColor(color) ?: MaterialTheme.colorScheme.primary
     val foreground = if (background.luminance() > 0.179f) Color.Black else Color.White
     Text(
-        code, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = foreground,
-        modifier = Modifier.background(background, RoundedCornerShape(16.dp)).padding(horizontal = 16.dp, vertical = 14.dp),
+        code, style = if (compact) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold, color = foreground,
+        modifier = Modifier.background(background, RoundedCornerShape(if (compact) 10.dp else 16.dp))
+            .padding(horizontal = if (compact) 10.dp else 16.dp, vertical = if (compact) 6.dp else 14.dp),
     )
 }
 

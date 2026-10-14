@@ -5,7 +5,7 @@ import co.camilo.transmicrone.BuildConfig
 import co.camilo.transmicrone.data.ArrivalsRepository
 import co.camilo.transmicrone.data.catalog.CatalogRepository
 import co.camilo.transmicrone.data.catalog.JsonCatalogRepository
-import co.camilo.transmicrone.data.catalog.PublicRouteRepository
+import co.camilo.transmicrone.data.catalog.CatalogRouteRepository
 import co.camilo.transmicrone.data.feed.ArrivalsParser
 import co.camilo.transmicrone.data.feed.BodegaFeedClient
 import co.camilo.transmicrone.data.feed.FeedClient
@@ -41,7 +41,7 @@ class AppContainer(
     }
 
     val boards: BoardRepository = boardRepository ?: DataStoreBoardRepository(context, json)
-    val routes = PublicRouteRepository(json)
+    val routes = CatalogRouteRepository(catalog)
 
     private val cache: ArrivalsCache = arrivalsCache ?: FileArrivalsCache(
         File(context.filesDir, if (BuildConfig.DEBUG && BuildConfig.MOCK_FEED) "arrivals-cache-demo" else "arrivals-cache"),

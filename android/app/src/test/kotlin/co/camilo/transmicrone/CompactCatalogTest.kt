@@ -63,6 +63,9 @@ class CompactCatalogTest {
         val catalog = JsonCatalogRepository(json, gzip = true) { asset.inputStream() }
         val leon = catalog.search("leon").first { it.name == "León XIII" }
         assertTrue(leon.servicios.map { it.painted }.containsAll(listOf("E48", "K43")))
+        val e48Hours = catalog.service("E48", "CAD")!!.operatingHours.single()
+        assertEquals("12444", e48Hours.catalogId)
+        assertTrue(e48Hours.windows.any { it.dayGroup == "L-V" && it.startTime == "04:00" && it.endTime == "10:00" })
         assertTrue(catalog.search("ricaurte").any { place ->
             place.servicios.map { it.painted }.containsAll(listOf("S48", "S43"))
         })

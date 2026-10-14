@@ -28,7 +28,7 @@ Two paths return the same vehicle array.
 | `POST /location/ruta?ruta={CODE}` | empty, `Content-Length: 0` | painted service code (`B23`, `Z8`, `166`, `1`) |
 | `POST /buses` | JSON `{"ruta":"{CODE}","Nombre":"{headsign}"}` | same `ruta`; `Nombre` was ignored for B23 on 2026-09-04 (wrong value still returned the Alcalá list) |
 
-Current Android client (v2.9.6 teardown) uses `/buses` for troncal and `/location/ruta` for zonal. Both accept both systems here: `/location/ruta?ruta=B23` and `/buses` with `ruta=Z8` each returned vehicles.
+The TransMiApp Android client examined in the v2.9.6 teardown uses `/buses` for troncal and `/location/ruta` for zonal. Both accept both systems here: `/location/ruta?ruta=B23` and `/buses` with `ruta=Z8` each returned vehicles.
 
 Stop ETAs are a different call. Read [arrivals.md](arrivals.md) before `/paradero/buses`.
 
@@ -40,14 +40,14 @@ Stop ETAs are a different call. Read [arrivals.md](arrivals.md) before `/parader
 - Header `uuid` is also required now. Generate one UUID per installation and persist it, then reuse it on every request. Set `INSTALL_UUID` to that saved value for the curl above. Do not use a shared literal or rotate it per request. A public client's [September 21 change](https://github.com/estebantorrg/transmilenio/commit/d5967b8bd4ced636293ee3da888c75ee5407049a) records the requirement. This project verified on October 2 that a canonical arrivals POST without this header returned empty-body 403, while the same request with a stable UUID returned 200 JSON. The Android app stores its UUID in private preferences. Historical status observations below predate this change unless stated otherwise.
 - `GET` / `PUT` / `DELETE` / `PATCH` / `HEAD` → 405, `Allow: POST`.
 - Send `Content-Length`. Omitting it on HTTP or HTTPS → Google Frontend 411.
-- User-Agent is not required. The old iOS MetroBus UA (`MetroBus/1.9.7 (com.nexura.transmilenio; build:276; iOS 16.0.2) Alamofire/1.9.7`) still works if you want parity with the 2023 public client. Store version is 2.9.x.
+- User-Agent is not required. The old iOS MetroBus UA (`MetroBus/1.9.7 (com.nexura.transmilenio; build:276; iOS 16.0.2) Alamofire/1.9.7`) was accepted in the September verification; the curl example omits it.
 - Extra query params are ignored.
 - JSON body does not supply `ruta` for `/location/ruta`. The query param does.
 - Browser `Origin` on POST or OPTIONS → 403 `Invalid CORS request`. Call from curl/native, not from a web page.
 
 Unknown or inactive codes → 400 `"detail":"Service Not Available"`. Omitting `ruta` on `/location/ruta` → 400 `"Required parameter 'ruta' is not present."` An empty `[]` was not observed on 2026-09-04; do not assume idle known routes return one.
 
-Colombia IP geofence on the live paths: a Cloudflare Worker in MIA (correct `appid`, health still reachable) got the same 401 as a missing `appid`. Curl from Soacha, CO returns 200. `GET /actuator/health` is not geofenced. See [provenance.md](provenance.md).
+Colombia IP geofence observed on 2026-09-04: a Cloudflare Worker in MIA (correct `appid`, health still reachable) got the same 401 as a missing `appid`. Curl from Soacha, CO returned 200. `GET /actuator/health` is not geofenced. See [provenance.md](provenance.md).
 
 ## Response
 
@@ -116,7 +116,7 @@ Zonal example (Z8):
 
 ## Failures
 
-Error bodies from the app are `application/problem+json`. Google edge errors are HTML.
+Error bodies from the host are `application/problem+json`. Google edge errors are HTML.
 
 | case | status | body |
 | --- | --- | --- |

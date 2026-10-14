@@ -16,6 +16,10 @@ fun interface RouteRepository {
     suspend fun load(option: ServicioOption): List<ServiceRoute>
 }
 
+class CatalogRouteRepository(private val catalog: CatalogRepository) : RouteRepository {
+    override suspend fun load(option: ServicioOption): List<ServiceRoute> = catalog.routes(option)
+}
+
 class PublicRouteRepository(
     private val json: Json = Json { ignoreUnknownKeys = true },
     private val client: OkHttpClient = OkHttpClient.Builder().connectTimeout(10, TimeUnit.SECONDS)

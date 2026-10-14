@@ -1,19 +1,13 @@
-# Transmicrone
+# TransMinuto
 
-Local tooling against Bogotá TransMilenio / SITP live bus positions.
+Android arrivals boards and local tools for Bogotá's TransMilenio and SITP.
 
-Builds, previews, and device installs: follow [AGENTS.md](AGENTS.md) for live data and mock fallback rules.
+Builds, previews, and device installs: follow [AGENTS.md](AGENTS.md). Build commands and catalog refresh instructions are in [android/README.md](android/README.md).
 
-Live positions come from TransMiApp's Bodega host (unofficial). Contract, fields, failure modes: [docs/feed.md](docs/feed.md). Read it before calling the feed, verifying it still answers, or mapping a response into types.
+Read [docs/feed.md](docs/feed.md) before configuring or testing live positions. Read [docs/arrivals.md](docs/arrivals.md) before testing station or stop arrivals. Credentials belong in ignored local configuration.
 
-How to call (base URL, `appid`, curl): [docs/feed.md](docs/feed.md).
+For live-field joins to GTFS, GIS, or fleet IDs, read [docs/join.md](docs/join.md). Public catalog variant IDs are separate from GTFS and live route IDs.
 
-Stop arrivals board: [docs/arrivals.md](docs/arrivals.md) before `/paradero/buses`. Next N buses at an estación: `scripts/eta.py S43 TM0069`. S43+S48 at Ricaurte NQS: `scripts/ricaurte.sh`. Browser board: `python3 scripts/serve-ricaurte.py` then [ricaurte.html](ricaurte.html) (Bodega has no CORS; do not open the file directly).
+Domain terms: [CONTEXT.md](CONTEXT.md). App scope: [docs/app-scope.md](docs/app-scope.md). Current UI: [docs/android-design.md](docs/android-design.md). Source inventory and provenance: [docs/sources.md](docs/sources.md), [docs/provenance.md](docs/provenance.md).
 
-Join live fields to GTFS, GIS, or fleet IDs: [docs/join.md](docs/join.md).
-
-Official catalogs are static. No GTFS-RT. Inventory: [docs/sources.md](docs/sources.md).
-
-Who hosts this, ToS, other reverse-engineers: [docs/provenance.md](docs/provenance.md).
-
-Domain language: [CONTEXT.md](CONTEXT.md).
+Local arrival inspection: `scripts/eta.py S43 TM0069`. For S43 and S48 together: `scripts/ricaurte.sh`. These tools' estimates are separate from the Android app's server-provided arrival phrases.

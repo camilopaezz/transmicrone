@@ -6,6 +6,12 @@ import co.camilo.transmicrone.domain.ServicioOption
 import co.camilo.transmicrone.domain.TextNorm
 import co.camilo.transmicrone.domain.CatalogEntry
 import co.camilo.transmicrone.domain.CatalogResults
+import co.camilo.transmicrone.domain.OperatingWindow
+import co.camilo.transmicrone.domain.ServiceOperatingHours
+import co.camilo.transmicrone.domain.CatalogVariant
+import co.camilo.transmicrone.domain.ServiceRoute
+import co.camilo.transmicrone.domain.RouteStop
+import co.camilo.transmicrone.domain.matchingCatalogVariants
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -56,6 +62,7 @@ interface CatalogRepository {
     suspend fun service(painted: String, destino: String): CatalogEntry.Service?
     fun place(placeId: String): Place?
     suspend fun generatedAt(): String?
+    suspend fun routes(option: ServicioOption): List<ServiceRoute> = emptyList()
 }
 
 class JsonCatalogRepository(
@@ -69,6 +76,8 @@ class JsonCatalogRepository(
     @Volatile
     private var byId: Map<String, Place> = emptyMap()
     private var services: List<CatalogEntry.Service> = emptyList()
+    private var routeVariants: List<CatalogVariant> = emptyList()
+    private var routesById: Map<String, ServiceRoute> = emptyMap()
     // Published together with services by the volatile write to loaded.
     private var placeSearchIndex: List<SearchEntry<Place>> = emptyList()
     private var serviceSearchIndex: List<SearchEntry<CatalogEntry.Service>> = emptyList()
@@ -100,6 +109,20 @@ class JsonCatalogRepository(
                     )
                 }
                 val dictionary = packed.servicios.map(::resolve)
+                val hours = packed.serviceHours.map { row ->
+                    ServiceOperatingHours(row.catalogId, row.painted, TextNorm.nfc(row.destino), row.fetchedAt,
+                        row.windows.map { OperatingWindow(it.dayGroup, it.startTime, it.endTime) })
+                }
+                val hoursById = hours.associateBy { it.catalogId }
+                val hourVariants = hours.map { CatalogVariant(it.catalogId, it.painted, it.destino) }
+                routeVariants = packed.serviceRoutes.map { CatalogVariant(it.catalogId, it.painted, TextNorm.nfc(it.destino)) }
+                routesById = packed.serviceRoutes.associate { row ->
+                    row.catalogId to ServiceRoute(row.catalogId, row.stops.map { stop ->
+                        RouteStop(stop.code, TextNorm.nfc(stop.name).ifBlank { stop.code },
+                            stop.wagon?.trim()?.takeIf { it.isNotBlank() && it != "0" },
+                            stop.address?.let(TextNorm::nfc)?.takeIf { it.isNotBlank() }, stop.stopsHere)
+                    })
+                }
                 val places = packed.places.map { place ->
                     val resolved = place.servicioIndices?.let { indices ->
                         require(place.servicios.isEmpty()) { "Place ${place.placeId} has both servicio shapes" }
@@ -121,6 +144,7 @@ class JsonCatalogRepository(
                             ),
                             rows.map { it.second }.distinctBy { it.placeId }
                                 .sortedWith(compareBy<Place> { it.kind.ordinal }.thenBy { it.name }.thenBy { it.disambiguator }),
+                            matchingCatalogVariants(rows.first().first, hourVariants).mapNotNull { hoursById[it.catalogId] },
                         )
                     }
                 placeSearchIndex = places.map { SearchEntry(it, placeSearchValues(it).map(::foldSearchText)) }
@@ -181,6 +205,14 @@ class JsonCatalogRepository(
     }
 
     override suspend fun generatedAt(): String? = catalog().generatedAt
+
+    override suspend fun routes(option: ServicioOption): List<ServiceRoute> {
+        catalog()
+        return matchingCatalogVariants(option, routeVariants).mapNotNull { routesById[it.catalogId] }
+            .filter { it.stops.isNotEmpty() }
+            // Equal stops can belong to distinct destinations or operating schedules.
+            .distinctBy { it.catalogId }
+    }
 }
 
 private data class CatalogMetadata(val generatedAt: String?)
@@ -191,6 +223,41 @@ internal data class PackedCatalog(
     @SerialName("schema_version") val schemaVersion: Int = 1,
     val servicios: List<PackedServicio> = emptyList(),
     val places: List<PackedPlace> = emptyList(),
+    @SerialName("service_hours") val serviceHours: List<PackedServiceHours> = emptyList(),
+    @SerialName("service_routes") val serviceRoutes: List<PackedServiceRoute> = emptyList(),
+)
+
+@Serializable
+internal data class PackedServiceRoute(
+    @SerialName("catalog_id") val catalogId: String,
+    val painted: String,
+    val destino: String,
+    val stops: List<PackedRouteStop> = emptyList(),
+)
+
+@Serializable
+internal data class PackedRouteStop(
+    val code: String,
+    val name: String,
+    val wagon: String? = null,
+    val address: String? = null,
+    @SerialName("stops_here") val stopsHere: Boolean = true,
+)
+
+@Serializable
+internal data class PackedServiceHours(
+    @SerialName("catalog_id") val catalogId: String,
+    val painted: String,
+    val destino: String,
+    @SerialName("fetched_at") val fetchedAt: String? = null,
+    val windows: List<PackedOperatingWindow> = emptyList(),
+)
+
+@Serializable
+internal data class PackedOperatingWindow(
+    @SerialName("day_group") val dayGroup: String,
+    @SerialName("start_time") val startTime: String,
+    @SerialName("end_time") val endTime: String,
 )
 
 @Serializable
