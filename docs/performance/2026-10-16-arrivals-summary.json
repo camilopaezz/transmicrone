@@ -1,0 +1,402 @@
+{
+  "raw_files": [
+    "2026-10-16-arrivals-first-run-totals.jsonl",
+    "2026-10-16-arrivals-android.jsonl"
+  ],
+  "measured_runs": 48,
+  "warmup_runs": 8,
+  "request_count": 336,
+  "summaries": [
+    {
+      "requests": 4,
+      "mode": "capped",
+      "runs": 12,
+      "outcomes": {
+        "success": 9,
+        "empty": 1,
+        "failure:TIMEOUT": 2
+      },
+      "complete_runs": 10,
+      "runs_with_call_details": 6,
+      "transport_failures": 2,
+      "complete_median_ms": 4430.481699,
+      "complete_range_ms": [
+        500.564562,
+        13113.525079
+      ],
+      "all_outcomes_median_ms": 6340.9676660000005,
+      "last_request_start_median_ms": 318.36348,
+      "call_median_ms": 331.773763,
+      "peak_calls": 2,
+      "http_statuses": {
+        "200": 22,
+        "0": 2
+      }
+    },
+    {
+      "requests": 4,
+      "mode": "uncapped",
+      "runs": 12,
+      "outcomes": {
+        "failure:TIMEOUT": 4,
+        "success": 8
+      },
+      "complete_runs": 8,
+      "runs_with_call_details": 6,
+      "transport_failures": 2,
+      "complete_median_ms": 4258.428589499999,
+      "complete_range_ms": [
+        306.510759,
+        8683.224384
+      ],
+      "all_outcomes_median_ms": 6495.3330320000005,
+      "last_request_start_median_ms": 2.696604,
+      "call_median_ms": 369.106295,
+      "peak_calls": 4,
+      "http_statuses": {
+        "200": 22,
+        "0": 2
+      }
+    },
+    {
+      "requests": 8,
+      "mode": "capped",
+      "runs": 12,
+      "outcomes": {
+        "success": 6,
+        "failure:TIMEOUT": 6
+      },
+      "complete_runs": 6,
+      "runs_with_call_details": 6,
+      "transport_failures": 7,
+      "complete_median_ms": 13582.2762435,
+      "complete_range_ms": [
+        1483.772107,
+        23061.076679
+      ],
+      "all_outcomes_median_ms": 16614.080562,
+      "last_request_start_median_ms": 2713.6672335,
+      "call_median_ms": 341.709675,
+      "peak_calls": 2,
+      "http_statuses": {
+        "200": 41,
+        "0": 7
+      }
+    },
+    {
+      "requests": 8,
+      "mode": "uncapped",
+      "runs": 12,
+      "outcomes": {
+        "success": 10,
+        "failure:TIMEOUT": 2
+      },
+      "complete_runs": 10,
+      "runs_with_call_details": 6,
+      "transport_failures": 2,
+      "complete_median_ms": 6122.64827,
+      "complete_range_ms": [
+        457.105521,
+        8650.759853
+      ],
+      "all_outcomes_median_ms": 6354.947717999999,
+      "last_request_start_median_ms": 7.441185000000001,
+      "call_median_ms": 342.276724,
+      "peak_calls": 8,
+      "http_statuses": {
+        "200": 46,
+        "0": 2
+      }
+    }
+  ],
+  "pairs": [
+    {
+      "experiment": "2026-10-16-arrivals-android",
+      "requests": 4,
+      "round": 1,
+      "capped_ms": 10010.668076,
+      "uncapped_ms": 15011.632995,
+      "capped_result": "empty",
+      "uncapped_result": "failure:TIMEOUT",
+      "both_complete": false,
+      "same_outcome": false,
+      "reduction_percent": null
+    },
+    {
+      "experiment": "2026-10-16-arrivals-android",
+      "requests": 4,
+      "round": 2,
+      "capped_ms": 21150.879936,
+      "uncapped_ms": 15006.806573,
+      "capped_result": "failure:TIMEOUT",
+      "uncapped_result": "failure:TIMEOUT",
+      "both_complete": false,
+      "same_outcome": true,
+      "reduction_percent": null
+    },
+    {
+      "experiment": "2026-10-16-arrivals-android",
+      "requests": 4,
+      "round": 3,
+      "capped_ms": 15299.863633,
+      "uncapped_ms": 8683.224384,
+      "capped_result": "failure:TIMEOUT",
+      "uncapped_result": "success",
+      "both_complete": false,
+      "same_outcome": false,
+      "reduction_percent": null
+    },
+    {
+      "experiment": "2026-10-16-arrivals-android",
+      "requests": 4,
+      "round": 4,
+      "capped_ms": 2777.053248,
+      "uncapped_ms": 2674.379528,
+      "capped_result": "success",
+      "uncapped_result": "success",
+      "both_complete": true,
+      "same_outcome": true,
+      "reduction_percent": 3.6972182681028753
+    },
+    {
+      "experiment": "2026-10-16-arrivals-android",
+      "requests": 4,
+      "round": 5,
+      "capped_ms": 823.545242,
+      "uncapped_ms": 401.772215,
+      "capped_result": "success",
+      "uncapped_result": "success",
+      "both_complete": true,
+      "same_outcome": true,
+      "reduction_percent": 51.214311672266334
+    },
+    {
+      "experiment": "2026-10-16-arrivals-android",
+      "requests": 4,
+      "round": 6,
+      "capped_ms": 500.564562,
+      "uncapped_ms": 306.510759,
+      "capped_result": "success",
+      "uncapped_result": "success",
+      "both_complete": true,
+      "same_outcome": true,
+      "reduction_percent": 38.7669878635955
+    },
+    {
+      "experiment": "2026-10-16-arrivals-first-run-totals",
+      "requests": 4,
+      "round": 1,
+      "capped_ms": 9324.517553,
+      "uncapped_ms": 15010.07481,
+      "capped_result": "success",
+      "uncapped_result": "failure:TIMEOUT",
+      "both_complete": false,
+      "same_outcome": false,
+      "reduction_percent": null
+    },
+    {
+      "experiment": "2026-10-16-arrivals-first-run-totals",
+      "requests": 4,
+      "round": 2,
+      "capped_ms": 4820.364274,
+      "uncapped_ms": 4372.381939,
+      "capped_result": "success",
+      "uncapped_result": "success",
+      "both_complete": true,
+      "same_outcome": true,
+      "reduction_percent": 9.293536951477288
+    },
+    {
+      "experiment": "2026-10-16-arrivals-first-run-totals",
+      "requests": 4,
+      "round": 3,
+      "capped_ms": 7861.571058,
+      "uncapped_ms": 4361.216022,
+      "capped_result": "success",
+      "uncapped_result": "success",
+      "both_complete": true,
+      "same_outcome": true,
+      "reduction_percent": 44.524879444268464
+    },
+    {
+      "experiment": "2026-10-16-arrivals-first-run-totals",
+      "requests": 4,
+      "round": 4,
+      "capped_ms": 13113.525079,
+      "uncapped_ms": 8618.284125,
+      "capped_result": "success",
+      "uncapped_result": "success",
+      "both_complete": true,
+      "same_outcome": true,
+      "reduction_percent": 34.27942469259222
+    },
+    {
+      "experiment": "2026-10-16-arrivals-first-run-totals",
+      "requests": 4,
+      "round": 5,
+      "capped_ms": 2024.543988,
+      "uncapped_ms": 4155.641157,
+      "capped_result": "success",
+      "uncapped_result": "success",
+      "both_complete": true,
+      "same_outcome": true,
+      "reduction_percent": -105.26307067821539
+    },
+    {
+      "experiment": "2026-10-16-arrivals-first-run-totals",
+      "requests": 4,
+      "round": 6,
+      "capped_ms": 4040.599124,
+      "uncapped_ms": 15003.737541,
+      "capped_result": "success",
+      "uncapped_result": "failure:TIMEOUT",
+      "both_complete": false,
+      "same_outcome": false,
+      "reduction_percent": null
+    },
+    {
+      "experiment": "2026-10-16-arrivals-android",
+      "requests": 8,
+      "round": 1,
+      "capped_ms": 21330.212788,
+      "uncapped_ms": 15014.451397,
+      "capped_result": "failure:TIMEOUT",
+      "uncapped_result": "failure:TIMEOUT",
+      "both_complete": false,
+      "same_outcome": true,
+      "reduction_percent": null
+    },
+    {
+      "experiment": "2026-10-16-arrivals-android",
+      "requests": 8,
+      "round": 2,
+      "capped_ms": 34021.401755,
+      "uncapped_ms": 6422.55515,
+      "capped_result": "failure:TIMEOUT",
+      "uncapped_result": "success",
+      "both_complete": false,
+      "same_outcome": false,
+      "reduction_percent": null
+    },
+    {
+      "experiment": "2026-10-16-arrivals-android",
+      "requests": 8,
+      "round": 3,
+      "capped_ms": 15615.156656,
+      "uncapped_ms": 569.267238,
+      "capped_result": "failure:TIMEOUT",
+      "uncapped_result": "success",
+      "both_complete": false,
+      "same_outcome": false,
+      "reduction_percent": null
+    },
+    {
+      "experiment": "2026-10-16-arrivals-android",
+      "requests": 8,
+      "round": 4,
+      "capped_ms": 1483.772107,
+      "uncapped_ms": 8025.994222,
+      "capped_result": "success",
+      "uncapped_result": "success",
+      "both_complete": true,
+      "same_outcome": true,
+      "reduction_percent": -440.9182571997224
+    },
+    {
+      "experiment": "2026-10-16-arrivals-android",
+      "requests": 8,
+      "round": 5,
+      "capped_ms": 15876.826736,
+      "uncapped_ms": 540.030264,
+      "capped_result": "failure:TIMEOUT",
+      "uncapped_result": "success",
+      "both_complete": false,
+      "same_outcome": false,
+      "reduction_percent": null
+    },
+    {
+      "experiment": "2026-10-16-arrivals-android",
+      "requests": 8,
+      "round": 6,
+      "capped_ms": 15281.513886,
+      "uncapped_ms": 457.105521,
+      "capped_result": "failure:TIMEOUT",
+      "uncapped_result": "success",
+      "both_complete": false,
+      "same_outcome": false,
+      "reduction_percent": null
+    },
+    {
+      "experiment": "2026-10-16-arrivals-first-run-totals",
+      "requests": 8,
+      "round": 1,
+      "capped_ms": 4153.786272,
+      "uncapped_ms": 5957.956254,
+      "capped_result": "success",
+      "uncapped_result": "success",
+      "both_complete": true,
+      "same_outcome": true,
+      "reduction_percent": -43.43434793844876
+    },
+    {
+      "experiment": "2026-10-16-arrivals-first-run-totals",
+      "requests": 8,
+      "round": 2,
+      "capped_ms": 17351.334388,
+      "uncapped_ms": 8650.759853,
+      "capped_result": "success",
+      "uncapped_result": "success",
+      "both_complete": true,
+      "same_outcome": true,
+      "reduction_percent": 50.14354712117834
+    },
+    {
+      "experiment": "2026-10-16-arrivals-first-run-totals",
+      "requests": 8,
+      "round": 3,
+      "capped_ms": 22686.556151,
+      "uncapped_ms": 15012.132524,
+      "capped_result": "failure:TIMEOUT",
+      "uncapped_result": "failure:TIMEOUT",
+      "both_complete": false,
+      "same_outcome": true,
+      "reduction_percent": null
+    },
+    {
+      "experiment": "2026-10-16-arrivals-first-run-totals",
+      "requests": 8,
+      "round": 4,
+      "capped_ms": 9813.218099,
+      "uncapped_ms": 6287.340286,
+      "capped_result": "success",
+      "uncapped_result": "success",
+      "both_complete": true,
+      "same_outcome": true,
+      "reduction_percent": 35.929883320939325
+    },
+    {
+      "experiment": "2026-10-16-arrivals-first-run-totals",
+      "requests": 8,
+      "round": 5,
+      "capped_ms": 19579.779901,
+      "uncapped_ms": 8126.562834,
+      "capped_result": "success",
+      "uncapped_result": "success",
+      "both_complete": true,
+      "same_outcome": true,
+      "reduction_percent": 58.49512673232373
+    },
+    {
+      "experiment": "2026-10-16-arrivals-first-run-totals",
+      "requests": 8,
+      "round": 6,
+      "capped_ms": 23061.076679,
+      "uncapped_ms": 5741.766282,
+      "capped_result": "success",
+      "uncapped_result": "success",
+      "both_complete": true,
+      "same_outcome": true,
+      "reduction_percent": 75.10191583019801
+    }
+  ]
+}

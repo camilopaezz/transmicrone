@@ -9,8 +9,6 @@ import co.camilo.transmicrone.domain.PlaceKind
 import co.camilo.transmicrone.domain.ArrivalReducer
 import co.camilo.transmicrone.domain.FeedSelection
 import kotlinx.coroutines.*
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.json.*
 import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.MediaType.Companion.toMediaType
@@ -49,11 +47,10 @@ class BodegaFeedClient(
         val resolved = board.servicios.map(FeedSelection::resolve)
         if (resolved.any { it.isEmpty() }) return@withContext FetchResult.Unsupported(clock.now())
         val services = resolved.flatten().distinctBy { Triple(it.painted, it.destino, it.routeIds.toSet()) }
-        val semaphore = Semaphore(2)
         val results = coroutineScope {
             services.flatMap { service ->
                 service.routeIds.distinct().map { routeId ->
-                    async { semaphore.withPermit {
+                    async {
                         val body = buildJsonObject {
                             put("estacion", code)
                             put("ruta", service.painted)
@@ -65,7 +62,7 @@ class BodegaFeedClient(
                             is FetchResult.Success -> result.copy(arrivals = ArrivalReducer.filter(result.arrivals, listOf(service)))
                             else -> result
                         }
-                    } }
+                    }
                 }
             }.awaitAll()
         }

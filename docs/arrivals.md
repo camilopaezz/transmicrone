@@ -117,5 +117,7 @@ resolution. Unknown composite mappings return Unsupported for station requests
 rather than a successful empty board. Add mappings only with directional live
 ID evidence; paired headsign text alone is insufficient. Ordinary service code,
 destination, and route ID guards remain in place. Composite rows additionally
-require the reported route ID. Requests remain limited to two at a time and any
-failed request preserves the previous complete board.
+require the reported route ID. All selected variant requests start concurrently,
+without an application-level per-board cap. Any failed request preserves the previous complete board. The
+comparison with the previous two-request cap is documented in
+[the concurrency measurements](performance/2026-10-16-arrivals.md).

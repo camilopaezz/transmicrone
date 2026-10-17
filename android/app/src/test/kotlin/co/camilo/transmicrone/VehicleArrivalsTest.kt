@@ -18,6 +18,34 @@ class VehicleArrivalsTest {
         listOf(SelectedServicio("S43", "San Mateo", listOf(13278))))
 
     @Test
+    fun everySelectedVariantCanStartBeforeAnyResponseFinishes() = runBlocking {
+        val started = java.util.concurrent.CountDownLatch(4)
+        val blockedByCap = java.util.concurrent.atomic.AtomicBoolean(false)
+        val server = MockWebServer()
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                started.countDown()
+                if (!started.await(3, java.util.concurrent.TimeUnit.SECONDS)) blockedByCap.set(true)
+                return MockResponse().setBody("[]")
+            }
+        }
+        server.start()
+        val http = BodegaFeedClient.httpClient(5000, 5000)
+        try {
+            val client = BodegaFeedClient(server.url("/").toString(), "test-appid", "test-installation",
+                ArrivalsParser(json), Clock { now }, http)
+            val services = listOf(board.servicios.single().copy(routeIds = listOf(13277, 13278, 13279)),
+                SelectedServicio("S48", "San Mateo", listOf(13267)))
+            assertTrue(client.fetchArrivals(board.copy(servicios = services)) is FetchResult.Empty)
+            assertEquals(4, server.requestCount)
+            assertFalse("All four requests must reach the host before it releases any response", blockedByCap.get())
+        } finally {
+            http.connectionPool.evictAll()
+            server.shutdown()
+        }
+    }
+
+    @Test
     fun realCompositeSelectionRequestsAndKeepsObservedZ63Vehicles() = runBlocking {
         val packed = co.camilo.transmicrone.data.catalog.JsonCatalogRepository(json, true) {
             java.io.File("src/main/assets/catalog.json.gz").inputStream()
