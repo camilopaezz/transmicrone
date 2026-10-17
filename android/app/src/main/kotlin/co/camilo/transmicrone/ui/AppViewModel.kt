@@ -137,7 +137,7 @@ class AppViewModel(
     private var setupDraftPlaceId: String? = null
     private var fetchGeneration: Long = 0
     private var lastPersistedId: String? = null
-    private var lastManual: Instant = Instant.EPOCH
+    private var pendingManualRefresh = false
     private val boardMutation = Mutex()
     private var boardDeletion: BoardDeletion? = null
 
@@ -537,12 +537,20 @@ class AppViewModel(
 
     fun manualRefresh() {
         val st = _state.value
-        if (!st.started || st.screen != Screen.HOME || refreshJob?.isActive == true) return
+        if (!st.started || st.screen != Screen.HOME) return
         val visible = st.boards.getOrNull(st.pageIndex) ?: return
-        val retryingFailure = visible.freshness is Freshness.Failed || visible.freshness is Freshness.FailedCached
-        val now = clock.now()
-        if (!retryingFailure && now.toEpochMilli() - lastManual.toEpochMilli() < BuildConfig.MANUAL_REFRESH_THROTTLE_MS) return
-        lastManual = now
+        if (refreshJob?.isActive == true) {
+            pendingManualRefresh = true
+            _state.update { ui ->
+                ui.copy(boards = ui.boards.map { view ->
+                    val freshness = view.freshness
+                    if (view.board.boardId == visible.board.boardId && freshness is Freshness.UpdatingCached) {
+                        view.copy(freshness = freshness.copy(quiet = false))
+                    } else view
+                })
+            }
+            return
+        }
         refreshVisible()
     }
 
@@ -575,6 +583,7 @@ class AppViewModel(
     }
 
     private fun stopPolling() {
+        pendingManualRefresh = false
         fetchGeneration++
         loop?.cancel()
         refreshJob?.cancel()
@@ -583,6 +592,7 @@ class AppViewModel(
     }
 
     private fun restartLoop(quiet: Boolean = false) {
+        pendingManualRefresh = false
         loop?.cancel()
         val st = _state.value
         if (!st.started || st.screen != Screen.HOME || st.boards.isEmpty()) {
@@ -596,6 +606,9 @@ class AppViewModel(
                 delay(BuildConfig.AUTO_REFRESH_MS)
                 val now = _state.value
                 if (!now.started || now.screen != Screen.HOME) break
+                // A slow board may span several ticks. Let it finish instead of
+                // repeatedly cancelling it before it can publish a result.
+                if (refreshJob?.isActive == true) continue
                 refreshVisible()
             }
         }
@@ -606,6 +619,7 @@ class AppViewModel(
         if (!st.started || st.screen != Screen.HOME) return
         val view = st.boards.getOrNull(st.pageIndex) ?: return
         val boardId = view.board.boardId
+        pendingManualRefresh = false
         val gen = ++fetchGeneration
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch(io) {
@@ -650,6 +664,13 @@ class AppViewModel(
                     }
                 }
                 throw e
+            }
+        }
+        refreshJob?.invokeOnCompletion { cause ->
+            if (cause == null) viewModelScope.launch {
+                // Handle queued pulls on Main, after the worker has finished.
+                // Navigation invalidates the generation and drops its intent.
+                if (gen == fetchGeneration && pendingManualRefresh) refreshVisible()
             }
         }
     }

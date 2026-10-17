@@ -177,7 +177,9 @@ fun HomeScreen(
                 val hasScrolled by remember(listState) { derivedStateOf { listState.canScrollBackward } }
                 val fade by animateFloatAsState(if (hasScrolled) 1f else 0f, label = "listTopFade")
                 PullToRefreshBox(
-                    isRefreshing = refreshing,
+                    // Keep accepting pulls during a fetch. The strip below owns
+                    // loading feedback; the ViewModel coalesces queued pulls.
+                    isRefreshing = false,
                     onRefresh = onRefresh,
                     state = pullState,
                     indicator = {},
@@ -187,10 +189,10 @@ fun HomeScreen(
                     Column(Modifier.fillMaxSize()) {
                         // Reserve the strip even when idle so progress never moves the list.
                         Box(Modifier.fillMaxWidth().height(4.dp)) {
-                            if (refreshing && !quietRefresh && page == visibleIndex && !pager.isScrollInProgress) {
-                                LinearProgressIndicator(Modifier.fillMaxSize())
-                            } else if (!quietRefresh && pullState.distanceFraction > 0f) {
+                            if (pullState.distanceFraction > 0f) {
                                 LinearProgressIndicator(progress = { pullState.distanceFraction.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxSize())
+                            } else if (refreshing && !quietRefresh && page == visibleIndex && !pager.isScrollInProgress) {
+                                LinearProgressIndicator(Modifier.fillMaxSize())
                             }
                         }
                         ArrivalList(
