@@ -59,7 +59,6 @@ android {
         buildConfigField("String", "FEED_APPID", "\"$feedAppId\"")
         buildConfigField("boolean", "MOCK_FEED", "false")
         buildConfigField("long", "AUTO_REFRESH_MS", "25000L")
-        buildConfigField("long", "MANUAL_REFRESH_THROTTLE_MS", "8000L")
         buildConfigField("int", "HTTP_CONNECT_TIMEOUT_MS", "10000")
         buildConfigField("int", "HTTP_READ_TIMEOUT_MS", "15000")
     }

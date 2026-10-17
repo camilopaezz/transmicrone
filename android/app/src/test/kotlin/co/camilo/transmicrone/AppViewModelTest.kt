@@ -492,6 +492,53 @@ class AppViewModelTest {
     }
 
     @Test
+    fun automaticPollingLetsSlowFetchFinishAndResumesAfterwards() = vmTest {
+        val interval = BuildConfig.AUTO_REFRESH_MS
+        val feed = ScriptedFeed()
+        feed.enqueue(interval * 2 + 1_000, FetchResult.Success(listOf(arrival("E48", "Llegando")), clock.now()))
+        feed.enqueue(0, FetchResult.Success(listOf(arrival("E48", "Entre 2 y 4 min")), clock.now()))
+        val vm = viewModel(feed, MemoryBoards(listOf(leonBoard())))
+        runCurrent()
+        vm.setStarted(true)
+        runCurrent()
+
+        advanceTimeBy(interval * 2)
+        runCurrent()
+        assertEquals("Timer ticks must not replace an in-flight fetch", 1, feed.calls.size)
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertTrue(vm.state.value.boards.single().freshness is Freshness.Updated)
+        assertEquals("Llegando", vm.state.value.boards.single().arrivals.single().etaPhrase)
+
+        advanceTimeBy(interval - 1_000)
+        runCurrent()
+        assertEquals(2, feed.calls.size)
+        assertEquals("Entre 2 y 4 min", vm.state.value.boards.single().arrivals.single().etaPhrase)
+    }
+
+    @Test
+    fun automaticPollingDoesNotCancelSlowManualRefresh() = vmTest {
+        val interval = BuildConfig.AUTO_REFRESH_MS
+        val feed = ScriptedFeed()
+        feed.enqueue(0, FetchResult.Empty(clock.now()))
+        feed.enqueue(interval + 1_000, FetchResult.Success(listOf(arrival("E48", "Llegando")), clock.now()))
+        val vm = viewModel(feed, MemoryBoards(listOf(leonBoard())))
+        runCurrent()
+        vm.setStarted(true)
+        runCurrent()
+        vm.manualRefresh()
+        runCurrent()
+
+        advanceTimeBy(interval)
+        runCurrent()
+        assertEquals("The timer must leave a manual refresh running", 2, feed.calls.size)
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertTrue(vm.state.value.boards.single().freshness is Freshness.Updated)
+        assertEquals("Llegando", vm.state.value.boards.single().arrivals.single().etaPhrase)
+    }
+
+    @Test
     fun setupStopsPollingHiddenBoard() = vmTest {
         val feed = ScriptedFeed()
         val vm = viewModel(feed, MemoryBoards(listOf(leonBoard(), ricaurteBoard())))
@@ -777,11 +824,13 @@ class AppViewModelTest {
     }
 
     @Test
-    fun immediateRetryAfterManualFailureBypassesThrottleAndIgnoresInFlightTaps() = vmTest {
+    fun manualRefreshRetriesFailureAndCoalescesInFlightPulls() = vmTest {
         val feed = ScriptedFeed()
         feed.enqueue(0, FetchResult.Success(listOf(arrival("E48", "Entre 2 y 4 min")), clock.now()))
         feed.enqueue(0, FetchResult.Failure(FailureKind.TIMEOUT, null))
         feed.enqueue(1_000, FetchResult.Success(listOf(arrival("E48", "Llegando")), clock.now()))
+        feed.enqueue(0, FetchResult.Success(listOf(arrival("E48", "Actualizado")), clock.now()))
+        feed.enqueue(0, FetchResult.Empty(clock.now()))
         val vm = viewModel(feed, MemoryBoards(listOf(leonBoard())))
         runCurrent()
         vm.setStarted(true)
@@ -799,7 +848,60 @@ class AppViewModelTest {
         advanceTimeBy(1_000)
         runCurrent()
         assertTrue(vm.state.value.boards.single().freshness is Freshness.Updated)
+        assertEquals(4, feed.calls.size)
+        assertEquals("Actualizado", vm.state.value.boards.single().arrivals.single().etaPhrase)
         vm.manualRefresh()
+        runCurrent()
+        assertEquals(5, feed.calls.size)
+    }
+
+    @Test
+    fun pullDuringQuietRefreshShowsProgressAndQueuesOneRefresh() = vmTest {
+        val cache = FileArrivalsCache(File(System.getProperty("java.io.tmpdir"), "tm-pull-${System.nanoTime()}"), json)
+        cache.write(ricaurteBoard().boardId, CachedArrivals(listOf(arrival("S43", "Anterior")), clock.now()))
+        val feed = ScriptedFeed()
+        feed.enqueue(0, FetchResult.Empty(clock.now()))
+        feed.enqueue(1_000, FetchResult.Empty(clock.now()))
+        feed.enqueue(1_000, FetchResult.Success(listOf(arrival("S43", "Llegando")), clock.now()))
+        val vm = viewModel(feed, MemoryBoards(listOf(leonBoard(), ricaurteBoard())), cache)
+        runCurrent()
+        vm.setStarted(true)
+        runCurrent()
+        vm.onPage(1)
+        runCurrent()
+        assertTrue((vm.state.value.boards[1].freshness as Freshness.UpdatingCached).quiet)
+        repeat(3) { vm.manualRefresh() }
+        assertFalse((vm.state.value.boards[1].freshness as Freshness.UpdatingCached).quiet)
+        assertEquals(2, feed.calls.size)
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertEquals(3, feed.calls.size)
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertEquals("Llegando", vm.state.value.boards[1].arrivals.single().etaPhrase)
+    }
+
+    @Test
+    fun queuedManualRefreshIsDiscardedWhenSwitchingBoardsOrStopping() = vmTest {
+        val feed = ScriptedFeed()
+        feed.enqueue(10_000, FetchResult.Empty(clock.now()))
+        feed.enqueue(10_000, FetchResult.Empty(clock.now()))
+        val vm = viewModel(feed, MemoryBoards(listOf(leonBoard(), ricaurteBoard())))
+        runCurrent()
+        vm.setStarted(true)
+        runCurrent()
+        vm.manualRefresh()
+        vm.onPage(1)
+        runCurrent()
+        advanceTimeBy(10_000)
+        runCurrent()
+        assertEquals(listOf("TM0101", "TM0069"), feed.calls)
+        feed.enqueue(10_000, FetchResult.Empty(clock.now()))
+        vm.manualRefresh()
+        runCurrent()
+        vm.manualRefresh()
+        vm.setStarted(false)
+        advanceTimeBy(10_000)
         runCurrent()
         assertEquals(3, feed.calls.size)
     }
