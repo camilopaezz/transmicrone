@@ -35,6 +35,30 @@ It does not establish access from every location, full catalog correctness,
 future availability, or access to the separately hosted live arrivals feed.
 No Colombian collection host is needed based on this initial result.
 
+## One-night variation experiment
+
+`catalog-overnight.yml` collects six samples, one hour apart, on a GitHub-hosted
+runner. It starts on a push changing that workflow on the experiment branch,
+or via manual dispatch once available on the default branch. There is no daily
+schedule. The job stops after six samples and has a 330-minute overall limit.
+Each probe has a ten-minute limit; failures are recorded and later samples
+continue. The Actions job summary compares each source with its first successful
+sample. Check both the collected sample count and individual results; a completed
+experiment does not imply that every source succeeded.
+
+Reports are uploaded together as `catalog-overnight-reports` and retained for
+30 days. They include timestamps, durations, counts, errors, and SHA-256 content
+fingerprints. GIS fingerprints include all returned attributes. GIS and catalog
+search fingerprints ignore row ordering; route detail fingerprints preserve
+array order. GTFS fingerprints cover the downloaded archive bytes, so a changed
+ZIP alone does not prove the underlying transit records changed. Route details
+sample only three variants, not the whole network.
+
+This temporary experiment keeps one hosted runner waiting between samples so
+it can run from the branch without merging a recurring workflow into main.
+It does not depend on the local PC. A production schedule should use separate
+scheduled jobs instead of retaining a runner between samples.
+
 ## Next steps
 
 Run the full builder on hosted infrastructure, then add completeness and change

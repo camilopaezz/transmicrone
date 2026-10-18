@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import io
 import json
 import time
@@ -13,6 +14,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import build_catalog as catalog
+
+
+def fingerprint(value: object, unordered: bool = False) -> str:
+    """Ignore object key order, and optionally row order, when comparing data."""
+    if unordered:
+        value = sorted(value, key=lambda row: json.dumps(row, sort_keys=True, ensure_ascii=False))
+    raw = json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()
+    return hashlib.sha256(raw).hexdigest()
 
 
 def probe_gtfs() -> dict:
@@ -36,14 +45,14 @@ def probe_gtfs() -> dict:
                 if not first or not first.get(required):
                     raise ValueError(f"{name} has no usable first row")
                 rows[name] = first if name == "feed_info.txt" else "first row valid"
-    return {"url": url, "bytes": len(raw), "metadata": metadata, "files": rows}
+    return {"url": url, "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest(), "metadata": metadata, "files": rows}
 
 
 def probe_gis(layer: str, required: str) -> dict:
-    rows = catalog.gis_query_all(layer, required)
+    rows = catalog.gis_query_all(layer, "*")
     if not rows or not any(row.get(required) is not None for row in rows):
         raise ValueError(f"No usable GIS rows for {required}")
-    return {"url": layer, "rows": len(rows)}
+    return {"url": layer, "rows": len(rows), "sha256": fingerprint(rows, unordered=True)}
 
 
 def main() -> int:
@@ -80,7 +89,7 @@ def main() -> int:
         hours = catalog.service_operating_hours(routes, datetime.now(timezone.utc).isoformat())
         if not hours:
             raise ValueError("Catalog search has no operating hours")
-        return {"rows": len(routes), "hours": len(hours)}
+        return {"rows": len(routes), "hours": len(hours), "sha256": fingerprint(routes, unordered=True)}
 
     check("catalog-search", search)
     # A small deterministic sample tests the detail endpoint without a network-wide crawl.
@@ -91,7 +100,7 @@ def main() -> int:
             stops = catalog.info_route_stops(info)
             if not stops:
                 raise ValueError("Route detail returned no stops")
-            return {"catalog_id": row["id"], "code": row["codigo"], "stops": len(stops)}
+            return {"catalog_id": row["id"], "code": row["codigo"], "stops": len(stops), "sha256": fingerprint(info)}
         check(f"catalog-detail-{row['id']}", detail)
         time.sleep(0.2)
 

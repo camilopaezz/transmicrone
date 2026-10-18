@@ -1,0 +1,91 @@
+name: Catalog overnight experiment
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [t3/catalog-over-the-air-updates]
+    paths: [.github/workflows/catalog-overnight.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-overnight-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sample:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Collect six hourly samples, continuing after source failures
+        env:
+          REPORT_DIR: ${{ runner.temp }}/catalog-overnight
+        run: |
+          python3 -u - <<'PY'
+          import json, os, subprocess, time
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          directory = Path(os.environ['REPORT_DIR'])
+          directory.mkdir(parents=True, exist_ok=True)
+          start = time.monotonic()
+          for sample in range(6):
+              delay = max(0, start + sample * 3600 - time.monotonic())
+              print(f'Sample {sample + 1}/6: waiting {delay:.0f}s', flush=True)
+              time.sleep(delay)
+              output = directory / f'sample-{sample + 1:02d}.json'
+              try:
+                  result = subprocess.run(
+                      ['python3', '-u', 'tools/probe_catalog_sources.py', '--out', str(output)],
+                      timeout=600, check=False,
+                  )
+                  if not output.exists():
+                      raise RuntimeError(f'Probe exited {result.returncode} without a report')
+              except (subprocess.TimeoutExpired, RuntimeError) as error:
+                  output.write_text(json.dumps({
+                      'checked_at': datetime.now(timezone.utc).isoformat(),
+                      'ok': False, 'error': str(error), 'results': [],
+                  }, indent=2) + '\n')
+          PY
+      - name: Summarize variation
+        if: always()
+        env:
+          REPORT_DIR: ${{ runner.temp }}/catalog-overnight
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          reports = sorted(Path(os.environ['REPORT_DIR']).glob('sample-*.json'))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('## Overnight catalog samples\n\n')
+              summary.write(f'{len(reports)}/6 reports collected. Times are UTC.\n\n')
+              baseline = {}
+              for path in reports:
+                  report = json.loads(path.read_text())
+                  status = 'PASS' if report['ok'] else 'FAIL'
+                  summary.write(f"### {path.stem}: {status}, {report['checked_at']}\n\n")
+                  if report.get('error'):
+                      summary.write(report['error'] + '\n\n')
+                  for result in report['results']:
+                      if not result['ok']:
+                          summary.write(f"- {result['name']}: FAIL, {result['error']}\n")
+                          continue
+                      details = result['details']
+                      digest = details.get('sha256')
+                      previous = baseline.get(result['name'])
+                      variation = 'first success' if previous is None else ('unchanged' if digest == previous else 'CHANGED from first success')
+                      baseline.setdefault(result['name'], digest)
+                      count = details.get('rows', details.get('stops', details.get('bytes')))
+                      summary.write(f"- {result['name']}: {count}, {result['seconds']}s, {variation}\n")
+                  summary.write('\n')
+          PY
+      - name: Upload every sample report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: catalog-overnight-reports
+          path: ${{ runner.temp }}/catalog-overnight/
+          if-no-files-found: warn
+          retention-days: 30
