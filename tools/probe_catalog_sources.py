@@ -10,10 +10,53 @@ import io
 import json
 import time
 import zipfile
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 import build_catalog as catalog
+
+
+class ResponseCapture:
+    """Persist response bytes before parsing, including HTTP error bodies."""
+
+    def __init__(self, directory: Path):
+        self.directory = directory
+        self.directory.mkdir(parents=True, exist_ok=True)
+        self.sequence = 0
+
+    def http_bytes(self, url: str, timeout: float = 120) -> bytes:
+        self.sequence += 1
+        stem = f"response-{self.sequence:04d}"
+        metadata = {"url": url, "requested_at": datetime.now(timezone.utc).isoformat()}
+        try:
+            request = urllib.request.Request(url, headers={"User-Agent": catalog.UA})
+            http_error = None
+            try:
+                response = urllib.request.urlopen(request, timeout=timeout)
+            except urllib.error.HTTPError as error:
+                response = error
+                http_error = error
+            with response:
+                metadata.update(status=response.status, headers=dict(response.headers))
+                raw = response.read()
+            (self.directory / f"{stem}.body").write_bytes(raw)
+            metadata.update(body=f"{stem}.body", bytes=len(raw), sha256=hashlib.sha256(raw).hexdigest())
+            if http_error is not None:
+                raise http_error
+            return raw
+        except Exception as error:
+            metadata["error"] = str(error)
+            raise
+        finally:
+            (self.directory / f"{stem}.json").write_text(
+                json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+            )
+
+    def http_json(self, url: str, timeout: float = 30) -> object:
+        return json.loads(self.http_bytes(url, timeout).decode())
 
 
 def fingerprint(value: object, unordered: bool = False) -> str:
@@ -59,6 +102,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
+    capture = ResponseCapture(args.out.with_suffix(".responses"))
+    with patch.object(catalog, "http_bytes", capture.http_bytes), patch.object(catalog, "http_json", capture.http_json):
+        return run_probe(args.out)
+
+
+def run_probe(output: Path) -> int:
     results = []
 
     def check(name, operation):
@@ -110,8 +159,9 @@ def main() -> int:
         "ok": all(result["ok"] for result in results),
         "results": results,
     }
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    report["responses"] = output.with_suffix(".responses").name
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return 0 if report["ok"] else 1
 
 

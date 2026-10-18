@@ -2,9 +2,6 @@ name: Catalog overnight experiment
 
 on:
   workflow_dispatch:
-  push:
-    branches: [t3/catalog-over-the-air-updates]
-    paths: [.github/workflows/catalog-overnight.yml]
 
 permissions:
   contents: read

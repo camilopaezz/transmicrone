@@ -10,7 +10,12 @@ The probe downloads the discovered GTFS archive and checks headers and a first
 row in each file consumed by the builder. It reads all pages of the three GIS
 layers, checks the catalog list and operating hours, and requests three route
 details. Each check reports independently; any failure fails the job. The JSON
-report is retained as a workflow artifact for 14 days, with a job summary.
+report and response bodies are retained as a workflow artifact for 30 days,
+with a job summary. Each probe writes a sibling `.responses` directory containing
+the original GET response bytes and a metadata file per request with URL,
+timestamp, status, headers, and checksum. Bodies are saved before JSON or ZIP
+validation, including HTTP error responses. Connection failures have metadata
+but no response body. Discovery HEAD requests are not captured.
 
 Run it from Actions using **Catalog source probe → Run workflow** once the
 workflow is on the default branch. During the initial experiment, pushes that
@@ -38,21 +43,27 @@ No Colombian collection host is needed based on this initial result.
 ## One-night variation experiment
 
 `catalog-overnight.yml` collects six samples, one hour apart, on a GitHub-hosted
-runner. It starts on a push changing that workflow on the experiment branch,
-or via manual dispatch once available on the default branch. There is no daily
+runner. It can be started via manual dispatch once available on the default
+branch. The initial experiment used a branch push trigger, which has now been
+removed to avoid restarting it while fixing the workflow. There is no daily
 schedule. The job stops after six samples and has a 330-minute overall limit.
 Each probe has a ten-minute limit; failures are recorded and later samples
 continue. The Actions job summary compares each source with its first successful
 sample. Check both the collected sample count and individual results; a completed
 experiment does not imply that every source succeeded.
 
-Reports are uploaded together as `catalog-overnight-reports` and retained for
+Reports and their sibling response directories are uploaded together as
+`catalog-overnight-reports` and retained for
 30 days. They include timestamps, durations, counts, errors, and SHA-256 content
 fingerprints. GIS fingerprints include all returned attributes. GIS and catalog
 search fingerprints ignore row ordering; route detail fingerprints preserve
 array order. GTFS fingerprints cover the downloaded archive bytes, so a changed
 ZIP alone does not prove the underlying transit records changed. Route details
 sample only three variants, not the whole network.
+
+The first overnight experiment retained only reports and fingerprints. It did
+not retain response bodies, so the two changed route-detail responses cannot be
+compared retrospectively. Response capture was added after that experiment.
 
 This temporary experiment keeps one hosted runner waiting between samples so
 it can run from the branch without merging a recurring workflow into main.
