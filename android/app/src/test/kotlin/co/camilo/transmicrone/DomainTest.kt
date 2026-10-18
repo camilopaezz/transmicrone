@@ -1,5 +1,7 @@
 package co.camilo.transmicrone
 
+import kotlinx.coroutines.flow.last
+
 import co.camilo.transmicrone.data.ArrivalsRepository
 import co.camilo.transmicrone.data.catalog.JsonCatalogRepository
 import co.camilo.transmicrone.data.feed.ArrivalsParser
@@ -137,13 +139,13 @@ class DomainTest {
             disambiguator = "Soacha",
             servicios = listOf(SelectedServicio("E48", "CAD", listOf(13266))),
         )
-        val ok = repo.refresh(board) as FetchResult.Success
+        val ok = repo.refreshUpdates(board).last()
         assertEquals("E48", ok.arrivals.single().painted)
         next = FetchResult.Failure(FailureKind.HOST_REJECTED, null)
-        val failed = repo.refresh(board) as FetchResult.Failure
-        assertEquals(FailureKind.HOST_REJECTED, failed.kind)
+        val failed = repo.refreshUpdates(board).last().services.single()
+        assertEquals(co.camilo.transmicrone.domain.ServiceStatus.Failed(FailureKind.HOST_REJECTED), failed.status)
         assertEquals("E48", failed.cached!!.arrivals.single().painted)
-        assertEquals(ok.fetchedAt, failed.cached!!.fetchedAt)
+        assertEquals(ok.cache()!!.fetchedAt, failed.cached!!.fetchedAt)
     }
 
     @Test

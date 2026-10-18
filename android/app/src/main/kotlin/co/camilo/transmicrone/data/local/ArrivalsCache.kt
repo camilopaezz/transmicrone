@@ -1,9 +1,6 @@
 package co.camilo.transmicrone.data.local
 
-import co.camilo.transmicrone.domain.Arrival
-import co.camilo.transmicrone.domain.ArrivalIdentity
-import co.camilo.transmicrone.domain.CachedArrivals
-import co.camilo.transmicrone.domain.Occupancy
+import co.camilo.transmicrone.domain.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -33,6 +30,11 @@ class FileArrivalsCache(
             CachedArrivals(
                 arrivals = stored.arrivals.map { it.toArrival() },
                 fetchedAt = Instant.ofEpochMilli(stored.fetchedAtEpochMs),
+                queryScope = stored.queryScope,
+                services = stored.services.map { service -> CachedService(
+                    ServiceKey(service.painted, service.destino, service.routeIds),
+                    service.arrivals.map { it.toArrival() }, Instant.ofEpochMilli(service.fetchedAtEpochMs),
+                ) },
             )
         }.getOrNull()
     }
@@ -42,8 +44,18 @@ class FileArrivalsCache(
         val stored = StoredCache(
             fetchedAtEpochMs = cached.fetchedAt.toEpochMilli(),
             arrivals = cached.arrivals.map { it.toStored() },
+            queryScope = cached.queryScope,
+            services = cached.services.map { service -> StoredService(
+                service.key.painted, service.key.destino, service.key.routeIds,
+                service.fetchedAt.toEpochMilli(), service.arrivals.map { it.toStored() },
+            ) },
         )
-        file.writeText(json.encodeToString(StoredCache.serializer(), stored))
+        val temporary = File.createTempFile("arrivals-", ".tmp", dir)
+        try {
+            temporary.writeText(json.encodeToString(StoredCache.serializer(), stored))
+            java.nio.file.Files.move(temporary.toPath(), file.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE)
+        } finally { temporary.delete() }
     }
 
     override fun remove(boardId: String) {
@@ -60,6 +72,17 @@ class FileArrivalsCache(
 private data class StoredCache(
     val fetchedAtEpochMs: Long,
     val arrivals: List<StoredArrival> = emptyList(),
+    val queryScope: String? = null,
+    val services: List<StoredService> = emptyList(),
+)
+
+@Serializable
+private data class StoredService(
+    val painted: String,
+    val destino: String,
+    val routeIds: List<Int>,
+    val fetchedAtEpochMs: Long,
+    val arrivals: List<StoredArrival>,
 )
 
 @Serializable
