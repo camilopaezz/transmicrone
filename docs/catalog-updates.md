@@ -79,6 +79,51 @@ it can run from the branch without merging a recurring workflow into main.
 It does not depend on the local PC. A production schedule should use separate
 scheduled jobs instead of retaining a runner between samples.
 
+## October 18 morning-to-noon results
+
+The [collection run](https://github.com/camilopaezz/transmicrone/actions/runs/39133571125)
+completed successfully. All five planned samples were present, collected at
+08:54, 09:00, 10:00, 11:00, and 12:00 Bogotá time. All 40 source checks passed.
+The one-time follow-up schedule was disabled after triggering.
+
+The [comparison run](https://github.com/camilopaezz/transmicrone/actions/runs/39150416099)
+downloaded the full artifact and verified all 55 response bodies against their
+recorded sizes and SHA-256 checksums. Every captured request returned HTTP 200.
+Each sample contains the GTFS archive, six GIS page responses, the catalog
+search response, and three route-detail responses. No planned samples or
+captured response bodies were missing.
+
+Every response body was byte-for-byte identical to the corresponding first
+sample. Parsed JSON comparison also found no changes, including no changes
+attributable only to object-key or GIS/search row ordering:
+
+- GIS station attributes: 152 records, unchanged.
+- GIS stop attributes: 7,610 records, unchanged across all four pages.
+- GIS service attributes: 693 records, unchanged.
+- Catalog variants and published hours: 1,247 records each, unchanged.
+- Complete sampled route-detail responses for `1` / `17-3`, `10` / `D237`,
+  and `1003` / `K627`: unchanged, including ordered stops of 24, 61, and 60.
+- `GTFS_20261018.zip`: 185,617,644 bytes in every sample, SHA-256
+  `a6eb71b50dce1f31fe7f1a6368d4ff6041358a4bdf55f70be9d65a6d9f169c53`.
+  Since the archive bytes did not change, there is no inter-sample archive
+  member or transit-record change to investigate in this collection window.
+
+The [machine-readable comparison](experiments/2026-10-18/noon-comparison.json)
+is checked in alongside its [verification script](experiments/2026-10-18/compare_noon.py).
+Run the script with the extracted collection artifact directory and an output
+JSON path as its two arguments. The full original responses remain in the
+collection artifact for its configured 30-day retention period. The comparison
+artifact is retained for 30 days as `catalog-noon-comparison`.
+
+This supports using hosted runners for collection and skipping publication when
+the catalog's meaningful content is unchanged. It does not establish long-term
+availability, full-network route-detail stability, or agreement between sources.
+Only three route details were sampled, and the window contains no observed
+network changes. The earlier overnight route-detail changes remain unexplained
+because their earlier bodies were not retained. Publication validation still
+needs source freshness, identity and join checks, completeness checks, and
+confirmation of removals. Fetch success alone must not approve publication.
+
 ## Next steps
 
 Run the full builder on hosted infrastructure, then add completeness and change
