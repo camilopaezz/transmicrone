@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>Transmicrone</title>
+  <rect width="256" height="256" rx="56" fill="#B92F3F"/>
+  <g transform="translate(35.84 35.84) scale(.72)">
+    <path d="M192 86a77 77 0 1 0 12 62" fill="none" stroke="#FFF3DF" stroke-width="13" stroke-linecap="round"/>
+    <path d="M185 86a13 13 0 1 0 26 0a13 13 0 1 0-26 0" fill="#FFD36B"/>
+    <path d="M112 87h32q19 0 19 19v54q0 19-19 19h-32q-19 0-19-19v-54q0-19 19-19Z" fill="#FFF3DF"/>
+    <path d="M112 100h32q9 0 9 9v16q0 9-9 9h-32q-9 0-9-9v-16q0-9 9-9Z" fill="#B92F3F"/>
+    <path d="M107 154h5m32 0h5" fill="none" stroke="#B92F3F" stroke-width="9" stroke-linecap="round"/>
+    <path d="M107 177v8m42-8v8" fill="none" stroke="#FFF3DF" stroke-width="10" stroke-linecap="round"/>
+  </g>
+</svg>
