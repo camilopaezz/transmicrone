@@ -1,7 +1,15 @@
-name: Catalog overnight experiment
+name: Catalog sampling experiment
 
 on:
   workflow_dispatch:
+    inputs:
+      until:
+        description: Last sample time, ISO 8601 with UTC offset
+        default: '2026-10-18T12:00:00-05:00'
+        required: true
+  push:
+    branches: [t3/catalog-over-the-air-updates]
+    paths: [.github/workflows/catalog-overnight.yml]
 
 permissions:
   contents: read
@@ -13,24 +21,41 @@ concurrency:
 jobs:
   sample:
     runs-on: ubuntu-24.04
-    timeout-minutes: 330
+    timeout-minutes: 240
+    env:
+      PROBE_UNTIL: ${{ inputs.until || '2026-10-18T12:00:00-05:00' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Collect six hourly samples, continuing after source failures
+      - name: Collect samples through the deadline, continuing after source failures
         env:
           REPORT_DIR: ${{ runner.temp }}/catalog-overnight
         run: |
           python3 -u - <<'PY'
           import json, os, subprocess, time
-          from datetime import datetime, timezone
+          from datetime import datetime, timedelta, timezone
           from pathlib import Path
 
           directory = Path(os.environ['REPORT_DIR'])
           directory.mkdir(parents=True, exist_ok=True)
-          start = time.monotonic()
-          for sample in range(6):
-              delay = max(0, start + sample * 3600 - time.monotonic())
-              print(f'Sample {sample + 1}/6: waiting {delay:.0f}s', flush=True)
+          now = datetime.now(timezone.utc)
+          deadline = datetime.fromisoformat(os.environ['PROBE_UNTIL'])
+          if deadline.tzinfo is None or not 0 < (deadline - now).total_seconds() <= 3.5 * 3600:
+              raise SystemExit('Deadline must be timezone-aware, in the future, and within 3.5 hours')
+          targets = [now]
+          target = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+          while target <= deadline:
+              targets.append(target)
+              target += timedelta(hours=1)
+          if targets[-1] != deadline:
+              targets.append(deadline)
+          (directory / 'plan.json').write_text(json.dumps({
+              'targets': [target.isoformat() for target in targets],
+              'deadline': deadline.isoformat(),
+          }, indent=2) + '\n')
+          print('Sample times: ' + ', '.join(target.isoformat() for target in targets), flush=True)
+          for sample, target in enumerate(targets):
+              delay = max(0, (target - datetime.now(timezone.utc)).total_seconds())
+              print(f'Sample {sample + 1}/{len(targets)}: waiting {delay:.0f}s', flush=True)
               time.sleep(delay)
               output = directory / f'sample-{sample + 1:02d}.json'
               try:
@@ -56,8 +81,10 @@ jobs:
           from pathlib import Path
           reports = sorted(Path(os.environ['REPORT_DIR']).glob('sample-*.json'))
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
-              summary.write('## Overnight catalog samples\n\n')
-              summary.write(f'{len(reports)}/6 reports collected. Times are UTC.\n\n')
+              summary.write('## Catalog samples\n\n')
+              plan_path = Path(os.environ['REPORT_DIR']) / 'plan.json'
+              expected = len(json.loads(plan_path.read_text())['targets']) if plan_path.exists() else '?'
+              summary.write(f'{len(reports)}/{expected} reports collected. Times are UTC.\n\n')
               baseline = {}
               for path in reports:
                   report = json.loads(path.read_text())

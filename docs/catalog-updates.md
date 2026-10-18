@@ -42,11 +42,13 @@ No Colombian collection host is needed based on this initial result.
 
 ## One-night variation experiment
 
-`catalog-overnight.yml` collects six samples, one hour apart, on a GitHub-hosted
-runner. It can be started via manual dispatch once available on the default
-branch. The initial experiment used a branch push trigger, which has now been
-removed to avoid restarting it while fixing the workflow. There is no daily
-schedule. The job stops after six samples and has a 330-minute overall limit.
+`catalog-overnight.yml` initially collected six hourly overnight samples on a
+GitHub-hosted runner. The follow-up experiment on October 18 collects a sample
+immediately, then at each whole hour through noon Bogotá time, including noon.
+It uses a fixed deadline of `2026-10-18T12:00:00-05:00` for its branch push
+trigger. Manual dispatch accepts an explicit deadline within 3.5 hours.
+There is no daily schedule. The job stops after its last sample and has a
+240-minute overall limit. `plan.json` records all intended sample times.
 Each probe has a ten-minute limit; failures are recorded and later samples
 continue. The Actions job summary compares each source with its first successful
 sample. Check both the collected sample count and individual results; a completed
