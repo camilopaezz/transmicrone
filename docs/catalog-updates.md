@@ -64,6 +64,13 @@ sample only three variants, not the whole network.
 The first overnight experiment retained only reports and fingerprints. It did
 not retain response bodies, so the two changed route-detail responses cannot be
 compared retrospectively. Response capture was added after that experiment.
+The [capture verification run](https://github.com/camilopaezz/transmicrone/actions/runs/39133334129)
+successfully uploaded 23 files including response bodies and request metadata.
+Both dated GTFS archives were subsequently
+[recovered and retained](https://github.com/camilopaezz/transmicrone/actions/runs/39133408272)
+with SHA-256 checksums exactly matching the overnight reports. These recovered
+archives are available in `recovered-overnight-gtfs` for 30 days. The dedicated
+`catalog-recover-gtfs.yml` workflow verifies those recorded checksums when rerun.
 
 This temporary experiment keeps one hosted runner waiting between samples so
 it can run from the branch without merging a recurring workflow into main.
