@@ -3,7 +3,8 @@ package co.camilo.transmicrone
 import co.camilo.transmicrone.data.feed.ArrivalsParser
 import co.camilo.transmicrone.data.feed.BodegaFeedClient
 import co.camilo.transmicrone.domain.*
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
 import kotlinx.serialization.json.*
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -40,6 +41,57 @@ class VehicleArrivalsTest {
             assertEquals(4, server.requestCount)
             assertFalse("All four requests must reach the host before it releases any response", blockedByCap.get())
         } finally {
+            http.connectionPool.evictAll()
+            server.shutdown()
+        }
+    }
+
+    @Test
+    fun fastServicePublishesBeforeSlowVariantAndVariantFailureRemainsServiceAtomic() = runBlocking {
+        val release = java.util.concurrent.CountDownLatch(1)
+        val blocked = java.util.concurrent.CountDownLatch(1)
+        val server = MockWebServer()
+        val fixture = javaClass.classLoader!!.getResource("nearby-S43.json")!!.readText()
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                val query = json.parseToJsonElement(request.body.readUtf8()).jsonObject
+                return if (query["ruta"]!!.jsonPrimitive.content == "S48") {
+                    MockResponse().setBody("""[{"vehicleid":42,"ruta_sae":13267,"ruta_extraida":"S48","destino_limpio":"San Mateo","labeltiempo":"Entre 2 y 4 min"}]""")
+                } else if (query["idRuta"]!!.jsonPrimitive.int == 13279) {
+                    blocked.countDown()
+                    release.await(5, java.util.concurrent.TimeUnit.SECONDS)
+                    MockResponse().setResponseCode(403)
+                } else MockResponse().setBody(fixture)
+            }
+        }
+        server.start()
+        val http = BodegaFeedClient.httpClient(2000, 6000)
+        val first = CompletableDeferred<ServiceFetchResult>()
+        val seen = mutableListOf<ServiceFetchResult>()
+        val services = listOf(board.servicios.single().copy(routeIds = listOf(13277, 13278, 13279)),
+            SelectedServicio("S48", "San Mateo", listOf(13267)))
+        try {
+            val client = BodegaFeedClient(server.url("/").toString(), "test-appid", "test-installation",
+                ArrivalsParser(json), Clock { now }, http)
+            val job = launch {
+                client.updates(board.copy(servicios = services)).collect {
+                    seen.add(it)
+                    first.complete(it)
+                }
+            }
+            val ready = withTimeout(4000) { first.await() }
+            assertEquals(services[1].serviceKey(), ready.key)
+            assertTrue(ready.result is FetchResult.Success)
+            assertTrue(blocked.await(1, java.util.concurrent.TimeUnit.SECONDS))
+            assertEquals("No partial S43 result may be published before its last variant", 1, seen.size)
+            release.countDown()
+            withTimeout(4000) { job.join() }
+            assertEquals(4, server.requestCount)
+            assertEquals(2, seen.size)
+            assertEquals(services[0].serviceKey(), seen.last().key)
+            assertEquals(FailureKind.HOST_REJECTED, (seen.last().result as FetchResult.Failure).kind)
+        } finally {
+            release.countDown()
             http.connectionPool.evictAll()
             server.shutdown()
         }
@@ -110,7 +162,7 @@ class VehicleArrivalsTest {
                 ArrivalsParser(json), Clock { now }, BodegaFeedClient.httpClient(2000, 2000))
             val repository = co.camilo.transmicrone.data.ArrivalsRepository(client,
                 co.camilo.transmicrone.data.local.FileArrivalsCache(dir, json))
-            val result = repository.refresh(stop) as FetchResult.Success
+            val result = repository.refreshUpdates(stop).last()
             assertEquals(1, result.arrivals.size)
             assertEquals("Z63", result.arrivals.single().painted)
             assertEquals("/paradero/buses", server.takeRequest().path)
@@ -213,6 +265,64 @@ class VehicleArrivalsTest {
             assertEquals(1, server.requestCount)
             assertEquals("/getServicios", server.takeRequest().path)
         } finally { server.shutdown() }
+    }
+
+    @Test
+    fun callTimeoutEmitsFailureForItsServiceWhileOtherServiceFinishes() = runBlocking {
+        val server = MockWebServer()
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                val query = json.parseToJsonElement(request.body.readUtf8()).jsonObject
+                return if (query["ruta"]!!.jsonPrimitive.content == "S43") {
+                    MockResponse().setHeadersDelay(1000, java.util.concurrent.TimeUnit.MILLISECONDS).setBody("[]")
+                } else MockResponse().setHeadersDelay(400, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    .setBody("""[{"vehicleid":42,"ruta_sae":13267,"ruta_extraida":"S48","destino_limpio":"San Mateo"}]""")
+            }
+        }
+        server.start()
+        val base = BodegaFeedClient.httpClient(1000, 5000)
+        val http = object : okhttp3.OkHttpClient() {
+            override fun newCall(request: okhttp3.Request): okhttp3.Call {
+                val buffer = okio.Buffer()
+                request.body!!.writeTo(buffer)
+                val code = json.parseToJsonElement(buffer.readUtf8()).jsonObject["ruta"]!!.jsonPrimitive.content
+                return base.newCall(request).also {
+                    it.timeout().timeout(if (code == "S43") 100 else 2000, java.util.concurrent.TimeUnit.MILLISECONDS)
+                }
+            }
+        }
+        try {
+            val client = BodegaFeedClient(server.url("/").toString(), "test-appid", "test-installation",
+                ArrivalsParser(json), Clock { now }, http)
+            val services = listOf(board.servicios.single(), SelectedServicio("S48", "San Mateo", listOf(13267)))
+            val results = withTimeout(4000) { client.updates(board.copy(servicios = services)).toList() }
+            assertEquals("Every selected service must finish, including the call that OkHttp cancels on timeout", 2, results.size)
+            assertEquals(FailureKind.TIMEOUT,
+                (results.single { it.key == services[0].serviceKey() }.result as FetchResult.Failure).kind)
+            assertTrue(results.single { it.key == services[1].serviceKey() }.result is FetchResult.Success)
+        } finally {
+            base.connectionPool.evictAll()
+            base.dispatcher.executorService.shutdown()
+            server.shutdown()
+        }
+    }
+
+    @Test
+    fun brokenVehicleBodyMustFailInsteadOfClearingServiceAsEmpty() = runBlocking {
+        val server = MockWebServer()
+        server.enqueue(MockResponse().setBody(javaClass.classLoader!!.getResource("nearby-S43.json")!!.readText())
+            .setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.DISCONNECT_DURING_RESPONSE_BODY))
+        server.start()
+        val http = BodegaFeedClient.httpClient(1000, 1000)
+        try {
+            val client = BodegaFeedClient(server.url("/").toString(), "test-appid", "test-installation",
+                ArrivalsParser(json), Clock { now }, http)
+            val result = client.fetchArrivals(board)
+            assertTrue("An interrupted response body is a failed service, never an empty success", result is FetchResult.Failure)
+        } finally {
+            http.connectionPool.evictAll()
+            server.shutdown()
+        }
     }
 
     @Test

@@ -68,7 +68,54 @@ data class Arrival(
 data class CachedArrivals(
     val arrivals: List<Arrival>,
     val fetchedAt: Instant,
+    val services: List<CachedService> = emptyList(),
+    val queryScope: String? = null,
 )
+
+/** Saved selection identity, including its variant set, never a guessed live direction. */
+data class ServiceKey(val painted: String, val destino: String, val routeIds: List<Int>)
+
+fun SelectedServicio.serviceKey() = ServiceKey(painted, TextNorm.nfc(destino), routeIds.distinct().sorted())
+fun Board.queryScope() = "${kind.name}:${Paradero.normalize(queryParadero) ?: queryParadero}"
+
+data class CachedService(val key: ServiceKey, val arrivals: List<Arrival>, val fetchedAt: Instant)
+data class ServiceFetchResult(val key: ServiceKey, val result: FetchResult)
+
+sealed interface ServiceStatus {
+    data object Idle : ServiceStatus
+    data object CachedEmpty : ServiceStatus
+    data object Cached : ServiceStatus
+    data object Pending : ServiceStatus
+    data object Updated : ServiceStatus
+    data object Empty : ServiceStatus
+    data class Failed(val kind: FailureKind) : ServiceStatus
+    data object Unsupported : ServiceStatus
+}
+
+fun CachedService?.restoredStatus(): ServiceStatus = when {
+    this == null -> ServiceStatus.Idle
+    arrivals.isEmpty() -> ServiceStatus.CachedEmpty
+    else -> ServiceStatus.Cached
+}
+
+data class ServiceArrivals(
+    val selection: SelectedServicio,
+    val cached: CachedService?,
+    val status: ServiceStatus,
+) {
+    val arrivals: List<Arrival> get() = cached?.arrivals.orEmpty()
+}
+
+data class BoardArrivals(val services: List<ServiceArrivals>, val queryScope: String) {
+    val arrivals: List<Arrival> get() = ArrivalReducer.prepare(
+        services.flatMap { it.arrivals }, services.map { it.selection },
+    )
+    val pending: Boolean get() = services.any { it.status == ServiceStatus.Pending }
+    fun cache(): CachedArrivals? {
+        val saved = services.mapNotNull { it.cached }
+        return saved.minOfOrNull { it.fetchedAt }?.let { CachedArrivals(arrivals, it, saved, queryScope) }
+    }
+}
 
 sealed class FetchResult {
     data class Success(val arrivals: List<Arrival>, val fetchedAt: Instant) : FetchResult()
