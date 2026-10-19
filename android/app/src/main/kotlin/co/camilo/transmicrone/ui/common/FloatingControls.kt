@@ -24,6 +24,11 @@ internal fun Modifier.floatingHeaderPadding(): Modifier =
     fillMaxWidth().windowInsetsPadding(LocalFloatingInsets.current.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
         .padding(start = 20.dp, top = 16.dp, end = 20.dp, bottom = 4.dp)
 
+@Composable
+internal fun Modifier.floatingHorizontalPadding(): Modifier =
+    fillMaxWidth().windowInsetsPadding(LocalFloatingInsets.current.only(WindowInsetsSides.Horizontal))
+        .padding(horizontal = 20.dp)
+
 private val LocalBackdrop = compositionLocalOf<HazeState?> { null }
 
 /** Captures only screen content, keeping the navigation controls out of the blur source. */
@@ -34,10 +39,10 @@ internal fun FloatingScaffold(
     snackbarHost: @Composable () -> Unit = {},
     floatingActionButton: @Composable () -> Unit = {},
     floatingActionButtonPosition: FabPosition = FabPosition.End,
+    backdrop: HazeState = rememberHazeState(),
     contentWindowInsets: WindowInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout),
     content: @Composable (PaddingValues) -> Unit,
 ) {
-    val backdrop = rememberHazeState()
     val statusHeight = contentWindowInsets.asPaddingValues().calculateTopPadding()
     CompositionLocalProvider(LocalBackdrop provides backdrop, LocalFloatingInsets provides contentWindowInsets) {
         Scaffold(
@@ -65,12 +70,13 @@ internal fun FloatingControlSurface(
     modifier: Modifier = Modifier,
     shape: Shape = CircleShape,
     blurred: Boolean = true,
+    backdrop: HazeState? = LocalBackdrop.current,
     content: @Composable () -> Unit,
 ) {
-    val backdrop = if (blurred) LocalBackdrop.current else null
+    val source = if (blurred) backdrop else null
     val colors = MaterialTheme.colorScheme
-    val effect = if (backdrop != null) Modifier.clip(shape).hazeEffect(
-        state = backdrop,
+    val effect = if (source != null) Modifier.clip(shape).hazeEffect(
+        state = source,
         style = HazeStyle(
             backgroundColor = colors.surface,
             tint = HazeTint(colors.surfaceContainerHigh.copy(alpha = .60f)),
@@ -82,7 +88,7 @@ internal fun FloatingControlSurface(
     Surface(
         modifier = modifier.then(effect),
         shape = shape,
-        color = if (backdrop != null) Color.Transparent else colors.surfaceContainerHigh,
+        color = if (source != null) Color.Transparent else colors.surfaceContainerHigh,
         contentColor = colors.onSurface,
         border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .30f)),
         content = content,

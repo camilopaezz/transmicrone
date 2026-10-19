@@ -61,6 +61,21 @@ class AdaptiveLayoutTest {
         compose.onNodeWithText("No hay servicios acercándose de los que elegiste.").assertIsDisplayed()
     }
 
+    @Test fun pinnedSavePanelOverlaysTheListAndLastServiceCanClearIt() {
+        val services = List(30) { ServicioOption("Z$it", "Destino $it", listOf(it), null) }
+        compose.setContent { TransmicroneTheme {
+            SetupScreen("", emptyList(), place.copy(servicios = services), emptySet(), true, false,
+                {}, {}, {}, {}, {})
+        } }
+        val list = compose.onNode(hasScrollAction()).fetchSemanticsNode().boundsInRoot
+        val save = compose.onNodeWithText("Guardar tablero").fetchSemanticsNode().boundsInRoot
+        assertTrue("The list must extend behind the floating save panel", list.bottom > save.bottom)
+        compose.onNode(hasScrollAction()).performScrollToIndex(33)
+        val last = compose.onNodeWithText("Z29").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val status = compose.onNodeWithText("Elige al menos un servicio.").fetchSemanticsNode().boundsInRoot
+        assertTrue("The final service must scroll above the panel", last.bottom < status.top)
+    }
+
     @Test fun shortEditorKeepsNameAndSaveReachableAtDoubleFont() {
         var saved = false
         compose.setContent {

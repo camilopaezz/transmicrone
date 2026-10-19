@@ -1,6 +1,7 @@
 package co.camilo.transmicrone.ui.setup
 
 import co.camilo.transmicrone.ui.common.FloatingScaffold
+import co.camilo.transmicrone.ui.common.FloatingSearchHeader
 import co.camilo.transmicrone.ui.common.FloatingScreenHeader
 import co.camilo.transmicrone.ui.common.FloatingActionPanel
 import co.camilo.transmicrone.ui.common.LocalScreenEntered
@@ -26,9 +27,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
@@ -79,11 +78,13 @@ fun SetupScreen(
                         stringResource(R.string.setup_save_failed),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                     )
                     Text(
                         if (selected.isEmpty()) stringResource(R.string.need_servicio)
                         else pluralStringResource(R.plurals.setup_selected_services, selected.size, selected.size),
                         style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                     )
                     Button(onClick = { keyboard?.hide(); onSave() }, enabled = selected.isNotEmpty(), modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
                         Icon(Icons.Default.Check, null)
@@ -102,43 +103,30 @@ fun SetupScreen(
         FloatingScaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
-                FloatingScreenHeader(stringResource(if (isEditing) R.string.edit_board else R.string.add_board),
+                if (place == null) FloatingSearchHeader(query, onQuery, stringResource(R.string.search_hint), searchFocus, onBack) {
+                    onQuery(query)
+                    keyboard?.hide()
+                } else FloatingScreenHeader(stringResource(if (isEditing) R.string.edit_board else R.string.add_board),
                     stringResource(R.string.back), onBack)
             },
             bottomBar = { if (!inlineActions) actions() },
         ) { insets ->
-            // The bottom bar includes the IME inset. Consume Scaffold's padding so
-            // the content only adds keyboard space that has not already been reserved.
-            Column(Modifier.fillMaxSize().padding(bottom = insets.calculateBottomPadding()).consumeWindowInsets(PaddingValues(bottom = insets.calculateBottomPadding())).imePadding()) {
+            // Let the list pass behind the glass panel. Clearance belongs to the
+            // scrollable content, so the final service can still move above it.
+            val bodyBottom = if (inlineActions) insets.calculateBottomPadding() else 0.dp
+            val listBottom = if (inlineActions) 12.dp else insets.calculateBottomPadding() + 12.dp
+            Column(Modifier.fillMaxSize().padding(bottom = bodyBottom)
+                .consumeWindowInsets(PaddingValues(bottom = bodyBottom)).imePadding()) {
                 if (place == null) {
                     LazyColumn(
                         Modifier.weight(1f),
-                        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = insets.calculateTopPadding() + 12.dp, bottom = 12.dp),
+                        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = insets.calculateTopPadding() + 12.dp, bottom = listBottom),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         item {
                             Column(Modifier.padding(horizontal = 4.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text(stringResource(R.string.setup_step_place), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text(stringResource(R.string.setup_place_title), style = MaterialTheme.typography.headlineMedium)
-                                TextField(
-                                    value = query, onValueChange = onQuery,
-                                    modifier = Modifier.fillMaxWidth().focusRequester(searchFocus),
-                                    shape = CircleShape,
-                                    label = { Text(stringResource(R.string.search_hint)) },
-                                    leadingIcon = { Icon(Icons.Default.Search, null) },
-                                    trailingIcon = if (query.isNotEmpty()) ({ IconButton(onClick = { onQuery("") }) { Icon(Icons.Default.Close, stringResource(R.string.clear_search)) } }) else null,
-                                    singleLine = true,
-                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                                    keyboardActions = KeyboardActions(onSearch = {
-                                        onQuery(query)
-                                        keyboard?.hide()
-                                    }),
-                                    colors = TextFieldDefaults.colors(
-                                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                        focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
-                                    ),
-                                )
                                 if (query.length < 2) Text(
                                     stringResource(R.string.search_example),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -196,7 +184,7 @@ fun SetupScreen(
                     val orderedServices = remember(place.servicios, initiallySelected) {
                         place.servicios.sortedBy { if (it.key() in initiallySelected) 0 else 1 }
                     }
-                    LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = insets.calculateTopPadding() + 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = insets.calculateTopPadding() + 12.dp, bottom = listBottom), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         item {
                             Column(Modifier.padding(horizontal = 4.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text(stringResource(R.string.setup_step_services), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)

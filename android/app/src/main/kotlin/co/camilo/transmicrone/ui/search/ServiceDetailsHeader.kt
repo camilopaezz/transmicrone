@@ -1,5 +1,6 @@
 package co.camilo.transmicrone.ui.search
 
+import co.camilo.transmicrone.ui.common.FloatingControlSurface
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.selection.selectableGroup
@@ -36,6 +37,7 @@ internal fun ServiceDetailsHeader(
     routes: List<ServiceRoute>,
     routeIndex: Int,
     onSelectRoute: (Int) -> Unit,
+    showDirections: Boolean = true,
 ) {
     val selectedIndex = routeIndex.takeIf { it in routes.indices } ?: 0
     val route = routes.getOrNull(selectedIndex)
@@ -44,7 +46,7 @@ internal fun ServiceDetailsHeader(
         service.operatingHours.firstOrNull { it.catalogId == variant.catalogId }?.destino ?: variant.stops.last().name
     }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        if (routes.size > 1) RouteVariantSelector(destinations, selectedIndex, onSelectRoute)
+        if (showDirections && routes.size > 1) ServiceRouteSelector(service, routes, selectedIndex, onSelectRoute)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ServicioBadge(service.option.painted, service.option.color, compact = true)
             if (route != null) Text(stringResource(R.string.route_stop_count, route.stops.count { it.stopsHere }),
@@ -98,7 +100,14 @@ internal fun ServiceDetailsHeader(
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun RouteVariantSelector(destinations: List<String>, selectedIndex: Int, onSelectRoute: (Int) -> Unit) {
+internal fun ServiceRouteSelector(
+    service: CatalogEntry.Service, routes: List<ServiceRoute>, selectedIndex: Int,
+    onSelectRoute: (Int) -> Unit, floating: Boolean = false,
+) {
+    val destinations = routes.map { variant ->
+        service.operatingHours.firstOrNull { it.catalogId == variant.catalogId }?.destino ?: variant.stops.last().name
+    }
+    val checkedIndex = selectedIndex.takeIf { it in routes.indices } ?: 0
     val segmentShape = RoundedCornerShape(14.dp)
     val rows = destinations.indices.chunked(2)
     val colors = ToggleButtonDefaults.toggleButtonColors(
@@ -107,7 +116,7 @@ private fun RouteVariantSelector(destinations: List<String>, selectedIndex: Int,
         checkedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
         checkedContentColor = MaterialTheme.colorScheme.onSecondaryContainer,
     )
-    Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceContainerHighest) {
+    FloatingControlSurface(shape = RoundedCornerShape(18.dp), blurred = floating) {
         Column(Modifier.fillMaxWidth().padding(4.dp).selectableGroup(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             rows.forEach { indices ->
                 EqualHeightRow(columns = 2, gap = 4.dp) { probe ->
@@ -116,7 +125,7 @@ private fun RouteVariantSelector(destinations: List<String>, selectedIndex: Int,
                         val duplicate = destinations.count { it == destination } > 1
                         val label = if (duplicate) stringResource(R.string.route_variant_destination, destination, index + 1)
                             else stringResource(R.string.route_direction, destination)
-                        val isSelected = index == selectedIndex
+                        val isSelected = index == checkedIndex
                         ToggleButton(
                             checked = isSelected,
                             onCheckedChange = { onSelectRoute(index) },

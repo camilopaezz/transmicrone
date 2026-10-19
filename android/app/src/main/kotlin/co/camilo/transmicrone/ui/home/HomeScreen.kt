@@ -1,5 +1,6 @@
 package co.camilo.transmicrone.ui.home
 
+import dev.chrisbanes.haze.rememberHazeState
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -131,7 +132,9 @@ fun HomeScreen(
             }
         }
         val addLabel = stringResource(R.string.add_board)
+        val backdrop = rememberHazeState()
         FloatingScaffold(
+            backdrop = backdrop,
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = { FloatingHomeHeader(onSearch, onSettings, compactHeight, onAdd) { onEdit(current.board.boardId) } },
             floatingActionButtonPosition = FabPosition.Center,
@@ -238,7 +241,7 @@ fun HomeScreen(
             }
         }
         if (choosingBoard) BoardPickerSheet(
-            boards = boards, selectedId = current.board.boardId,
+            backdrop = backdrop, boards = boards, selectedId = current.board.boardId,
             onDismiss = { choosingBoard = false },
             onSelect = { boardId ->
                 choosingBoard = false

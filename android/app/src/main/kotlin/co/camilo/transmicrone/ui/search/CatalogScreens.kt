@@ -1,6 +1,8 @@
 package co.camilo.transmicrone.ui.search
 
+import co.camilo.transmicrone.ui.common.floatingHorizontalPadding
 import co.camilo.transmicrone.ui.common.FloatingScaffold
+import co.camilo.transmicrone.ui.common.FloatingSearchHeader
 import co.camilo.transmicrone.ui.common.FloatingScreenHeader
 import co.camilo.transmicrone.ui.common.FloatingActionPanel
 import co.camilo.transmicrone.ui.common.LocalScreenEntered
@@ -11,8 +13,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
@@ -21,12 +21,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import co.camilo.transmicrone.R
 import co.camilo.transmicrone.domain.*
@@ -46,24 +45,11 @@ fun CatalogSearchScreen(
     val screenEntered = LocalScreenEntered.current
     LaunchedEffect(screenEntered) { if (screenEntered) focus.requestFocus() }
     FloatingScaffold(topBar = {
-        FloatingScreenHeader(stringResource(R.string.catalog_search), stringResource(R.string.back), onBack)
+        FloatingSearchHeader(query, onQuery, stringResource(R.string.catalog_search_hint), focus, onBack) { keyboard?.hide() }
     }) { insets ->
         LazyColumn(Modifier.fillMaxSize().padding(bottom = insets.calculateBottomPadding()).consumeWindowInsets(PaddingValues(bottom = insets.calculateBottomPadding())).imePadding(),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = insets.calculateTopPadding() + 12.dp, bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            item { TextField(
-                value = query, onValueChange = onQuery,
-                modifier = Modifier.fillMaxWidth().focusRequester(focus),
-                label = { Text(stringResource(R.string.catalog_search_hint)) },
-                leadingIcon = { Icon(Icons.Default.Search, null) },
-                trailingIcon = if (query.isNotEmpty()) ({
-                    IconButton(onClick = { onQuery("") }) { Icon(Icons.Default.Close, stringResource(R.string.clear_search)) }
-                }) else null,
-                singleLine = true, shape = CircleShape,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
-                colors = TextFieldDefaults.colors(focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent),
-            ) }
             when {
                 query.isBlank() -> item { Message(stringResource(R.string.catalog_search_example)) }
                 searching -> item {
@@ -109,69 +95,79 @@ fun CatalogDetailsScreen(
     val service = entry as? CatalogEntry.Service
     val routes = (routeState as? RouteState.Loaded)?.routes.orEmpty()
     val route = routes.getOrNull(routeIndex) ?: routes.firstOrNull()
-    FloatingScaffold(
-        topBar = {
-            FloatingScreenHeader(stringResource(if (location != null) {
-                if (location.kind == PlaceKind.ESTACION) R.string.kind_estacion else R.string.kind_paradero
-            } else R.string.catalog_service), stringResource(R.string.back), onBack)
-        },
-        bottomBar = {
-            if (location != null) FloatingActionPanel {
-                Button(onClick = { onAdd(location) }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-                    Icon(Icons.Default.Add, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.add_board))
-                }
-            }
-        },
-    ) { insets ->
-        LazyColumn(Modifier.fillMaxSize().padding(bottom = insets.calculateBottomPadding()), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = insets.calculateTopPadding() + 12.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(if (service != null) 0.dp else 10.dp)) {
-            if (location != null) item {
-                Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerLow) {
-                    Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Icon(if (location.kind == PlaceKind.ESTACION) Icons.Default.Tram else Icons.Default.DirectionsBus, null,
-                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
-                        Text(location.name, style = MaterialTheme.typography.headlineLarge)
-                        location.disambiguator?.let { Message(it) }
-                        Message(stringResource(R.string.setup_place_code, location.queryParadero))
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // Long variants and large text stay in the list rather than consuming its viewport.
+        val pinnedDirections = service != null && routes.size == 2 &&
+            maxHeight / maxOf(1f, LocalDensity.current.fontScale) >= 480.dp
+        FloatingScaffold(
+            topBar = {
+                Column {
+                    FloatingScreenHeader(stringResource(if (location != null) {
+                        if (location.kind == PlaceKind.ESTACION) R.string.kind_estacion else R.string.kind_paradero
+                    } else R.string.catalog_service), stringResource(R.string.back), onBack)
+                    if (pinnedDirections) Box(Modifier.floatingHorizontalPadding().padding(vertical = 8.dp)) {
+                        ServiceRouteSelector(service, routes, routeIndex, onSelectRoute, floating = true)
                     }
                 }
-            }
-            if (service != null) item {
-                ServiceDetailsHeader(service, routes, routeIndex, onSelectRoute)
-            }
-            serviceLookup?.let { lookup ->
-                item {
-                    if (lookup.failed) {
-                        Message(stringResource(R.string.service_lookup_failed, lookup.option.painted))
-                        TextButton(onClick = onRetryService) { Text(stringResource(R.string.retry_refresh)) }
-                    } else {
-                        Message(stringResource(R.string.service_lookup_loading, lookup.option.painted))
+            },
+            bottomBar = {
+                if (location != null) FloatingActionPanel {
+                    Button(onClick = { onAdd(location) }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                        Icon(Icons.Default.Add, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.add_board))
                     }
                 }
-            }
-            if (location != null) {
-                item { SectionTitle(stringResource(R.string.choose_servicios)) }
-                items(location.servicios, key = { "${it.painted}\u0001${it.destino}" }) { option ->
-                    ServiceRow(option) { onService(option) }
-                }
-            } else if (service != null) {
-                item { SectionTitle(stringResource(R.string.route_title)) }
-                when (routeState) {
-                    null, RouteState.Loading -> item {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
-                            Message(stringResource(R.string.route_loading))
+            },
+        ) { insets ->
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = insets.calculateTopPadding() + 12.dp, bottom = insets.calculateBottomPadding() + 20.dp), verticalArrangement = Arrangement.spacedBy(if (service != null) 0.dp else 10.dp)) {
+                if (location != null) item {
+                    Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+                        Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Icon(if (location.kind == PlaceKind.ESTACION) Icons.Default.Tram else Icons.Default.DirectionsBus, null,
+                                tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
+                            Text(location.name, style = MaterialTheme.typography.headlineLarge)
+                            location.disambiguator?.let { Message(it) }
+                            Message(stringResource(R.string.setup_place_code, location.queryParadero))
                         }
                     }
-                    RouteState.Failed, RouteState.Unavailable -> item {
-                        Message(stringResource(if (routeState == RouteState.Failed) R.string.route_failed else R.string.route_unavailable))
-                        TextButton(onClick = onRetryRoute) { Text(stringResource(R.string.retry_refresh)) }
+                }
+                if (service != null) item {
+                    ServiceDetailsHeader(service, routes, routeIndex, onSelectRoute, showDirections = !pinnedDirections)
+                }
+                serviceLookup?.let { lookup ->
+                    item {
+                        if (lookup.failed) {
+                            Message(stringResource(R.string.service_lookup_failed, lookup.option.painted))
+                            TextButton(onClick = onRetryService) { Text(stringResource(R.string.retry_refresh)) }
+                        } else {
+                            Message(stringResource(R.string.service_lookup_loading, lookup.option.painted))
+                        }
                     }
-                    is RouteState.Loaded -> {
-                        if (route != null) {
-                            items(route.stops.size, key = { "${route.catalogId}:$it" }) { index ->
-                                RouteStopRow(route.stops[index], index, route.stops.lastIndex) { place -> onPlace(place) }
+                }
+                if (location != null) {
+                    item { SectionTitle(stringResource(R.string.choose_servicios)) }
+                    items(location.servicios, key = { "${it.painted}\u0001${it.destino}" }) { option ->
+                        ServiceRow(option) { onService(option) }
+                    }
+                } else if (service != null) {
+                    item { SectionTitle(stringResource(R.string.route_title)) }
+                    when (routeState) {
+                        null, RouteState.Loading -> item {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                                Message(stringResource(R.string.route_loading))
+                            }
+                        }
+                        RouteState.Failed, RouteState.Unavailable -> item {
+                            Message(stringResource(if (routeState == RouteState.Failed) R.string.route_failed else R.string.route_unavailable))
+                            TextButton(onClick = onRetryRoute) { Text(stringResource(R.string.retry_refresh)) }
+                        }
+                        is RouteState.Loaded -> {
+                            if (route != null) {
+                                items(route.stops.size, key = { "${route.catalogId}:$it" }) { index ->
+                                    RouteStopRow(route.stops[index], index, route.stops.lastIndex) { place -> onPlace(place) }
+                                }
                             }
                         }
                     }
