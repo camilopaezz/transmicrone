@@ -31,7 +31,24 @@ measuring frame timing; the capture process can add display-buffer stalls on the
 
 ## Continuous integration
 
-GitHub Actions runs unit tests, Android lint, debug assembly, and instrumented tests on an Android 15 emulator for pushes and pull requests. It also checks Python syntax and publishes the debug APK and test reports as build artifacts. CI uses no live-feed credentials; its APK needs a locally configured build for live access.
+GitHub Actions runs unit tests, Android lint, debug assembly, and instrumented tests on an Android 15 emulator for pushes and pull requests. It also checks Python syntax and publishes the debug APK and test reports as build artifacts. The debug artifact uses no live-feed credentials.
+
+Same-repository pull requests also publish a live APK under the `transminuto-pr-N` artifact in the Android CI run. Download and unzip it to install `transminuto-pr-N.apk`. These builds use the repository's `TRANSMICRONE_APP_ID` secret and fail if it is missing. Fork PRs run the normal checks without access to the secret or a live APK.
+
+PRs authored by `camilopaezz` run automatically. Other authors wait for `camilopaezz` to approve the `pr-maintainer-approval` environment before Android jobs run. Keep that GitHub environment configured with `camilopaezz` as its required reviewer and administrator bypass disabled. The repository also requires workflow approval for all external contributors, including repeat contributors. The `owner-ci` environment has no approval requirement.
+
+To build a PR APK locally with configured feed credentials:
+
+```sh
+cd android
+./gradlew :app:assemblePr -PprNumber=42 -PmockFeed=false
+```
+
+The APK is `app/build/outputs/apk/pr/app-pr.apk`. PR 42 installs as `co.camilo.transmicrone.pr42`, with launcher name `TransMinuto PR #42` and version `0.1.0-alpha.2-pr.42` shown in Settings. It runs without debugging and always uses live data. Each PR installs alongside the release and other PRs, with its own boards and settings. Reinstall the same PR with `adb install -r` to preserve its data. Omit `-PprNumber` for a `PR local` build using package `co.camilo.transmicrone.pr`.
+
+The top bar and in-app name stay `TransMinuto`; the PR label appears only in the launcher name and version.
+
+PR APKs use the committed public test key in `android/keystores/pr-preview.jks` so local and CI rebuilds can update the same PR installation. This key is only for previews and cannot authenticate a production release. The release package and permanent signing key are unchanged.
 
 ## Project
 
