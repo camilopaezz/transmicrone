@@ -44,6 +44,17 @@ adb -s SERIAL shell am start -n co.camilo.transmicrone.debug/co.camilo.transmicr
 
 The `device` build uses the development package and debug signing key. Verify the generated `MOCK_FEED = false` and configured app ID before installing, then open the app and check a live fetch as required by AGENTS.md. A successful empty result is different from a failed request.
 
+For instrumented UI checks on a Xiaomi that blocks background activity launches, use a live-data debug build, close the active `agent-device` automation session, and opt into the test listener:
+
+```sh
+adb -s SERIAL shell am instrument -w -r \
+  -e listener co.camilo.transmicrone.ForegroundTestListener \
+  -e class co.camilo.transmicrone.AdaptiveLayoutTest,co.camilo.transmicrone.SetupKeyboardTest \
+  co.camilo.transmicrone.debug.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+The listener brings the Compose test activity forward through the shell before each test. This does not change phone permissions or saved app data. Restore the live-data `device` build after testing.
+
 ## Catalog
 
 Run catalog tooling from the repository root. To rebuild place and service joins from official static sources:

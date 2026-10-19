@@ -1,5 +1,8 @@
 package co.camilo.transmicrone.ui.search
 
+import co.camilo.transmicrone.ui.common.FloatingScaffold
+import co.camilo.transmicrone.ui.common.FloatingScreenHeader
+import co.camilo.transmicrone.ui.common.FloatingActionPanel
 import co.camilo.transmicrone.ui.common.LocalScreenEntered
 
 import androidx.compose.foundation.layout.*
@@ -11,7 +14,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -43,15 +45,15 @@ fun CatalogSearchScreen(
     val keyboard = LocalSoftwareKeyboardController.current
     val screenEntered = LocalScreenEntered.current
     LaunchedEffect(screenEntered) { if (screenEntered) focus.requestFocus() }
-    Scaffold(topBar = {
-        TopAppBar(title = { Text(stringResource(R.string.catalog_search)) }, navigationIcon = {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-        })
+    FloatingScaffold(topBar = {
+        FloatingScreenHeader(stringResource(R.string.catalog_search), stringResource(R.string.back), onBack)
     }) { insets ->
-        Column(Modifier.fillMaxSize().padding(insets).imePadding()) {
-            TextField(
+        LazyColumn(Modifier.fillMaxSize().padding(bottom = insets.calculateBottomPadding()).consumeWindowInsets(PaddingValues(bottom = insets.calculateBottomPadding())).imePadding(),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = insets.calculateTopPadding() + 12.dp, bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            item { TextField(
                 value = query, onValueChange = onQuery,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp).fillMaxWidth().focusRequester(focus),
+                modifier = Modifier.fillMaxWidth().focusRequester(focus),
                 label = { Text(stringResource(R.string.catalog_search_hint)) },
                 leadingIcon = { Icon(Icons.Default.Search, null) },
                 trailingIcon = if (query.isNotEmpty()) ({
@@ -61,33 +63,31 @@ fun CatalogSearchScreen(
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
                 colors = TextFieldDefaults.colors(focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent),
-            )
-            LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                when {
-                    query.isBlank() -> item { Message(stringResource(R.string.catalog_search_example)) }
-                    searching -> item {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
-                            Message(stringResource(R.string.searching_places))
+            ) }
+            when {
+                query.isBlank() -> item { Message(stringResource(R.string.catalog_search_example)) }
+                searching -> item {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                        Message(stringResource(R.string.searching_places))
+                    }
+                }
+                failed -> item {
+                    Message(stringResource(R.string.catalog_search_failed))
+                    TextButton(onClick = { onQuery(query) }) { Text(stringResource(R.string.retry_refresh)) }
+                }
+                results.services.isEmpty() && results.places.isEmpty() -> item { Message(stringResource(R.string.catalog_no_results)) }
+                else -> {
+                    if (results.services.isNotEmpty()) {
+                        item { SectionTitle(stringResource(R.string.catalog_services)) }
+                        items(results.services, key = { "service:${it.option.painted}\u0001${it.option.destino}" }) { entry ->
+                            ServiceRow(entry.option) { keyboard?.hide(); onDetails(entry) }
                         }
                     }
-                    failed -> item {
-                        Message(stringResource(R.string.catalog_search_failed))
-                        TextButton(onClick = { onQuery(query) }) { Text(stringResource(R.string.retry_refresh)) }
-                    }
-                    results.services.isEmpty() && results.places.isEmpty() -> item { Message(stringResource(R.string.catalog_no_results)) }
-                    else -> {
-                        if (results.services.isNotEmpty()) {
-                            item { SectionTitle(stringResource(R.string.catalog_services)) }
-                            items(results.services, key = { "service:${it.option.painted}\u0001${it.option.destino}" }) { entry ->
-                                ServiceRow(entry.option) { keyboard?.hide(); onDetails(entry) }
-                            }
-                        }
-                        results.places.groupBy { it.kind }.forEach { (kind, places) ->
-                            item { SectionTitle(stringResource(if (kind == PlaceKind.ESTACION) R.string.search_stations else R.string.search_stops)) }
-                            items(places, key = { it.placeId }) { place ->
-                                LocationRow(place) { keyboard?.hide(); onDetails(CatalogEntry.Location(place)) }
-                            }
+                    results.places.groupBy { it.kind }.forEach { (kind, places) ->
+                        item { SectionTitle(stringResource(if (kind == PlaceKind.ESTACION) R.string.search_stations else R.string.search_stops)) }
+                        items(places, key = { it.placeId }) { place ->
+                            LocationRow(place) { keyboard?.hide(); onDetails(CatalogEntry.Location(place)) }
                         }
                     }
                 }
@@ -109,17 +109,15 @@ fun CatalogDetailsScreen(
     val service = entry as? CatalogEntry.Service
     val routes = (routeState as? RouteState.Loaded)?.routes.orEmpty()
     val route = routes.getOrNull(routeIndex) ?: routes.firstOrNull()
-    Scaffold(
+    FloatingScaffold(
         topBar = {
-            TopAppBar(title = { Text(stringResource(if (location != null) {
+            FloatingScreenHeader(stringResource(if (location != null) {
                 if (location.kind == PlaceKind.ESTACION) R.string.kind_estacion else R.string.kind_paradero
-            } else R.string.catalog_service)) }, navigationIcon = {
-                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-            })
+            } else R.string.catalog_service), stringResource(R.string.back), onBack)
         },
         bottomBar = {
-            if (location != null) Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
-                Button(onClick = { onAdd(location) }, modifier = Modifier.navigationBarsPadding().padding(20.dp).fillMaxWidth().heightIn(min = 56.dp)) {
+            if (location != null) FloatingActionPanel {
+                Button(onClick = { onAdd(location) }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
                     Icon(Icons.Default.Add, null)
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.add_board))
@@ -127,7 +125,7 @@ fun CatalogDetailsScreen(
             }
         },
     ) { insets ->
-        LazyColumn(Modifier.fillMaxSize().padding(insets), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(if (service != null) 0.dp else 10.dp)) {
+        LazyColumn(Modifier.fillMaxSize().padding(bottom = insets.calculateBottomPadding()), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = insets.calculateTopPadding() + 12.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(if (service != null) 0.dp else 10.dp)) {
             if (location != null) item {
                 Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerLow) {
                     Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

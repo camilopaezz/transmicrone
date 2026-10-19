@@ -66,7 +66,7 @@ internal fun BoardTitleSelector(
         }
     }
     val titleStyle = MaterialTheme.typography.headlineLarge
-    Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 24.dp)) {
+    Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp)) {
         Box(
             modifier = Modifier.fillMaxWidth().clipToBounds()
                 .scrollable(pager, Orientation.Horizontal,

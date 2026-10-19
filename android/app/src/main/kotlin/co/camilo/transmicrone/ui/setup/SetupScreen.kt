@@ -1,5 +1,8 @@
 package co.camilo.transmicrone.ui.setup
 
+import co.camilo.transmicrone.ui.common.FloatingScaffold
+import co.camilo.transmicrone.ui.common.FloatingScreenHeader
+import co.camilo.transmicrone.ui.common.FloatingActionPanel
 import co.camilo.transmicrone.ui.common.LocalScreenEntered
 
 import androidx.compose.foundation.BorderStroke
@@ -12,7 +15,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -68,187 +70,189 @@ fun SetupScreen(
             keyboard?.hide()
         }
     }
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(if (isEditing) R.string.edit_board else R.string.add_board), style = MaterialTheme.typography.titleMedium) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
-            )
-        },
-        bottomBar = {
-            if (place != null || isEditing) Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
-                Column(Modifier.navigationBarsPadding().imePadding().padding(horizontal = 24.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (place != null) {
-                        if (saveFailed) Text(
-                            stringResource(R.string.setup_save_failed),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                        Text(
-                            if (selected.isEmpty()) stringResource(R.string.need_servicio)
-                            else pluralStringResource(R.plurals.setup_selected_services, selected.size, selected.size),
-                            style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Button(onClick = { keyboard?.hide(); onSave() }, enabled = selected.isNotEmpty(), modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-                            Icon(Icons.Default.Check, null)
-                            Spacer(Modifier.width(8.dp))
-                            Text(stringResource(R.string.save_board))
-                        }
-                    }
-                    if (isEditing) TextButton(onClick = { confirmingDelete = true }, modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
-                        Icon(Icons.Default.DeleteOutline, null)
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val inlineActions = maxHeight < 480.dp || WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current) > 0
+        val actions: @Composable () -> Unit = {
+            if (place != null || isEditing) FloatingActionPanel(inline = inlineActions) {
+                if (place != null) {
+                    if (saveFailed) Text(
+                        stringResource(R.string.setup_save_failed),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    Text(
+                        if (selected.isEmpty()) stringResource(R.string.need_servicio)
+                        else pluralStringResource(R.plurals.setup_selected_services, selected.size, selected.size),
+                        style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Button(onClick = { keyboard?.hide(); onSave() }, enabled = selected.isNotEmpty(), modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                        Icon(Icons.Default.Check, null)
                         Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.delete_board))
+                        Text(stringResource(R.string.save_board))
                     }
+                }
+                if (isEditing) TextButton(onClick = { confirmingDelete = true }, modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+                    Icon(Icons.Default.DeleteOutline, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.delete_board))
                 }
             }
-        },
-    ) { insets ->
-        // The bottom bar includes the IME inset. Consume Scaffold's padding so
-        // the content only adds keyboard space that has not already been reserved.
-        Column(Modifier.fillMaxSize().padding(insets).consumeWindowInsets(insets).imePadding()) {
-            if (place == null) {
-                LazyColumn(
-                    Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    item {
-                        Column(Modifier.padding(horizontal = 4.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text(stringResource(R.string.setup_step_place), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(stringResource(R.string.setup_place_title), style = MaterialTheme.typography.headlineMedium)
-                            TextField(
-                                value = query, onValueChange = onQuery,
-                                modifier = Modifier.fillMaxWidth().focusRequester(searchFocus),
-                                shape = CircleShape,
-                                label = { Text(stringResource(R.string.search_hint)) },
-                                leadingIcon = { Icon(Icons.Default.Search, null) },
-                                trailingIcon = if (query.isNotEmpty()) ({ IconButton(onClick = { onQuery("") }) { Icon(Icons.Default.Close, stringResource(R.string.clear_search)) } }) else null,
-                                singleLine = true,
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                                keyboardActions = KeyboardActions(onSearch = {
-                                    onQuery(query)
-                                    keyboard?.hide()
-                                }),
-                                colors = TextFieldDefaults.colors(
-                                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
-                                ),
-                            )
-                            if (query.length < 2) Text(
-                                stringResource(R.string.search_example),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                    }
-                    if (query.length >= 2 && (!catalogReady || searching || results.isEmpty()) && !catalogLoadFailed && !searchFailed) item {
-                        val loading = !catalogReady || searching
-                        val status = when {
-                            !catalogReady -> stringResource(R.string.catalog_loading)
-                            searching -> stringResource(R.string.searching_places)
-                            else -> stringResource(R.string.no_place_results)
-                        }
-                        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            if (loading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                            Text(status, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                    if (catalogLoadFailed || searchFailed) item {
-                        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(
-                                stringResource(if (searchFailed) R.string.setup_search_failed else R.string.catalog_load_failed),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                            if (query.length >= 2) TextButton(onClick = { onQuery(query) }) {
-                                Text(stringResource(R.string.retry_refresh))
-                            }
-                        }
-                    }
-                    if (catalogReady && !searching) {
-                        results.groupBy { it.kind }.toSortedMap(compareBy { it.ordinal }).forEach { (kind, places) ->
-                            item(key = "group-${kind.name}") {
-                                Text(stringResource(if (kind == PlaceKind.ESTACION) R.string.search_stations else R.string.search_stops),
-                                    style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp, start = 4.dp))
-                            }
-                            items(places, key = { it.placeId }) { item ->
-                                PlaceRow(
-                                    item,
-                                    leadWithAddress = repeatedNames.getOrDefault(item.name, 0) > 1,
-                                    showCode = repeatedLocations.getOrDefault(Triple(item.name, item.kind, item.disambiguator?.trim().orEmpty()), 0) > 1,
-                                ) {
-                                    keyboard?.hide()
-                                    onPick(item)
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                // Snapshot the edit selection so toggling a row never moves it under the user's finger.
-                val initiallySelected = remember(place.placeId, isEditing) { if (isEditing) selected.toSet() else emptySet() }
-                val orderedServices = remember(place.servicios, initiallySelected) {
-                    place.servicios.sortedBy { if (it.key() in initiallySelected) 0 else 1 }
-                }
-                LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item {
-                        Column(Modifier.padding(horizontal = 4.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text(stringResource(R.string.setup_step_services), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(stringResource(R.string.choose_services_title), style = MaterialTheme.typography.headlineMedium)
-                            Text(stringResource(R.string.setup_services_body), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                    item {
-                        Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                            Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                                Text(place.name, style = MaterialTheme.typography.titleMedium)
-                                Text(
-                                    listOfNotNull(stringResource(if (place.kind == PlaceKind.ESTACION) R.string.kind_estacion else R.string.kind_paradero), place.disambiguator).joinToString(" · "),
-                                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        }
+        FloatingScaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+            topBar = {
+                FloatingScreenHeader(stringResource(if (isEditing) R.string.edit_board else R.string.add_board),
+                    stringResource(R.string.back), onBack)
+            },
+            bottomBar = { if (!inlineActions) actions() },
+        ) { insets ->
+            // The bottom bar includes the IME inset. Consume Scaffold's padding so
+            // the content only adds keyboard space that has not already been reserved.
+            Column(Modifier.fillMaxSize().padding(bottom = insets.calculateBottomPadding()).consumeWindowInsets(PaddingValues(bottom = insets.calculateBottomPadding())).imePadding()) {
+                if (place == null) {
+                    LazyColumn(
+                        Modifier.weight(1f),
+                        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = insets.calculateTopPadding() + 12.dp, bottom = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        item {
+                            Column(Modifier.padding(horizontal = 4.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text(stringResource(R.string.setup_step_place), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(stringResource(R.string.setup_place_title), style = MaterialTheme.typography.headlineMedium)
+                                TextField(
+                                    value = query, onValueChange = onQuery,
+                                    modifier = Modifier.fillMaxWidth().focusRequester(searchFocus),
+                                    shape = CircleShape,
+                                    label = { Text(stringResource(R.string.search_hint)) },
+                                    leadingIcon = { Icon(Icons.Default.Search, null) },
+                                    trailingIcon = if (query.isNotEmpty()) ({ IconButton(onClick = { onQuery("") }) { Icon(Icons.Default.Close, stringResource(R.string.clear_search)) } }) else null,
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                    keyboardActions = KeyboardActions(onSearch = {
+                                        onQuery(query)
+                                        keyboard?.hide()
+                                    }),
+                                    colors = TextFieldDefaults.colors(
+                                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
+                                    ),
                                 )
-                                TextButton(onClick = onChangePlace, modifier = Modifier.align(Alignment.End)) {
-                                    Text(stringResource(R.string.setup_change_place))
+                                if (query.length < 2) Text(
+                                    stringResource(R.string.search_example),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                        }
+                        if (query.length >= 2 && (!catalogReady || searching || results.isEmpty()) && !catalogLoadFailed && !searchFailed) item {
+                            val loading = !catalogReady || searching
+                            val status = when {
+                                !catalogReady -> stringResource(R.string.catalog_loading)
+                                searching -> stringResource(R.string.searching_places)
+                                else -> stringResource(R.string.no_place_results)
+                            }
+                            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                if (loading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                                Text(status, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        if (catalogLoadFailed || searchFailed) item {
+                            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                    stringResource(if (searchFailed) R.string.setup_search_failed else R.string.catalog_load_failed),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                                if (query.length >= 2) TextButton(onClick = { onQuery(query) }) {
+                                    Text(stringResource(R.string.retry_refresh))
                                 }
                             }
                         }
-                    }
-                    item {
-                        OutlinedTextField(
-                            value = customName, onValueChange = onCustomName,
-                            modifier = Modifier.fillMaxWidth(), singleLine = true,
-                            label = { Text(stringResource(R.string.board_custom_name)) },
-                            placeholder = { Text(place.name) },
-                            supportingText = { Text(stringResource(R.string.board_custom_name_hint, place.name)) },
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                            keyboardActions = KeyboardActions(onDone = { keyboard?.hide() }),
-                        )
-                    }
-                    item { Text(stringResource(R.string.choose_servicios), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(4.dp)) }
-                    items(orderedServices, key = { it.key() }) { option ->
-                        val key = option.key()
-                        val checked = key in selected
-                        val container by animateColorAsState(
-                            if (checked) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
-                            label = "service selection",
-                        )
-                        Surface(
-                            modifier = Modifier.fillMaxWidth().toggleable(value = checked, role = Role.Checkbox, onValueChange = { onToggle(key) }),
-                            shape = MaterialTheme.shapes.medium,
-                            color = container,
-                            border = if (checked) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)) else null,
-                        ) {
-                            Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                                ServicioBadge(option.painted, option.color)
-                                Box(Modifier.weight(1f)) {
-                                    ServiceDestinationList(option.destino, R.string.destination_prefix)
+                        if (catalogReady && !searching) {
+                            results.groupBy { it.kind }.toSortedMap(compareBy { it.ordinal }).forEach { (kind, places) ->
+                                item(key = "group-${kind.name}") {
+                                    Text(stringResource(if (kind == PlaceKind.ESTACION) R.string.search_stations else R.string.search_stops),
+                                        style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp, start = 4.dp))
                                 }
-                                Checkbox(checked = checked, onCheckedChange = null)
+                                items(places, key = { it.placeId }) { item ->
+                                    PlaceRow(
+                                        item,
+                                        leadWithAddress = repeatedNames.getOrDefault(item.name, 0) > 1,
+                                        showCode = repeatedLocations.getOrDefault(Triple(item.name, item.kind, item.disambiguator?.trim().orEmpty()), 0) > 1,
+                                    ) {
+                                        keyboard?.hide()
+                                        onPick(item)
+                                    }
+                                }
                             }
                         }
+                        if (inlineActions && isEditing) item(key = "board-actions") { actions() }
+                    }
+                } else {
+                    // Snapshot the edit selection so toggling a row never moves it under the user's finger.
+                    val initiallySelected = remember(place.placeId, isEditing) { if (isEditing) selected.toSet() else emptySet() }
+                    val orderedServices = remember(place.servicios, initiallySelected) {
+                        place.servicios.sortedBy { if (it.key() in initiallySelected) 0 else 1 }
+                    }
+                    LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = insets.calculateTopPadding() + 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        item {
+                            Column(Modifier.padding(horizontal = 4.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text(stringResource(R.string.setup_step_services), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(stringResource(R.string.choose_services_title), style = MaterialTheme.typography.headlineMedium)
+                                Text(stringResource(R.string.setup_services_body), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        item {
+                            Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                                Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                                    Text(place.name, style = MaterialTheme.typography.titleMedium)
+                                    Text(
+                                        listOfNotNull(stringResource(if (place.kind == PlaceKind.ESTACION) R.string.kind_estacion else R.string.kind_paradero), place.disambiguator).joinToString(" · "),
+                                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    TextButton(onClick = onChangePlace, modifier = Modifier.align(Alignment.End)) {
+                                        Text(stringResource(R.string.setup_change_place))
+                                    }
+                                }
+                            }
+                        }
+                        item {
+                            OutlinedTextField(
+                                value = customName, onValueChange = onCustomName,
+                                modifier = Modifier.fillMaxWidth(), singleLine = true,
+                                label = { Text(stringResource(R.string.board_custom_name)) },
+                                placeholder = { Text(place.name) },
+                                supportingText = { Text(stringResource(R.string.board_custom_name_hint, place.name)) },
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                keyboardActions = KeyboardActions(onDone = { keyboard?.hide() }),
+                            )
+                        }
+                        item { Text(stringResource(R.string.choose_servicios), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(4.dp)) }
+                        items(orderedServices, key = { it.key() }) { option ->
+                            val key = option.key()
+                            val checked = key in selected
+                            val container by animateColorAsState(
+                                if (checked) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+                                label = "service selection",
+                            )
+                            Surface(
+                                modifier = Modifier.fillMaxWidth().toggleable(value = checked, role = Role.Checkbox, onValueChange = { onToggle(key) }),
+                                shape = MaterialTheme.shapes.medium,
+                                color = container,
+                                border = if (checked) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)) else null,
+                            ) {
+                                Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                                    ServicioBadge(option.painted, option.color)
+                                    Box(Modifier.weight(1f)) {
+                                        ServiceDestinationList(option.destino, R.string.destination_prefix)
+                                    }
+                                    Checkbox(checked = checked, onCheckedChange = null)
+                                }
+                            }
+                        }
+                        if (inlineActions) item(key = "board-actions") { actions() }
                     }
                 }
             }

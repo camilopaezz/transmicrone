@@ -1,5 +1,8 @@
 package co.camilo.transmicrone
 
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -11,6 +14,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.CompositionLocalProvider
@@ -38,6 +42,104 @@ import java.time.Instant
 class HomeUiTest {
     @get:Rule
     val compose = createComposeRule()
+
+    @Test
+    fun requestProgressStaysIndeterminateDuringAnotherDrag() {
+        val freshness = mutableStateOf<Freshness>(Freshness.Loading)
+        compose.setContent {
+            TransmicroneTheme {
+                HomeScreen(
+                    boards = listOf(BoardView(sampleBoard(), listOf(sampleArrival()), freshness.value)),
+                    pageIndex = 0, onPage = {}, onAdd = {}, onEdit = {}, onRefresh = {},
+                )
+            }
+        }
+        val requestProgress = SemanticsMatcher.expectValue(
+            SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo.Indeterminate,
+        )
+        compose.onNode(requestProgress).assertIsDisplayed()
+        val list = compose.onNodeWithTag("arrival-viewport")
+        list.performTouchInput {
+            down(center)
+            moveTo(center.copy(y = height.toFloat() - 1f), delayMillis = 200)
+        }
+        compose.onNode(requestProgress).assertIsDisplayed()
+        list.performTouchInput { up() }
+        compose.onNode(requestProgress).assertIsDisplayed()
+        compose.runOnIdle { freshness.value = Freshness.Updated(Instant.now()) }
+        compose.onNode(requestProgress).assertDoesNotExist()
+    }
+
+    @Test
+    fun scrollingBackToTopDoesNotRefreshUntilANewPull() {
+        var refreshes = 0
+        compose.setContent {
+            TransmicroneTheme {
+                HomeScreen(
+                    boards = listOf(BoardView(sampleBoard(), List(12) { sampleArrival().copy(nodo = it) })),
+                    pageIndex = 0, onPage = {}, onAdd = {}, onEdit = {},
+                    onRefresh = { refreshes++ },
+                )
+            }
+        }
+        val list = compose.onNodeWithTag("arrival-viewport")
+        list.performScrollToIndex(1)
+        list.performTouchInput { swipeDown() }
+        compose.runOnIdle { assertTrue("Scrolling back to the top must not request refresh", refreshes == 0) }
+        list.performTouchInput { swipeDown() }
+        compose.runOnIdle { assertTrue("A new pull starting at the top must refresh", refreshes == 1) }
+    }
+
+    @Test
+    fun fastReturnToTopRequiresAnotherGestureToRefresh() {
+        var refreshes = 0
+        compose.setContent {
+            TransmicroneTheme {
+                HomeScreen(
+                    boards = listOf(BoardView(sampleBoard(), List(20) { sampleArrival().copy(nodo = it) })),
+                    pageIndex = 0, onPage = {}, onAdd = {}, onEdit = {},
+                    onRefresh = { refreshes++ },
+                )
+            }
+        }
+        val list = compose.onNodeWithTag("arrival-viewport")
+        // First arm refresh with a gesture at the top, as in normal use.
+        list.performTouchInput { swipeDown() }
+        compose.waitForIdle()
+        compose.runOnIdle { refreshes = 0 }
+        repeat(3) {
+            list.performScrollToIndex(1)
+            list.performTouchInput { swipeDown(durationMillis = 32) }
+            compose.waitForIdle()
+        }
+        compose.runOnIdle { assertTrue("A fast scroll reaching the top must never refresh", refreshes == 0) }
+        list.performTouchInput { swipeDown() }
+        compose.runOnIdle { assertTrue("Only a separate pull from the settled top refreshes", refreshes == 1) }
+    }
+
+    @Test
+    fun firstPullImmediatelyAfterReturningToTopRefreshes() {
+        var refreshes = 0
+        compose.setContent {
+            TransmicroneTheme {
+                HomeScreen(
+                    boards = listOf(BoardView(sampleBoard(), List(20) { sampleArrival().copy(nodo = it) })),
+                    pageIndex = 0, onPage = {}, onAdd = {}, onEdit = {},
+                    onRefresh = { refreshes++ },
+                )
+            }
+        }
+        val list = compose.onNodeWithTag("arrival-viewport")
+        list.performScrollToIndex(1)
+        // No waitForIdle between gestures: the first fresh pull must work even
+        // while the scroll/overscroll from returning to the top is settling.
+        list.performTouchInput {
+            swipeDown(durationMillis = 64)
+            advanceEventTime(16)
+            swipeDown()
+        }
+        compose.runOnIdle { assertTrue("The first fresh pull at the top must refresh exactly once", refreshes == 1) }
+    }
 
     @Test
     fun pullDownIsAcceptedRepeatedlyWhileFetchIsRunning() {

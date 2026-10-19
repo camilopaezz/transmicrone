@@ -4,7 +4,6 @@ import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.saveable.rememberSaveable
 import kotlinx.coroutines.delay
-import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -14,19 +13,26 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.pullToRefresh
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -38,15 +44,17 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.text.style.TextOverflow
 import co.camilo.transmicrone.R
 import co.camilo.transmicrone.BuildConfig
 import co.camilo.transmicrone.ui.BoardView
 import co.camilo.transmicrone.ui.Freshness
 import co.camilo.transmicrone.ui.board.ArrivalList
 import co.camilo.transmicrone.ui.board.parseColor
+import co.camilo.transmicrone.ui.common.FloatingHeaderHeight
+import co.camilo.transmicrone.ui.common.floatingHeaderPadding
+import co.camilo.transmicrone.ui.common.FloatingScaffold
+import co.camilo.transmicrone.ui.common.FloatingControlSurface
 import co.camilo.transmicrone.ui.common.relativeTime
-import co.camilo.transmicrone.ui.theme.TransmicroneBrandStyle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,165 +68,186 @@ fun HomeScreen(
     onSearch: () -> Unit = {},
     onSettings: () -> Unit = {},
 ) {
-    if (loadingBoards) {
-        Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { insets ->
-            Column(Modifier.fillMaxSize().padding(insets), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                CircularProgressIndicator()
-                Spacer(Modifier.height(20.dp))
-                Text(stringResource(R.string.loading_boards), style = MaterialTheme.typography.bodyLarge)
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val compactHeight = maxHeight < 480.dp || maxHeight / maxOf(1f, LocalDensity.current.fontScale) < 360.dp
+        if (loadingBoards) {
+            FloatingScaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { insets ->
+                Column(Modifier.fillMaxSize().padding(insets), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator()
+                    Spacer(Modifier.height(20.dp))
+                    Text(stringResource(R.string.loading_boards), style = MaterialTheme.typography.bodyLarge)
+                }
+            }
+            return@BoxWithConstraints
+        }
+        if (boards.isEmpty()) { EmptyHome(onAdd, snackbarHostState, onSearch, onSettings); return@BoxWithConstraints }
+        val index = pageIndex.coerceIn(0, boards.lastIndex)
+        val pager = rememberPagerState(initialPage = index, pageCount = { boards.size })
+        val boardIds = boards.map { it.board.boardId }
+        val scrolling = pager.isScrollInProgress
+        var settledBoards by remember { mutableStateOf(boards) }
+        LaunchedEffect(boards, scrolling) {
+            if (!scrolling) settledBoards = boards
+        }
+        val displayedBoards = if (scrolling && settledBoards.map { it.board.boardId } == boardIds) settledBoards else boards
+        val visibleIndex = pager.currentPage.coerceIn(boards.indices)
+        val current = displayedBoards[visibleIndex]
+        val density = LocalDensity.current
+        val safeInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
+        val dockMaxWidth = with(density) {
+            (LocalWindowInfo.current.containerSize.width - safeInsets.getLeft(density, androidx.compose.ui.platform.LocalLayoutDirection.current)
+                - safeInsets.getRight(density, androidx.compose.ui.platform.LocalLayoutDirection.current)).toDp()
+        } - 32.dp
+        var dockHeight by remember { mutableStateOf(64.dp) }
+        val scope = rememberCoroutineScope()
+        var choosingBoard by remember { mutableStateOf(false) }
+        val listStates = boards.map { view -> key(view.board.boardId) { rememberLazyListState() } }
+        var swipeHintDismissed by swipeHintDismissal
+        val dragging by pager.interactionSource.collectIsDraggedAsState()
+        LaunchedEffect(dragging, pager.isScrollInProgress) {
+            if (dragging || pager.isScrollInProgress) swipeHintDismissed = true
+        }
+        LaunchedEffect(boards.size > 1) {
+            if (boards.size > 1) {
+                delay(5000)
+                swipeHintDismissed = true
             }
         }
-        return
-    }
-    if (boards.isEmpty()) { EmptyHome(onAdd, snackbarHostState, onSearch, onSettings); return }
-    val index = pageIndex.coerceIn(0, boards.lastIndex)
-    val pager = rememberPagerState(initialPage = index, pageCount = { boards.size })
-    val boardIds = boards.map { it.board.boardId }
-    val scrolling = pager.isScrollInProgress
-    var settledBoards by remember { mutableStateOf(boards) }
-    LaunchedEffect(boards, scrolling) {
-        if (!scrolling) settledBoards = boards
-    }
-    val displayedBoards = if (scrolling && settledBoards.map { it.board.boardId } == boardIds) settledBoards else boards
-    val visibleIndex = pager.currentPage.coerceIn(boards.indices)
-    val current = displayedBoards[visibleIndex]
-    val scope = rememberCoroutineScope()
-    var choosingBoard by remember { mutableStateOf(false) }
-    val listStates = boards.map { view -> key(view.board.boardId) { rememberLazyListState() } }
-    val windowWidth = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }
-    val fontScale = LocalDensity.current.fontScale
-    val compactAppBar = fontScale > 1.2f || windowWidth < 400.dp
-    var swipeHintDismissed by swipeHintDismissal
-    val dragging by pager.interactionSource.collectIsDraggedAsState()
-    LaunchedEffect(dragging, pager.isScrollInProgress) {
-        if (dragging || pager.isScrollInProgress) swipeHintDismissed = true
-    }
-    LaunchedEffect(boards.size > 1) {
-        if (boards.size > 1) {
-            delay(5000)
-            swipeHintDismissed = true
+        val showSwipeHint = boards.size > 1 && !swipeHintDismissed
+        var synchronizingSelection by remember { mutableStateOf(false) }
+        LaunchedEffect(index, boardIds) {
+            synchronizingSelection = true
+            try {
+                if (pager.currentPage != index) pager.animateScrollToPage(index)
+            } finally {
+                synchronizingSelection = false
+            }
         }
-    }
-    val showSwipeHint = boards.size > 1 && !swipeHintDismissed
-    var synchronizingSelection by remember { mutableStateOf(false) }
-    LaunchedEffect(index, boardIds) {
-        synchronizingSelection = true
-        try {
-            if (pager.currentPage != index) pager.animateScrollToPage(index)
-        } finally {
-            synchronizingSelection = false
+        val latestOnPage by rememberUpdatedState(onPage)
+        val latestIndex by rememberUpdatedState(index)
+        LaunchedEffect(pager, boardIds) {
+            snapshotFlow { Triple(pager.settledPage, pager.isScrollInProgress, synchronizingSelection) }.collect { (page, scrolling, syncing) ->
+                if (!scrolling && !syncing && page in boards.indices && page != latestIndex) latestOnPage(page)
+            }
         }
-    }
-    val latestOnPage by rememberUpdatedState(onPage)
-    val latestIndex by rememberUpdatedState(index)
-    LaunchedEffect(pager, boardIds) {
-        snapshotFlow { Triple(pager.settledPage, pager.isScrollInProgress, synchronizingSelection) }.collect { (page, scrolling, syncing) ->
-            if (!scrolling && !syncing && page in boards.indices && page != latestIndex) latestOnPage(page)
-        }
-    }
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                title = {
-                    Column {
-                        Text(
-                            text = stringResource(R.string.app_name), style = TransmicroneBrandStyle,
-                            maxLines = if (compactAppBar) 2 else 1, overflow = TextOverflow.Ellipsis,
-                        )
-                        if (BuildConfig.DEBUG && BuildConfig.MOCK_FEED) {
-                            Text(stringResource(R.string.sample_data), style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary)
+        val addLabel = stringResource(R.string.add_board)
+        FloatingScaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+            topBar = { FloatingHomeHeader(onSearch, onSettings, compactHeight, onAdd) { onEdit(current.board.boardId) } },
+            floatingActionButtonPosition = FabPosition.Center,
+            floatingActionButton = {
+                if (!compactHeight) FloatingControlSurface {
+                    Row(Modifier.widthIn(max = dockMaxWidth).onSizeChanged { dockHeight = with(density) { it.height.toDp() } }.padding(6.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        IconButton(onClick = { onEdit(current.board.boardId) }, modifier = Modifier.size(48.dp)) {
+                            Icon(Icons.Default.Edit, stringResource(R.string.edit_board))
+                        }
+                        Button(onClick = onAdd, modifier = Modifier.weight(1f, fill = false).heightIn(min = 48.dp)
+                            .semantics { contentDescription = addLabel }) {
+                            Icon(Icons.Default.Add, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.add_board))
                         }
                     }
-                },
-                expandedHeight = if (fontScale >= 2f) 112.dp else if (fontScale > 1.2f) 88.dp else 64.dp,
-                navigationIcon = {
-                    if (!compactAppBar) Icon(Icons.Default.DirectionsBus, null, Modifier.padding(start = 20.dp, end = 12.dp), tint = MaterialTheme.colorScheme.primary)
-                },
-                actions = {
-                    IconButton(onClick = onAdd, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.Add, stringResource(R.string.add_board)) }
-                    IconButton(onClick = { onEdit(current.board.boardId) }, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Default.Edit, stringResource(R.string.edit_board))
-                    }
-                    IconButton(onClick = onSearch) {
-                        Icon(Icons.Default.Search, stringResource(R.string.catalog_search))
-                    }
-                    IconButton(onClick = onSettings) {
-                        Icon(Icons.Default.Settings, stringResource(R.string.settings_title))
-                    }
-                },
-            )
-        },
-    ) { insets ->
-        Column(Modifier.fillMaxSize().padding(insets).roundedHomeBody()) {
-            BoardTitleSelector(displayedBoards.map { it.board.displayName }, pager, showSwipeHint) { choosingBoard = true }
-            // Prepare neighbors before a tap starts moving the pager.
-            HorizontalPager(
-                state = pager, beyondViewportPageCount = 1, key = { boards[it].board.boardId },
-                modifier = Modifier.weight(1f).testTag("board-pager"),
-            ) { page ->
-                val view = displayedBoards[page]
-                val empty = when (val freshness = view.freshness) {
-                    Freshness.Idle, Freshness.Loading -> stringResource(R.string.freshness_updating)
-                    is Freshness.Cached -> stringResource(R.string.freshness_stale, relativeTime(freshness.cachedAt))
-                    is Freshness.UpdatingCached -> stringResource(
-                        if (freshness.quiet) R.string.arrivals_empty else R.string.freshness_updating,
-                    )
-                    is Freshness.Failed, is Freshness.FailedCached -> stringResource(R.string.freshness_failed)
-                    Freshness.Unsupported -> stringResource(R.string.freshness_unsupported)
-                    is Freshness.Empty, is Freshness.Updated -> stringResource(R.string.arrivals_empty)
                 }
-                val refreshing = view.freshness == Freshness.Loading || view.freshness is Freshness.UpdatingCached
-                val quietRefresh = (view.freshness as? Freshness.UpdatingCached)?.quiet == true
-                val pullState = rememberPullToRefreshState()
-                val listState = listStates[page]
-                val hasScrolled by remember(listState) { derivedStateOf { listState.canScrollBackward } }
-                val fade by animateFloatAsState(if (hasScrolled) 1f else 0f, label = "listTopFade")
-                PullToRefreshBox(
-                    // Keep accepting pulls during a fetch. The strip below owns
-                    // loading feedback; the ViewModel coalesces queued pulls.
-                    isRefreshing = false,
-                    onRefresh = onRefresh,
-                    state = pullState,
-                    indicator = {},
-                    modifier = Modifier.fillMaxSize()
-                        .then(if (page != visibleIndex) Modifier.clearAndSetSemantics {} else Modifier),
-                ) {
-                    Column(Modifier.fillMaxSize()) {
-                        // Reserve the strip even when idle so progress never moves the list.
-                        Box(Modifier.fillMaxWidth().height(4.dp)) {
-                            if (pullState.distanceFraction > 0f) {
-                                LinearProgressIndicator(progress = { pullState.distanceFraction.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxSize())
-                            } else if (refreshing && !quietRefresh && page == visibleIndex && !pager.isScrollInProgress) {
-                                LinearProgressIndicator(Modifier.fillMaxSize())
+            },
+        ) { insets ->
+            Column(Modifier.fillMaxSize().padding(insets)) {
+                if (!compactHeight) BoardTitleSelector(displayedBoards.map { it.board.displayName }, pager, showSwipeHint) { choosingBoard = true }
+                // Prepare neighbors before a tap starts moving the pager.
+                HorizontalPager(
+                    state = pager, beyondViewportPageCount = 1, key = { boards[it].board.boardId },
+                    modifier = Modifier.weight(1f).testTag("board-pager"),
+                ) { page ->
+                    val view = displayedBoards[page]
+                    val empty = when (val freshness = view.freshness) {
+                        Freshness.Idle, Freshness.Loading -> stringResource(R.string.freshness_updating)
+                        is Freshness.Cached -> stringResource(R.string.freshness_stale, relativeTime(freshness.cachedAt))
+                        is Freshness.UpdatingCached -> stringResource(
+                            if (freshness.quiet) R.string.arrivals_empty else R.string.freshness_updating,
+                        )
+                        is Freshness.Failed, is Freshness.FailedCached -> stringResource(R.string.freshness_failed)
+                        Freshness.Unsupported -> stringResource(R.string.freshness_unsupported)
+                        is Freshness.Empty, is Freshness.Updated -> stringResource(R.string.arrivals_empty)
+                    }
+                    val refreshing = view.freshness == Freshness.Loading || view.freshness is Freshness.UpdatingCached
+                    val quietRefresh = (view.freshness as? Freshness.UpdatingCached)?.quiet == true
+                    val pullState = rememberPullToRefreshState()
+                    val listState = listStates[page]
+                    val hasScrolled by remember(listState) { derivedStateOf { listState.canScrollBackward } }
+                    val fade by animateFloatAsState(if (hasScrolled) 1f else 0f, label = "listTopFade")
+                    var pullStartedAtTop by remember { mutableStateOf(false) }
+                    val scrollReturnGuard = remember(listState) {
+                        object : NestedScrollConnection {
+                            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                                // This runs synchronously, before the parent's pull handler. Do not
+                                // let excess return-to-top movement become a pull while it recomposes.
+                                return if (!pullStartedAtTop && available.y > 0f) Offset(0f, available.y) else Offset.Zero
                             }
                         }
-                        ArrivalList(
-                            view.arrivals, empty, Modifier.weight(1f).fillMaxWidth().testTag("arrival-viewport").topFade { fade }, state = listState,
-                            header = { StationHeader(view) },
-                            bottomContentPadding = 24.dp,
-                            colorForArrival = { arrival -> routeColor(view, arrival.painted, arrival.routeId) },
-                            active = page == visibleIndex && !scrolling,
-                            initialLoading = view.cache == null && view.freshness == Freshness.Loading,
-                        )
                     }
+                    Box(
+                        modifier = Modifier.fillMaxSize()
+                            .pointerInput(listState) {
+                                awaitEachGesture {
+                                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                                    // Latch for the whole gesture: reaching the top while scrolling
+                                    // must not turn the remainder of that drag into a refresh.
+                                    pullStartedAtTop = !listState.canScrollBackward
+                                    do {
+                                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    } while (event.changes.any { it.pressed })
+                                }
+                            }
+                            .pullToRefresh(
+                                isRefreshing = false, state = pullState,
+                                // The synchronous nested-scroll guard owns gesture eligibility.
+                                // Toggling this through recomposition can drop the first fresh pull.
+                                enabled = page == visibleIndex,
+                                onRefresh = { if (pullStartedAtTop) onRefresh() },
+                            )
+                            .nestedScroll(scrollReturnGuard)
+                            .then(if (page != visibleIndex) Modifier.clearAndSetSemantics {} else Modifier),
+                    ) {
+                        Column(Modifier.fillMaxSize()) {
+                            // Reserve the strip even when idle so progress never moves the list.
+                            Box(Modifier.fillMaxWidth().height(4.dp)) {
+                                // Request feedback owns the strip until the fetch completes.
+                                // A new drag must not replace it with gesture-distance progress.
+                                if (refreshing && !quietRefresh && page == visibleIndex) {
+                                    LinearProgressIndicator(Modifier.fillMaxSize())
+                                } else if ((!refreshing || quietRefresh) && pullStartedAtTop && pullState.distanceFraction > 0f) {
+                                    LinearProgressIndicator(progress = { pullState.distanceFraction.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxSize())
+                                }
+                            }
+                            ArrivalList(
+                                view.arrivals, empty, Modifier.weight(1f).fillMaxWidth().testTag("arrival-viewport").topFade { fade }, state = listState,
+                                header = {
+                                    if (compactHeight) BoardTitleSelector(displayedBoards.map { it.board.displayName }, pager, showSwipeHint) { choosingBoard = true }
+                                    StationHeader(view)
+                                },
+                                bottomContentPadding = if (compactHeight) 24.dp else dockHeight + 48.dp,
+                                colorForArrival = { arrival -> routeColor(view, arrival.painted, arrival.routeId) },
+                                active = page == visibleIndex && !scrolling,
+                                initialLoading = view.cache == null && view.freshness == Freshness.Loading,
+                            )
+                        }
 
+                    }
                 }
             }
         }
+        if (choosingBoard) BoardPickerSheet(
+            boards = boards, selectedId = current.board.boardId,
+            onDismiss = { choosingBoard = false },
+            onSelect = { boardId ->
+                choosingBoard = false
+                val destination = boards.indexOfFirst { it.board.boardId == boardId }
+                if (destination >= 0) scope.launch { pager.animateScrollToPage(destination) }
+            },
+            onAdd = { choosingBoard = false; onAdd() },
+        )
     }
-    if (choosingBoard) BoardPickerSheet(
-        boards = boards, selectedId = current.board.boardId,
-        onDismiss = { choosingBoard = false },
-        onSelect = { boardId ->
-            choosingBoard = false
-            val destination = boards.indexOfFirst { it.board.boardId == boardId }
-            if (destination >= 0) scope.launch { pager.animateScrollToPage(destination) }
-        },
-        onAdd = { choosingBoard = false; onAdd() },
-    )
 }
 
 @Composable
@@ -258,15 +287,11 @@ private fun Modifier.topFade(fraction: () -> Float): Modifier {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EmptyHome(onAdd: () -> Unit, snackbarHostState: SnackbarHostState = remember { SnackbarHostState() }, onSearch: () -> Unit = {}, onSettings: () -> Unit = {}) {
-    Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }, topBar = {
-        TopAppBar(colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceContainer), title = { Text(stringResource(R.string.app_name), style = TransmicroneBrandStyle) },
-            actions = {
-                IconButton(onClick = onSearch) { Icon(Icons.Default.Search, stringResource(R.string.catalog_search)) }
-                IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, stringResource(R.string.settings_title)) }
-            })
+    FloatingScaffold(snackbarHost = { SnackbarHost(snackbarHostState) }, topBar = {
+        FloatingHomeHeader(onSearch, onSettings)
     }) { insets ->
         Column(
-            Modifier.fillMaxSize().padding(insets).roundedHomeBody().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp),
+            Modifier.fillMaxSize().padding(insets).verticalScroll(rememberScrollState()).padding(horizontal = 28.dp),
             verticalArrangement = Arrangement.Center,
         ) {
             Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.primaryContainer) {
@@ -290,10 +315,47 @@ fun EmptyHome(onAdd: () -> Unit, snackbarHostState: SnackbarHostState = remember
 }
 
 @Composable
-private fun Modifier.roundedHomeBody(): Modifier =
-    background(MaterialTheme.colorScheme.surfaceContainer)
-        .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
-        .background(MaterialTheme.colorScheme.surface)
+private fun FloatingHomeHeader(
+    onSearch: () -> Unit, onSettings: () -> Unit,
+    compact: Boolean = false, onAdd: () -> Unit = {}, onEdit: () -> Unit = {},
+) {
+    // Wrap at large font scales rather than shrink touch targets.
+    FlowRow(
+        Modifier.floatingHeaderPadding(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        if (compact) FloatingControlSurface {
+            Row {
+                IconButton(onClick = onAdd, modifier = Modifier.size(FloatingHeaderHeight)) {
+                    Icon(Icons.Default.Add, stringResource(R.string.add_board))
+                }
+                IconButton(onClick = onEdit, modifier = Modifier.size(FloatingHeaderHeight)) {
+                    Icon(Icons.Default.Edit, stringResource(R.string.edit_board))
+                }
+            }
+        } else FloatingControlSurface {
+            Column(Modifier.heightIn(min = FloatingHeaderHeight).padding(horizontal = 18.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.Center) {
+                Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleMedium)
+                if (BuildConfig.DEBUG && BuildConfig.MOCK_FEED) {
+                    Text(stringResource(R.string.sample_data), style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
+        FloatingControlSurface {
+            Row {
+                IconButton(onClick = onSearch, modifier = Modifier.size(FloatingHeaderHeight)) {
+                    Icon(Icons.Default.Search, stringResource(R.string.catalog_search))
+                }
+                IconButton(onClick = onSettings, modifier = Modifier.size(FloatingHeaderHeight)) {
+                    Icon(Icons.Default.Settings, stringResource(R.string.settings_title))
+                }
+            }
+        }
+    }
+}
 
 // Saved route colors remain the same when the live feed omits its color.
 internal fun routeColor(view: BoardView, painted: String, routeId: Int?): String? {

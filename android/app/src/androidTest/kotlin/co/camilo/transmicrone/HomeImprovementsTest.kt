@@ -64,9 +64,9 @@ class HomeImprovementsTest {
             } }
         }
         compose.onNodeWithText("Fuente no oficial. Las frases de llegada no son un reloj.").performScrollTo().assertIsDisplayed()
-        val viewport = compose.onNodeWithTag("arrival-viewport").fetchSemanticsNode().boundsInRoot
-        val add = compose.onNodeWithContentDescription("Agregar tablero").fetchSemanticsNode().boundsInRoot
-        assertTrue("Add chip should precede the arrivals", add.bottom <= viewport.top)
+        val notice = compose.onNodeWithText("Fuente no oficial. Las frases de llegada no son un reloj.").fetchSemanticsNode().boundsInRoot
+        val add = compose.onNodeWithContentDescription("Agregar tablero").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        assertTrue("The last item must scroll above the floating dock", notice.bottom <= add.top)
     }
 
     @Test fun refreshDoesNotResizeArrivalViewport() {
