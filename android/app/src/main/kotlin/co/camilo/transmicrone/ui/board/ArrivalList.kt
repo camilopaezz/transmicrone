@@ -1,6 +1,5 @@
 package co.camilo.transmicrone.ui.board
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -25,7 +24,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -33,6 +31,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
+import co.camilo.transmicrone.ui.common.ServiceChipSurface
 import co.camilo.transmicrone.R
 import co.camilo.transmicrone.domain.Arrival
 import co.camilo.transmicrone.domain.Occupancy
@@ -125,7 +124,7 @@ fun ArrivalRow(arrival: Arrival, now: Instant = Instant.now(), routeColor: Strin
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                ServicioBadge(arrival.painted, routeColor)
+                ServicioBadge(arrival.painted, routeColor, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
                 Column(Modifier.weight(1f)) {
                     Text(stringResource(R.string.destination_prefix), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(destination, style = MaterialTheme.typography.titleMedium)
@@ -150,15 +149,21 @@ fun ArrivalRow(arrival: Arrival, now: Instant = Instant.now(), routeColor: Strin
 }
 
 @Composable
-fun ServicioBadge(code: String, color: String? = null, compact: Boolean = false) {
-    val background = parseColor(color) ?: MaterialTheme.colorScheme.primary
-    val foreground = if (background.luminance() > 0.179f) Color.Black else Color.White
-    Text(
-        code, style = if (compact) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Bold, color = foreground,
-        modifier = Modifier.background(background, RoundedCornerShape(if (compact) 10.dp else 16.dp))
-            .padding(horizontal = if (compact) 10.dp else 16.dp, vertical = if (compact) 6.dp else 14.dp),
-    )
+fun ServicioBadge(
+    code: String, color: String? = null, compact: Boolean = false,
+    containerColor: Color = MaterialTheme.colorScheme.surface,
+) {
+    ServiceChipSurface(
+        routeColor = parseColor(color) ?: MaterialTheme.colorScheme.primary,
+        containerColor = containerColor,
+        shape = RoundedCornerShape(if (compact) 10.dp else 16.dp),
+    ) {
+        Text(
+            code, style = if (compact) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = if (compact) 10.dp else 16.dp, vertical = if (compact) 6.dp else 14.dp),
+        )
+    }
 }
 
 @Composable

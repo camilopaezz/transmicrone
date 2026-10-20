@@ -101,16 +101,16 @@ fun CatalogDetailsScreen(
             maxHeight / maxOf(1f, LocalDensity.current.fontScale) >= 480.dp
         FloatingScaffold(
             topBar = {
-                Column {
-                    FloatingScreenHeader(stringResource(if (location != null) {
-                        if (location.kind == PlaceKind.ESTACION) R.string.kind_estacion else R.string.kind_paradero
-                    } else R.string.catalog_service), stringResource(R.string.back), onBack)
-                    if (pinnedDirections) Box(Modifier.floatingHorizontalPadding().padding(vertical = 8.dp)) {
-                        ServiceRouteSelector(service, routes, routeIndex, onSelectRoute, floating = true)
-                    }
-                }
+                FloatingScreenHeader(stringResource(if (location != null) {
+                    if (location.kind == PlaceKind.ESTACION) R.string.kind_estacion else R.string.kind_paradero
+                } else R.string.catalog_service), stringResource(R.string.back), onBack)
             },
             bottomBar = {
+                if (pinnedDirections) Box(Modifier.floatingHorizontalPadding()
+                    .windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout).only(WindowInsetsSides.Bottom))
+                    .padding(vertical = 16.dp)) {
+                    ServiceRouteSelector(service, routes, routeIndex, onSelectRoute, floating = true)
+                }
                 if (location != null) FloatingActionPanel {
                     Button(onClick = { onAdd(location) }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
                         Icon(Icons.Default.Add, null)
@@ -211,7 +211,7 @@ private fun RouteStopRow(stop: RouteStop, index: Int, lastIndex: Int, onPlace: (
 private fun ServiceRow(option: ServicioOption, onClick: () -> Unit) {
     Surface(onClick = onClick, shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            ServicioBadge(option.painted, option.color)
+            ServicioBadge(option.painted, option.color, containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 val destinations = option.destino.split("||").map { it.trim() }.filter { it.isNotEmpty() }.distinct()
                 if (destinations.size <= 1) {

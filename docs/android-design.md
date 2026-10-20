@@ -8,7 +8,7 @@ System, light, and dark modes are available in Ajustes. Android 12+ wallpaper co
 
 `MaterialExpressiveTheme` supplies the motion scheme. App shapes range from 12 to 32 dp. Medium-weight headings and emphasized destination and operating-time styles establish the text hierarchy. Font licenses are bundled with the app.
 
-Service chips and arrival badges use the saved catalog route color, falling back to the live color. Badge text is black or white according to luminance. Theme tests cover text contrast for the fallback palettes and tonal containers.
+Service chips and arrival badges use the saved catalog route color, falling back to the live color. All service chips and badges share a translucent route tint and subtle highlighted rim, including home, arrivals, search, details, and service selection. Label contrast is calculated against the tint composited onto the actual screen or card surface, including selected service rows. Inline chips do not sample the backdrop that contains them. Existing pill and badge shapes, typography, and padding are preserved. Badge text is black or white according to luminance. Theme tests cover text contrast for the fallback palettes and tonal containers.
 
 ## Home and board selection
 
@@ -38,9 +38,9 @@ The pencil opens the current board's editor. `Cambiar` opens place search with t
 
 Place details list serving services and can start a board. Service details show a direction selector, service badge and stop count, destination and origin, published hours, and ordered route stops. Hours and routes come from the packaged catalog and work offline.
 
-For two route variants in windows with at least 480 dp of effective height after font scaling, the direction selector sits in a glass panel below the floating header and remains available while stops scroll. In shorter windows, at larger text sizes, or with more variants, it stays inline with a solid tonal fill. Selection retains Material toggle motion and radio-button semantics.
+For two route variants in windows with at least 480 dp of effective height after font scaling, the direction selector sits in a floating glass bottom dock and remains available while stops scroll. Its safe bottom inset and 16 dp outer spacing match the home dock; list content can scroll underneath and the final stop can clear the dock. In shorter windows, at larger text sizes, or with more variants, it stays inline with a solid tonal fill. Selection retains Material toggle motion and radio-button semantics.
 
-The direction selector uses one shared track with 4 dp padding and gaps, 18 dp outer corners, and stable 14 dp segment corners. Two equal-width choices fit each row. `Hacia` sits above the destination; rows share a height of at least 64 dp and grow for wrapped text. Selection uses the secondary-container fill and radio-button semantics. Duplicate destination names include a variant number. Switching variants updates the header, hours, and route together.
+The direction selector uses one shared track with 6 dp padding and 4 dp gaps. The floating dock has a pill-shaped track and pill segments. Inline selectors use 32 dp outer and 28 dp segment corners so wrapped labels remain readable at large text sizes. Two equal-width choices fit each row. `Hacia` sits above the destination; rows share a height of at least 64 dp and grow for wrapped text. Selection uses the secondary-container fill and radio-button semantics. Duplicate destination names include a variant number. Switching variants updates the header, hours, and route together.
 
 ## Accessibility and freshness
 

@@ -2,6 +2,7 @@ package co.camilo.transmicrone.ui.search
 
 import co.camilo.transmicrone.ui.common.FloatingControlSurface
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.*
@@ -95,7 +96,7 @@ internal fun ServiceDetailsHeader(
 
 /**
  * Route variants share an inset track, with two equal-width choices per row.
- * Stable segment corners and separate direction/destination lines keep selection from shifting labels.
+ * Pill segments and separate direction/destination lines keep selection from shifting labels.
  * Equal heights per row come from [EqualHeightRow].
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -108,7 +109,7 @@ internal fun ServiceRouteSelector(
         service.operatingHours.firstOrNull { it.catalogId == variant.catalogId }?.destino ?: variant.stops.last().name
     }
     val checkedIndex = selectedIndex.takeIf { it in routes.indices } ?: 0
-    val segmentShape = RoundedCornerShape(14.dp)
+    val segmentShape = if (floating) CircleShape else RoundedCornerShape(28.dp)
     val rows = destinations.indices.chunked(2)
     val colors = ToggleButtonDefaults.toggleButtonColors(
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
@@ -116,8 +117,8 @@ internal fun ServiceRouteSelector(
         checkedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
         checkedContentColor = MaterialTheme.colorScheme.onSecondaryContainer,
     )
-    FloatingControlSurface(shape = RoundedCornerShape(18.dp), blurred = floating) {
-        Column(Modifier.fillMaxWidth().padding(4.dp).selectableGroup(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    FloatingControlSurface(shape = if (floating) CircleShape else RoundedCornerShape(32.dp), blurred = floating) {
+        Column(Modifier.fillMaxWidth().padding(6.dp).selectableGroup(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             rows.forEach { indices ->
                 EqualHeightRow(columns = 2, gap = 4.dp) { probe ->
                     indices.forEach { index ->

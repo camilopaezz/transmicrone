@@ -232,7 +232,7 @@ fun SetupScreen(
                                 border = if (checked) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)) else null,
                             ) {
                                 Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                                    ServicioBadge(option.painted, option.color)
+                                    ServicioBadge(option.painted, option.color, containerColor = container)
                                     Box(Modifier.weight(1f)) {
                                         ServiceDestinationList(option.destino, R.string.destination_prefix)
                                     }

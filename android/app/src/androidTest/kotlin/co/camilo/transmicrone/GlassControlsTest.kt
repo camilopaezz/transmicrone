@@ -17,6 +17,7 @@ import co.camilo.transmicrone.ui.search.CatalogSearchScreen
 import co.camilo.transmicrone.ui.setup.SetupScreen
 import co.camilo.transmicrone.ui.theme.TransmicroneTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -60,18 +61,23 @@ class GlassControlsTest {
         compose.runOnIdle { assertEquals(places.last(), picked) }
     }
 
-    @Test fun pinnedDirectionsStayAvailableAndSwitchRouteAfterScrolling() {
+    @Test fun bottomDockDirectionsStayAvailableAndSwitchRouteAfterScrolling() {
         val index = mutableIntStateOf(0)
         compose.setContent { TransmicroneTheme {
             CatalogDetailsScreen(service, {}, {}, {}, {}, RouteState.Loaded(routes),
                 routeIndex = index.intValue, onSelectRoute = { index.intValue = it })
         } }
         val before = compose.onNodeWithContentDescription("Hacia Sur").getUnclippedBoundsInRoot()
+        val list = compose.onNode(hasScrollAction()).getUnclippedBoundsInRoot()
+        assertTrue("Directions belong in the bottom dock", before.top > (list.top + list.bottom) / 2)
         compose.onNode(hasScrollAction()).performScrollToNode(hasText("Parada 0/35"))
         assertEquals(before, compose.onNodeWithContentDescription("Hacia Sur").getUnclippedBoundsInRoot())
         compose.onNodeWithContentDescription("Hacia Sur").assertIsDisplayed().performClick().assertIsSelected()
         compose.onNode(hasScrollAction()).performScrollToNode(hasText("Parada 1/35"))
         compose.onNodeWithText("Parada 1/35").assertIsDisplayed()
+        compose.onNode(hasScrollAction()).performScrollToIndex(41)
+        val lastStop = compose.onNodeWithText("1:39").assertIsDisplayed().getUnclippedBoundsInRoot()
+        assertTrue("The final stop must clear the floating dock", lastStop.bottom < before.top)
         compose.runOnIdle { assertEquals(1, index.intValue) }
     }
 

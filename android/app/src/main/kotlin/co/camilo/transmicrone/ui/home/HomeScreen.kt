@@ -13,7 +13,6 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -44,13 +43,13 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.luminance
 import co.camilo.transmicrone.R
 import co.camilo.transmicrone.BuildConfig
 import co.camilo.transmicrone.ui.BoardView
 import co.camilo.transmicrone.ui.Freshness
 import co.camilo.transmicrone.ui.board.ArrivalList
 import co.camilo.transmicrone.ui.board.parseColor
+import co.camilo.transmicrone.ui.common.ServiceChipSurface
 import co.camilo.transmicrone.ui.common.FloatingHeaderHeight
 import co.camilo.transmicrone.ui.common.floatingHeaderPadding
 import co.camilo.transmicrone.ui.common.FloatingScaffold
@@ -262,9 +261,9 @@ private fun StationHeader(view: BoardView) {
         view.board.servicios.forEach { servicio ->
             val color = parseColor(routeColor(view, servicio.painted, servicio.routeIds.firstOrNull()))
                 ?: MaterialTheme.colorScheme.primary
-            Surface(shape = CircleShape, color = color) {
-                Text(servicio.painted, Modifier.padding(horizontal = 12.dp, vertical = 6.dp), style = MaterialTheme.typography.labelLarge,
-                    color = if (color.luminance() > 0.179f) Color.Black else Color.White)
+            ServiceChipSurface(color) {
+                Text(servicio.painted, Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.labelLarge)
             }
         }
     }
