@@ -11,6 +11,7 @@ import co.camilo.transmicrone.ui.common.FloatingSnackbarHost
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import co.camilo.transmicrone.ui.common.FloatingEdgeBand
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import kotlinx.coroutines.launch
@@ -20,6 +21,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -28,8 +30,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.pullToRefresh
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.rememberScrollableState
+import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -48,6 +53,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import co.camilo.transmicrone.R
 import co.camilo.transmicrone.BuildConfig
@@ -265,20 +272,39 @@ fun HomeScreen(
                             .nestedScroll(scrollReturnGuard)
                             .then(if (page != visibleIndex) Modifier.clearAndSetSemantics {} else Modifier),
                     ) {
-                        Column(Modifier.fillMaxSize()) {
-                            // Reserve the strip even when idle so progress never moves the list.
-                            Box(Modifier.fillMaxWidth().height(4.dp)) {
-                                // Request feedback owns the strip until the fetch completes.
-                                // A new drag must not replace it with gesture-distance progress.
-                                if (refreshing && !quietRefresh && page == visibleIndex) {
-                                    LinearProgressIndicator(Modifier.fillMaxSize())
-                                } else if ((!refreshing || quietRefresh) && pullStartedAtTop && pullState.distanceFraction > 0f) {
-                                    LinearProgressIndicator(progress = { pullState.distanceFraction.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxSize())
-                                }
-                            }
-                            Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
+                        // Request feedback owns the gap until the fetch completes.
+                        // A new drag must not replace it with gesture-distance progress.
+                        val showRequest = refreshing && !quietRefresh && page == visibleIndex
+                        val pulling = (!refreshing || quietRefresh) && pullStartedAtTop && pullState.distanceFraction > 0f
+                        val trackPull = pulling && !showRequest
+                        val pullFraction = pullState.distanceFraction.coerceIn(0f, 1f)
+                        val revealed = 48.dp + 12.dp * 2
+                        val gap by animateDpAsState(
+                            when {
+                                showRequest -> revealed
+                                trackPull -> revealed * pullFraction
+                                else -> 0.dp
+                            },
+                            if (trackPull) snap() else MaterialTheme.motionScheme.defaultSpatialSpec(),
+                            label = "refreshGap",
+                        )
+                        val capsuleFade by animateFloatAsState(
+                            when {
+                                showRequest -> 1f
+                                trackPull -> pullFraction
+                                else -> 0f
+                            },
+                            if (trackPull || showRequest) snap() else MaterialTheme.motionScheme.fastEffectsSpec(),
+                            label = "refreshFade",
+                        )
+                        Box(Modifier.fillMaxSize().clipToBounds()) {
+                            Box(Modifier.fillMaxSize().clipToBounds()) {
                                 ArrivalList(
-                                    view.arrivals, empty, Modifier.fillMaxSize().testTag("arrival-viewport").hazeSource(arrivalsBackdrop), state = listState,
+                                    view.arrivals, empty,
+                                    Modifier.fillMaxSize().testTag("arrival-viewport")
+                                        .offset { IntOffset(0, gap.roundToPx()) }
+                                        .hazeSource(arrivalsBackdrop),
+                                    state = listState,
                                     header = {
                                         if (compactHeight) BoardTitleSelector(displayedBoards.map { it.board.displayName }, pager, showSwipeHint) { choosingBoard = true }
                                         StationHeader(view)
@@ -289,11 +315,22 @@ fun HomeScreen(
                                     initialLoading = view.cache == null && view.freshness == Freshness.Loading,
                                 )
                                 if (hasScrolled && page == visibleIndex) FloatingEdgeBand(
-                                    arrivalsBackdrop, true, fade, 28.dp, Modifier.align(Alignment.TopCenter), "arrival-edge-top",
+                                    arrivalsBackdrop, true, fade, 28.dp,
+                                    Modifier.align(Alignment.TopCenter).offset { IntOffset(0, gap.roundToPx()) },
+                                    "arrival-edge-top",
                                 )
                             }
+                            // The list slides inside its viewport, so a pull that starts in the
+                            // revealed gap still has to reach the existing pull handler.
+                            if (gap > 0.dp) Box(
+                                Modifier.align(Alignment.TopCenter).fillMaxWidth().height(gap)
+                                    .scrollable(rememberScrollableState { 0f }, Orientation.Vertical),
+                            )
+                            if (gap > 0.dp) RefreshCapsule(
+                                showRequest || !trackPull, { pullState.distanceFraction.coerceIn(0f, 1f) },
+                                gap, capsuleFade, Modifier.align(Alignment.TopCenter),
+                            )
                         }
-
                     }
                 }
             }
@@ -308,6 +345,22 @@ fun HomeScreen(
             },
             onAdd = { choosingBoard = false; onAdd() },
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun RefreshCapsule(
+    requesting: Boolean, pullFraction: () -> Float, gap: Dp, fade: Float, modifier: Modifier = Modifier,
+) {
+    val indicator = Modifier.size(36.dp).testTag("refresh-capsule")
+    FloatingControlSurface(
+        modifier.offset(y = (gap - 48.dp) / 2).alpha(fade).size(48.dp),
+    ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            if (requesting) LoadingIndicator(indicator)
+            else LoadingIndicator(progress = pullFraction, modifier = indicator)
+        }
     }
 }
 

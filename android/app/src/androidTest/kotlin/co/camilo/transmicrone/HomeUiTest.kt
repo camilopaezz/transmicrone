@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performScrollToIndex
@@ -20,6 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertTrue
 import co.camilo.transmicrone.domain.Arrival
 import co.camilo.transmicrone.domain.Board
@@ -68,6 +70,32 @@ class HomeUiTest {
         compose.onNode(requestProgress).assertIsDisplayed()
         compose.runOnIdle { freshness.value = Freshness.Updated(Instant.now()) }
         compose.onNode(requestProgress).assertDoesNotExist()
+    }
+
+    @Test
+    fun refreshCapsuleAppearsForRequestAndHidesWhenIdle() {
+        val freshness = mutableStateOf<Freshness>(Freshness.Updated(Instant.now()))
+        compose.setContent {
+            TransmicroneTheme {
+                HomeScreen(
+                    boards = listOf(BoardView(sampleBoard(), listOf(sampleArrival()), freshness.value)),
+                    pageIndex = 0, onPage = {}, onAdd = {}, onEdit = {}, onRefresh = {},
+                )
+            }
+        }
+        compose.onNodeWithTag("refresh-capsule").assertDoesNotExist()
+        val idleCardTop = compose.onNodeWithText("CAD", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.top
+        compose.runOnIdle { freshness.value = Freshness.Loading }
+        val capsule = compose.onNode(
+            hasTestTag("refresh-capsule") and SemanticsMatcher.expectValue(
+                SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo.Indeterminate,
+            ),
+        ).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val cardTop = compose.onNodeWithText("CAD", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.top
+        val minDrop = with(compose.density) { 60.dp.toPx() }
+        assertTrue("The first arrival must slide down to reveal the capsule", cardTop - idleCardTop >= minDrop)
+        val titleBottom = compose.onNodeWithTag("board-title-0", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.bottom
+        assertTrue("The capsule must sit fully below the board title", capsule.top >= titleBottom)
     }
 
     @Test
