@@ -171,6 +171,13 @@ must complete before `current.json` can advance. Public download verification
 also checks `current.json` after updating it. Workflow concurrency serializes
 publication runs. Previous version objects remain available for recovery.
 
+Public verification sends `User-Agent: transminuto-catalog/1.0`. The first
+R2 publication checks found that this domain rejected Python's default
+`Python-urllib` identity with Cloudflare error 1010, despite successful uploads
+and authenticated read-back. The same URL and checksum passed with the explicit
+publisher identity. This does not disable Cloudflare security settings or skip
+public download verification.
+
 Publication fails closed on missing or failed sources, incomplete or stale route
 details, duplicate identities, broken place/route joins, expired GTFS validity,
 or a GTFS archive older than two days. A loss of more than 10% of any compared

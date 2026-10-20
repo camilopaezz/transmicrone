@@ -35,7 +35,8 @@ def sha(raw: bytes) -> str:
 
 def verify_public(obj: dict) -> None:
     import urllib.request
-    with urllib.request.urlopen(obj['url'], timeout=60) as response:
+    request = urllib.request.Request(obj['url'], headers={'User-Agent': 'transminuto-catalog/1.0'})
+    with urllib.request.urlopen(request, timeout=60) as response:
         if sha(response.read()) != obj['sha256']:
             raise RuntimeError('Public catalog download checksum mismatch')
 

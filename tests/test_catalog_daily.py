@@ -6,6 +6,7 @@ import json
 import sys
 import tempfile
 import unittest
+import urllib.request
 from contextlib import redirect_stdout, redirect_stderr
 from datetime import datetime, timezone
 from pathlib import Path
@@ -133,6 +134,8 @@ class PublicationTests(unittest.TestCase):
             return 0
 
         def download(url, **kwargs):
+            if isinstance(url, urllib.request.Request):
+                url = url.full_url
             return io.BytesIO(store.objects[url.removeprefix('https://catalog.test/')])
 
         with tempfile.TemporaryDirectory() as temp, \
@@ -209,3 +212,21 @@ class ArchiveTests(unittest.TestCase):
             daily.archive_responses(directory, destination)
             with daily.tarfile.open(destination) as archive:
                 self.assertEqual(archive.extractfile('responses/response-0001.body').read(), b'complete source response')
+
+
+class PublicDownloadTests(unittest.TestCase):
+    def test_identifies_publisher_to_public_download_host(self):
+        raw = b'catalog bytes'
+
+        def download(request, **kwargs):
+            self.assertIsInstance(request, urllib.request.Request)
+            self.assertEqual(request.get_header('User-agent'), 'transminuto-catalog/1.0')
+            return io.BytesIO(raw)
+
+        with patch('urllib.request.urlopen', side_effect=download):
+            daily.verify_public({'url': 'https://catalog.test/catalog.json.gz', 'sha256': daily.sha(raw)})
+
+    def test_rejects_changed_public_download(self):
+        with patch('urllib.request.urlopen', return_value=io.BytesIO(b'wrong bytes')):
+            with self.assertRaisesRegex(RuntimeError, 'checksum mismatch'):
+                daily.verify_public({'url': 'https://catalog.test/catalog.json.gz', 'sha256': daily.sha(b'catalog bytes')})
