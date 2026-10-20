@@ -59,7 +59,8 @@ android {
         targetSdk = 35
         versionCode = 3
         versionName = "0.1.0-alpha.2"
-        resValue("string", "launcher_name", "@string/app_name")
+        // Also inherited by the test APK, which cannot reference the app's strings.
+        resValue("string", "launcher_name", "TransMinuto")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "FEED_BASE_URL", "\"$feedBaseUrl\"")
         buildConfigField("String", "FEED_APPID", "\"$feedAppId\"")
