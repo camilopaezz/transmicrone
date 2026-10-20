@@ -59,6 +59,7 @@ android {
         targetSdk = 35
         versionCode = 3
         versionName = "0.1.0-alpha.2"
+        resValue("string", "launcher_name", "@string/app_name")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "FEED_BASE_URL", "\"$feedBaseUrl\"")
         buildConfigField("String", "FEED_APPID", "\"$feedAppId\"")

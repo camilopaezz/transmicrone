@@ -29,7 +29,6 @@
     <string name="route_no_stop">Sin parada</string>
     <string name="route_stop_count">%1$d paradas</string>
     <string name="app_name">TransMinuto</string>
-    <string name="launcher_name">@string/app_name</string>
     <string name="sample_data">Datos de ejemplo</string>
     <string name="empty_boards_title">Sin tableros</string>
     <string name="empty_boards_body">Busca una estación o un paradero y elige los servicios que quieres ver juntos.</string>
