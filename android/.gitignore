@@ -11,3 +11,4 @@ captures/
 keystore.properties
 *.keystore
 *.jks
+!keystores/pr-preview.jks
