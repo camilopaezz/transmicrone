@@ -101,16 +101,19 @@ class AssessmentTests(unittest.TestCase):
 
 
 class FakeR2:
-    def __init__(self, archive_fails=False):
+    def __init__(self, archive_fails=False, report_fails=False):
         self.objects = {}
         self.events = []
         self.archive_fails = archive_fails
+        self.report_fails = report_fails
 
     def read(self, name):
         return self.objects.get(name)
 
     def put(self, name, raw, content_type='application/json', mutable=False):
         self.events.append(name)
+        if self.report_fails and name.endswith('/report.json'):
+            raise RuntimeError('Report upload failed')
         self.objects[name] = raw
         return {'key': name, 'sha256': daily.sha(raw), 'bytes': len(raw), 'url': 'https://catalog.test/' + name}
 
@@ -148,6 +151,8 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual(result, 0)
         self.assertEqual(report['publication'], 'published')
         self.assertLess(store.events.index('archive'), store.events.index('current.json'))
+        report_event = next(name for name in store.events if name.endswith('/report.json'))
+        self.assertLess(store.events.index(report_event), store.events.index('current.json'))
         current = json.loads(store.objects['current.json'])
         self.assertIn(current['catalog']['key'], store.objects)
 
@@ -156,6 +161,16 @@ class PublicationTests(unittest.TestCase):
         result, report = self.run_daily(store)
         self.assertEqual(result, 1)
         self.assertNotIn('current.json', store.objects)
+        self.assertIn('publication_error', report)
+
+    def test_report_failure_leaves_previous_manifest_untouched(self):
+        store = FakeR2()
+        self.assertEqual(self.run_daily(store)[0], 0)
+        previous = store.objects['current.json']
+        store.report_fails = True
+        result, report = self.run_daily(store)
+        self.assertEqual(result, 1)
+        self.assertEqual(store.objects['current.json'], previous)
         self.assertIn('publication_error', report)
 
     def test_unchanged_data_keeps_version_and_updates_check_time(self):
@@ -168,3 +183,29 @@ class PublicationTests(unittest.TestCase):
         current = json.loads(store.objects['current.json'])
         self.assertEqual(current['version'], original['version'])
         self.assertGreaterEqual(current['checked_at'], original['checked_at'])
+
+
+class ArchiveTests(unittest.TestCase):
+    def test_interrupted_archive_leaves_loose_responses_available(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp) / 'responses'
+            directory.mkdir()
+            body = directory / 'response-0001.body'
+            body.write_bytes(b'complete source response')
+            destination = Path(temp) / 'responses.tar.gz'
+            with patch.object(daily.tarfile, 'open') as opener:
+                opener.return_value.__enter__.return_value.add.side_effect = OSError('disk full')
+                with self.assertRaises(OSError):
+                    daily.archive_responses(directory, destination)
+            self.assertFalse(destination.exists())
+            self.assertEqual(body.read_bytes(), b'complete source response')
+
+    def test_successful_archive_contains_original_response(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp) / 'responses'
+            directory.mkdir()
+            (directory / 'response-0001.body').write_bytes(b'complete source response')
+            destination = Path(temp) / 'responses.tar.gz'
+            daily.archive_responses(directory, destination)
+            with daily.tarfile.open(destination) as archive:
+                self.assertEqual(archive.extractfile('responses/response-0001.body').read(), b'complete source response')

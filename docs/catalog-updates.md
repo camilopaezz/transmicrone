@@ -157,8 +157,10 @@ Files under the bucket's `catalog/` prefix:
   schema versions, artifact URLs, checksums, build time, and content digest.
 - `observations/<version>/responses.tar.gz`: original source response bodies,
   request metadata, and errors, including all route-detail variants and GTFS.
-- `observations/<version>/report.json`: source validation and added, removed,
-  and changed record identities, with before/after examples.
+- `observations/<version>/report.json`: immutable source validation and added,
+  removed, and changed record identities, with before/after examples. It is
+  saved before promotion; a `ready` state means the assessment approved it.
+- `observations/<version>/publication.json`: the subsequent publication outcome.
 - `latest-observation.json`: the latest completed report, including held candidates.
 - `current.json`: the current published manifest. An unchanged catalog keeps
   its published version and updates `checked_at` after a successful daily check.
@@ -180,6 +182,11 @@ catalog. These checks are initial conservative rules to evaluate over daily runs
 
 Held candidates retain their evidence and candidate manifests but do not replace
 `current.json`. A nonzero job result makes the hold or failure visible in Actions.
+Archive creation writes a temporary file and only renames it after a successful
+close. A partial archive cannot hide the intact loose response files from the
+artifact fallback. Both the response archive and assessment report must reach
+R2 before the published pointer can change.
+
 Workflow artifacts retain reports, the candidate, and full responses for 30 days;
 R2 objects currently have no automatic deletion policy. GitHub artifacts also
 include loose response files so a timeout before archiving does not discard them.

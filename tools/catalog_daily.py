@@ -40,6 +40,18 @@ def verify_public(obj: dict) -> None:
             raise RuntimeError('Public catalog download checksum mismatch')
 
 
+def archive_responses(directory: Path, destination: Path) -> None:
+    """Only expose the final filename after the archive is fully closed."""
+    destination.unlink(missing_ok=True)
+    temporary = destination.with_suffix(destination.suffix + '.partial')
+    try:
+        with tarfile.open(temporary, 'w:gz') as archive:
+            archive.add(directory, arcname='responses')
+        temporary.replace(destination)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def clean(value):
     if isinstance(value, dict):
         return {key: clean(item) for key, item in value.items()
@@ -260,11 +272,15 @@ def main():
     finally:
         try:
             if (out / 'responses').exists():
-                with tarfile.open(out / 'responses.tar.gz', 'w:gz') as archive:
-                    archive.add(out / 'responses', arcname='responses')
+                archive_responses(out / 'responses', out / 'responses.tar.gz')
             if store:
                 if (out / 'responses.tar.gz').exists():
                     store.archive(f'observations/{version}/responses.tar.gz', out / 'responses.tar.gz')
+                if code == 0 and report.get('publication') != 'unchanged':
+                    report['publication'] = 'ready'
+                # Persist the assessment and change evidence before changing the published pointer.
+                store.put(f'observations/{version}/report.json', encode(report))
+                store.put('latest-observation.json', encode(report), mutable=True)
                 if code == 0 and report.get('publication') != 'unchanged':
                     current = store.put('current.json', encode(report['manifest']), mutable=True)
                     report['publication'] = 'published'
@@ -273,7 +289,10 @@ def main():
                     refreshed = {**previous_manifest, 'checked_at': now.isoformat(), 'last_checked_run_url': report['run_url']}
                     current = store.put('current.json', encode(refreshed), mutable=True)
                     verify_public(current)
-                store.put(f'observations/{version}/report.json', encode(report))
+                store.put(f'observations/{version}/publication.json', encode({
+                    'publication': report.get('publication', 'failed'),
+                    'finished_at': datetime.now(timezone.utc).isoformat(),
+                }))
                 store.put('latest-observation.json', encode(report), mutable=True)
         except Exception as error:
             report['publication_error'] = str(error)
