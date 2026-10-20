@@ -22,12 +22,25 @@ import build_catalog as catalog
 class ResponseCapture:
     """Persist response bytes before parsing, including HTTP error bodies."""
 
-    def __init__(self, directory: Path):
+    def __init__(self, directory: Path, retries: int = 0):
         self.directory = directory
         self.directory.mkdir(parents=True, exist_ok=True)
         self.sequence = 0
+        self.retries = retries
 
     def http_bytes(self, url: str, timeout: float = 120) -> bytes:
+        for attempt in range(self.retries + 1):
+            try:
+                return self._request(url, timeout)
+            except (urllib.error.URLError, TimeoutError) as error:
+                if isinstance(error, urllib.error.HTTPError) and error.code not in (408, 429, 500, 502, 503, 504):
+                    raise
+                if attempt == self.retries:
+                    raise
+                time.sleep(2 ** attempt)
+        raise AssertionError("unreachable")
+
+    def _request(self, url: str, timeout: float) -> bytes:
         self.sequence += 1
         stem = f"response-{self.sequence:04d}"
         metadata = {"url": url, "requested_at": datetime.now(timezone.utc).isoformat()}

@@ -291,6 +291,8 @@ def main() -> int:
     p.add_argument("--info-limit", type=int, default=0, help="max infoRuta calls (0 = all catalog variants)")
     p.add_argument("--sleep", type=float, default=0.12, help="pause between infoRuta calls")
     p.add_argument("--out", type=Path, default=DATA / "catalog.json")
+    p.add_argument("--test-out", type=Path, default=DATA / "test-case.json")
+    p.add_argument("--work-dir", type=Path, default=Path("/tmp/transmicrone-gtfs"))
     args = p.parse_args()
 
     previous = json.loads(args.out.read_text(encoding="utf-8")) if args.out.exists() else {}
@@ -303,7 +305,7 @@ def main() -> int:
     gtfs_dir = args.gtfs_dir
     gtfs_meta: dict = {}
     if gtfs_dir is None:
-        work = Path("/tmp/transmicrone-gtfs")
+        work = args.work_dir
         work.mkdir(parents=True, exist_ok=True)
         if args.gtfs_zip:
             zpath = args.gtfs_zip
@@ -323,6 +325,7 @@ def main() -> int:
     sources.append({"kind": "gtfs", **gtfs_meta})
 
     feed_info = read_csv(gtfs_dir / "feed_info.txt")
+    sources[0]["feed_info"] = feed_info
     routes = read_csv(gtfs_dir / "routes.txt")
     stops = read_csv(gtfs_dir / "stops.txt")
     trips = read_csv(gtfs_dir / "trips.txt")
@@ -730,7 +733,8 @@ def main() -> int:
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(catalog, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    test_path = DATA / "test-case.json"
+    test_path = args.test_out
+    test_path.parent.mkdir(parents=True, exist_ok=True)
     # shrink resolved places for the sidecar
     slim_boards = []
     for b in test_case["boards"]:
