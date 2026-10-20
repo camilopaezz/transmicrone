@@ -1,5 +1,6 @@
 package co.camilo.transmicrone.ui.settings
 
+import co.camilo.transmicrone.ui.common.FloatingSnackbarHost
 import android.os.Build
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -35,7 +36,7 @@ fun SettingsScreen(
     snackbarHostState: SnackbarHostState,
 ) {
     FloatingScaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { FloatingSnackbarHost(snackbarHostState) },
         topBar = {
             FloatingScreenHeader(stringResource(R.string.settings_title), stringResource(R.string.settings_back), onBack)
         },

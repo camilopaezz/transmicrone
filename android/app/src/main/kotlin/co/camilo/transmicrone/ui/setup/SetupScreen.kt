@@ -1,5 +1,6 @@
 package co.camilo.transmicrone.ui.setup
 
+import co.camilo.transmicrone.ui.common.FloatingSnackbarHost
 import co.camilo.transmicrone.ui.common.FloatingScaffold
 import co.camilo.transmicrone.ui.common.FloatingSearchHeader
 import co.camilo.transmicrone.ui.common.FloatingScreenHeader
@@ -101,7 +102,7 @@ fun SetupScreen(
             }
         }
         FloatingScaffold(
-            snackbarHost = { SnackbarHost(snackbarHostState) },
+            snackbarHost = { FloatingSnackbarHost(snackbarHostState) },
             topBar = {
                 if (place == null) FloatingSearchHeader(query, onQuery, stringResource(R.string.search_hint), searchFocus, onBack) {
                     onQuery(query)

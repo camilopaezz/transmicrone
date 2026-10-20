@@ -1,5 +1,6 @@
 package co.camilo.transmicrone.ui.home
 
+import co.camilo.transmicrone.ui.common.FloatingSnackbarHost
 import dev.chrisbanes.haze.rememberHazeState
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import kotlinx.coroutines.launch
@@ -71,7 +72,7 @@ fun HomeScreen(
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compactHeight = maxHeight < 480.dp || maxHeight / maxOf(1f, LocalDensity.current.fontScale) < 360.dp
         if (loadingBoards) {
-            FloatingScaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { insets ->
+            FloatingScaffold(snackbarHost = { FloatingSnackbarHost(snackbarHostState) }) { insets ->
                 Column(Modifier.fillMaxSize().padding(insets), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator()
                     Spacer(Modifier.height(20.dp))
@@ -134,7 +135,7 @@ fun HomeScreen(
         val backdrop = rememberHazeState()
         FloatingScaffold(
             backdrop = backdrop,
-            snackbarHost = { SnackbarHost(snackbarHostState) },
+            snackbarHost = { FloatingSnackbarHost(snackbarHostState) },
             topBar = { FloatingHomeHeader(onSearch, onSettings, compactHeight, onAdd) { onEdit(current.board.boardId) } },
             floatingActionButtonPosition = FabPosition.Center,
             floatingActionButton = {
@@ -289,7 +290,7 @@ private fun Modifier.topFade(fraction: () -> Float): Modifier {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EmptyHome(onAdd: () -> Unit, snackbarHostState: SnackbarHostState = remember { SnackbarHostState() }, onSearch: () -> Unit = {}, onSettings: () -> Unit = {}) {
-    FloatingScaffold(snackbarHost = { SnackbarHost(snackbarHostState) }, topBar = {
+    FloatingScaffold(snackbarHost = { FloatingSnackbarHost(snackbarHostState) }, topBar = {
         FloatingHomeHeader(onSearch, onSettings)
     }) { insets ->
         Column(
