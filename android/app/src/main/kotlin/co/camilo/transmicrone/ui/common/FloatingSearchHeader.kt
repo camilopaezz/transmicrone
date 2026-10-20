@@ -44,7 +44,7 @@ internal fun FloatingSearchHeader(
                 value = query, onValueChange = onQuery,
                 modifier = Modifier.fillMaxWidth().focusRequester(focusRequester).semantics { contentDescription = hint },
                 textStyle = MaterialTheme.typography.titleMedium,
-                placeholder = { Text(stringResource(R.string.catalog_search), style = MaterialTheme.typography.titleMedium) },
+                placeholder = { Text(hint, style = MaterialTheme.typography.titleMedium) },
                 leadingIcon = { Icon(Icons.Default.Search, null) },
                 trailingIcon = if (query.isNotEmpty()) ({
                     IconButton(onClick = { onQuery("") }) {
