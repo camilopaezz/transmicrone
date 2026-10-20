@@ -83,7 +83,9 @@ fun HomeScreen(
         }
         if (boards.isEmpty()) { EmptyHome(onAdd, snackbarHostState, onSearch, onSettings); return@BoxWithConstraints }
         val index = pageIndex.coerceIn(0, boards.lastIndex)
-        val pager = rememberPagerState(initialPage = index, pageCount = { boards.size })
+        // Pager callbacks can outlive the composition that supplied them.
+        val pagerBoards = remember { mutableStateOf(boards) }
+        val pager = rememberPagerState(initialPage = index, pageCount = { pagerBoards.value.size })
         val boardIds = boards.map { it.board.boardId }
         val scrolling = pager.isScrollInProgress
         var settledBoards by remember { mutableStateOf(boards) }
@@ -91,7 +93,8 @@ fun HomeScreen(
             if (!scrolling) settledBoards = boards
         }
         val displayedBoards = if (scrolling && settledBoards.map { it.board.boardId } == boardIds) settledBoards else boards
-        val visibleIndex = pager.currentPage.coerceIn(boards.indices)
+        pagerBoards.value = displayedBoards
+        val visibleIndex = pager.currentPage.coerceIn(displayedBoards.indices)
         val current = displayedBoards[visibleIndex]
         val density = LocalDensity.current
         val safeInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
@@ -102,7 +105,9 @@ fun HomeScreen(
         var dockHeight by remember { mutableStateOf(64.dp) }
         val scope = rememberCoroutineScope()
         var choosingBoard by remember { mutableStateOf(false) }
-        val listStates = boards.map { view -> key(view.board.boardId) { rememberLazyListState() } }
+        val listStates by rememberUpdatedState(displayedBoards.associate { view ->
+            view.board.boardId to key(view.board.boardId) { rememberLazyListState() }
+        })
         var swipeHintDismissed by swipeHintDismissal
         val dragging by pager.interactionSource.collectIsDraggedAsState()
         LaunchedEffect(dragging, pager.isScrollInProgress) {
@@ -159,10 +164,11 @@ fun HomeScreen(
                 if (!compactHeight) BoardTitleSelector(displayedBoards.map { it.board.displayName }, pager, showSwipeHint) { choosingBoard = true }
                 // Prepare neighbors before a tap starts moving the pager.
                 HorizontalPager(
-                    state = pager, beyondViewportPageCount = 1, key = { boards[it].board.boardId },
+                    state = pager, beyondViewportPageCount = 1, key = { pagerBoards.value.getOrNull(it)?.board?.boardId ?: it },
                     modifier = Modifier.weight(1f).testTag("board-pager"),
                 ) { page ->
-                    val view = displayedBoards[page]
+                    val view = pagerBoards.value.getOrNull(page) ?: return@HorizontalPager
+                    val listState = listStates[view.board.boardId] ?: return@HorizontalPager
                     val empty = when (val freshness = view.freshness) {
                         Freshness.Idle, Freshness.Loading -> stringResource(R.string.freshness_updating)
                         is Freshness.Cached -> stringResource(R.string.freshness_stale, relativeTime(freshness.cachedAt))
@@ -176,7 +182,6 @@ fun HomeScreen(
                     val refreshing = view.freshness == Freshness.Loading || view.freshness is Freshness.UpdatingCached
                     val quietRefresh = (view.freshness as? Freshness.UpdatingCached)?.quiet == true
                     val pullState = rememberPullToRefreshState()
-                    val listState = listStates[page]
                     val hasScrolled by remember(listState) { derivedStateOf { listState.canScrollBackward } }
                     val fade by animateFloatAsState(if (hasScrolled) 1f else 0f, label = "listTopFade")
                     var pullStartedAtTop by remember { mutableStateOf(false) }

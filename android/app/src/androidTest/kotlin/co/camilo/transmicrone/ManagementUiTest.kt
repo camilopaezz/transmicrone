@@ -98,6 +98,33 @@ class ManagementUiTest {
         compose.onNodeWithContentDescription("Editar tablero").assertIsDisplayed()
     }
 
+    @Test fun deletingAndUndoingBoardWhileHomeIsComposedRestoresPage() {
+        val first = BoardView(Board("first", place.placeId, place.kind, place.queryParadero, "Primero",
+            place.disambiguator, emptyList()))
+        val restored = first.copy(board = first.board.copy(boardId = "restored", displayName = "Restaurado"))
+        val boards = mutableStateOf(listOf(first, restored))
+        val page = mutableIntStateOf(1)
+        compose.setContent { TransmicroneTheme {
+            val host = remember { SnackbarHostState() }
+            val scope = rememberCoroutineScope()
+            HomeScreen(boards.value, page.intValue, { page.intValue = it }, {}, {
+                boards.value = listOf(first)
+                page.intValue = 0
+                scope.launch {
+                    if (host.showSnackbar("Tablero eliminado", "Deshacer", duration = SnackbarDuration.Indefinite) == SnackbarResult.ActionPerformed) {
+                        boards.value = listOf(first, restored)
+                        page.intValue = 1
+                    }
+                }
+            }, {}, snackbarHostState = host)
+        } }
+        compose.onNodeWithContentDescription("Editar tablero").performClick()
+        compose.onNodeWithText("Primero").assertIsDisplayed()
+        compose.onNodeWithText("Deshacer").performClick()
+        compose.onNodeWithText("2 de 2").assertIsDisplayed()
+        compose.onNodeWithText("Restaurado").assertIsDisplayed()
+    }
+
     @Test fun addingHasNoDeleteAction() {
         compose.setContent { TransmicroneTheme {
             SetupScreen("", emptyList(), place, setOf(service.key()), true, false,
