@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -44,11 +45,12 @@ fun CatalogSearchScreen(
     val keyboard = LocalSoftwareKeyboardController.current
     val screenEntered = LocalScreenEntered.current
     LaunchedEffect(screenEntered) { if (screenEntered) focus.requestFocus() }
-    FloatingScaffold(topBar = {
+    val list = rememberLazyListState()
+    FloatingScaffold(topEdgeVisible = { list.canScrollBackward }, topBar = {
         FloatingSearchHeader(query, onQuery, stringResource(R.string.catalog_search_hint), focus, onBack) { keyboard?.hide() }
     }) { insets ->
         LazyColumn(Modifier.fillMaxSize().padding(bottom = insets.calculateBottomPadding()).consumeWindowInsets(PaddingValues(bottom = insets.calculateBottomPadding())).imePadding(),
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = insets.calculateTopPadding() + 12.dp, bottom = 20.dp),
+            state = list, contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = insets.calculateTopPadding() + 12.dp, bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
             when {
                 query.isBlank() -> item { Message(stringResource(R.string.catalog_search_example)) }
@@ -99,7 +101,11 @@ fun CatalogDetailsScreen(
         // Long variants and large text stay in the list rather than consuming its viewport.
         val pinnedDirections = service != null && routes.size == 2 &&
             maxHeight / maxOf(1f, LocalDensity.current.fontScale) >= 480.dp
+        val edgeList = rememberLazyListState()
         FloatingScaffold(
+            topEdgeVisible = { edgeList.canScrollBackward },
+            bottomEdgeBlur = pinnedDirections || location != null,
+            bottomEdgeVisible = { edgeList.canScrollForward },
             topBar = {
                 FloatingScreenHeader(stringResource(if (location != null) {
                     if (location.kind == PlaceKind.ESTACION) R.string.kind_estacion else R.string.kind_paradero
@@ -120,7 +126,7 @@ fun CatalogDetailsScreen(
                 }
             },
         ) { insets ->
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = insets.calculateTopPadding() + 12.dp, bottom = insets.calculateBottomPadding() + 20.dp), verticalArrangement = Arrangement.spacedBy(if (service != null) 0.dp else 10.dp)) {
+            LazyColumn(Modifier.fillMaxSize(), state = edgeList, contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = insets.calculateTopPadding() + 12.dp, bottom = insets.calculateBottomPadding() + 20.dp), verticalArrangement = Arrangement.spacedBy(if (service != null) 0.dp else 10.dp)) {
                 if (location != null) item {
                     Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerLow) {
                         Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

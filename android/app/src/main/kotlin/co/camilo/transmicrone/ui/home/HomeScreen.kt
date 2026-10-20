@@ -8,7 +8,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateDpAsState
 import co.camilo.transmicrone.ui.common.FloatingSnackbarHost
+import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import co.camilo.transmicrone.ui.common.FloatingEdgeBand
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -46,11 +49,6 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import co.camilo.transmicrone.R
 import co.camilo.transmicrone.BuildConfig
 import co.camilo.transmicrone.ui.BoardView
@@ -156,6 +154,10 @@ fun HomeScreen(
             MaterialTheme.motionScheme.defaultSpatialSpec(), label = "addPadding")
         FloatingScaffold(
             backdrop = backdrop,
+            topEdgeVisible = { false },
+            bottomEdgeBlur = !compactHeight,
+            bottomEdgeVisible = { currentList.canScrollForward },
+            bottomEdgeHeight = dockHeight + safeInsets.asPaddingValues().calculateBottomPadding() + 16.dp,
             snackbarHost = { FloatingSnackbarHost(snackbarHostState) },
             topBar = { FloatingHomeHeader(onSearch, onSettings, compactHeight, onAdd) { onEdit(current.board.boardId) } },
             floatingActionButtonPosition = FabPosition.Center,
@@ -205,6 +207,8 @@ fun HomeScreen(
                     val refreshing = view.freshness == Freshness.Loading || view.freshness is Freshness.UpdatingCached
                     val quietRefresh = (view.freshness as? Freshness.UpdatingCached)?.quiet == true
                     val pullState = rememberPullToRefreshState()
+                    // The edge reads only this list, never the enclosing scaffold source or its own output.
+                    val arrivalsBackdrop = rememberHazeState()
                     val hasScrolled by remember(listState) { derivedStateOf { listState.canScrollBackward } }
                     val fade by animateFloatAsState(if (hasScrolled) 1f else 0f, label = "listTopFade")
                     var pullStartedAtTop by remember { mutableStateOf(false) }
@@ -272,17 +276,22 @@ fun HomeScreen(
                                     LinearProgressIndicator(progress = { pullState.distanceFraction.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxSize())
                                 }
                             }
-                            ArrivalList(
-                                view.arrivals, empty, Modifier.weight(1f).fillMaxWidth().testTag("arrival-viewport").topFade { fade }, state = listState,
-                                header = {
-                                    if (compactHeight) BoardTitleSelector(displayedBoards.map { it.board.displayName }, pager, showSwipeHint) { choosingBoard = true }
-                                    StationHeader(view)
-                                },
-                                bottomContentPadding = if (compactHeight) 24.dp else dockHeight + 48.dp,
-                                colorForArrival = { arrival -> routeColor(view, arrival.painted, arrival.routeId) },
-                                active = page == visibleIndex && !scrolling,
-                                initialLoading = view.cache == null && view.freshness == Freshness.Loading,
-                            )
+                            Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
+                                ArrivalList(
+                                    view.arrivals, empty, Modifier.fillMaxSize().testTag("arrival-viewport").hazeSource(arrivalsBackdrop), state = listState,
+                                    header = {
+                                        if (compactHeight) BoardTitleSelector(displayedBoards.map { it.board.displayName }, pager, showSwipeHint) { choosingBoard = true }
+                                        StationHeader(view)
+                                    },
+                                    bottomContentPadding = if (compactHeight) 24.dp else dockHeight + 48.dp,
+                                    colorForArrival = { arrival -> routeColor(view, arrival.painted, arrival.routeId) },
+                                    active = page == visibleIndex && !scrolling,
+                                    initialLoading = view.cache == null && view.freshness == Freshness.Loading,
+                                )
+                                if (hasScrolled && page == visibleIndex) FloatingEdgeBand(
+                                    arrivalsBackdrop, true, fade, 28.dp, Modifier.align(Alignment.TopCenter), "arrival-edge-top",
+                                )
+                            }
                         }
 
                     }
@@ -314,23 +323,6 @@ private fun StationHeader(view: BoardView) {
             ServiceChipSurface(color) {
                 Text(servicio.painted, Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                     style = MaterialTheme.typography.labelLarge)
-            }
-        }
-    }
-}
-
-@Composable
-private fun Modifier.topFade(fraction: () -> Float): Modifier {
-    val surface = MaterialTheme.colorScheme.surface
-    // Fade into the board background without a full-size offscreen mask.
-    return graphicsLayer().drawWithCache {
-        val fadeHeight = 24.dp.toPx()
-        val brush = Brush.verticalGradient(listOf(surface, surface.copy(alpha = 0f)), endY = fadeHeight)
-        onDrawWithContent {
-            drawContent()
-            val fade = fraction()
-            if (fade > 0f) {
-                drawRect(brush, alpha = fade, size = Size(size.width, fadeHeight))
             }
         }
     }

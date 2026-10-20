@@ -4,6 +4,7 @@ import co.camilo.transmicrone.ui.common.FloatingSnackbarHost
 import android.os.Build
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -35,14 +36,16 @@ fun SettingsScreen(
     onMove: (String, Int) -> Unit, onBack: () -> Unit,
     snackbarHostState: SnackbarHostState,
 ) {
+    val list = rememberLazyListState()
     FloatingScaffold(
+        topEdgeVisible = { list.canScrollBackward },
         snackbarHost = { FloatingSnackbarHost(snackbarHostState) },
         topBar = {
             FloatingScreenHeader(stringResource(R.string.settings_title), stringResource(R.string.settings_back), onBack)
         },
     ) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding()),
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = padding.calculateTopPadding() + 12.dp, bottom = 28.dp),
+            state = list, contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = padding.calculateTopPadding() + 12.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item { SectionTitle(R.string.settings_appearance) }
             item {

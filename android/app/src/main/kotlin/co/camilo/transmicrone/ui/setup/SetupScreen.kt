@@ -11,6 +11,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
@@ -101,7 +102,11 @@ fun SetupScreen(
                 }
             }
         }
+        val edgeList = rememberLazyListState()
         FloatingScaffold(
+            topEdgeVisible = { edgeList.canScrollBackward },
+            bottomEdgeBlur = !inlineActions && (place != null || isEditing),
+            bottomEdgeVisible = { edgeList.canScrollForward },
             snackbarHost = { FloatingSnackbarHost(snackbarHostState) },
             topBar = {
                 if (place == null) FloatingSearchHeader(query, onQuery, stringResource(R.string.search_hint), searchFocus, onBack) {
@@ -120,7 +125,7 @@ fun SetupScreen(
                 .consumeWindowInsets(PaddingValues(bottom = bodyBottom)).imePadding()) {
                 if (place == null) {
                     LazyColumn(
-                        Modifier.weight(1f),
+                        Modifier.weight(1f), state = edgeList,
                         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = insets.calculateTopPadding() + 12.dp, bottom = listBottom),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
@@ -185,7 +190,7 @@ fun SetupScreen(
                     val orderedServices = remember(place.servicios, initiallySelected) {
                         place.servicios.sortedBy { if (it.key() in initiallySelected) 0 else 1 }
                     }
-                    LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = insets.calculateTopPadding() + 12.dp, bottom = listBottom), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    LazyColumn(Modifier.weight(1f), state = edgeList, contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = insets.calculateTopPadding() + 12.dp, bottom = listBottom), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         item {
                             Column(Modifier.padding(horizontal = 4.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text(stringResource(R.string.setup_step_services), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)

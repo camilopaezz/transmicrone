@@ -1,5 +1,7 @@
 package co.camilo.transmicrone
 
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.height
@@ -42,6 +44,64 @@ class GlassControlsTest {
     private val service = CatalogEntry.Service(ServicioOption("E48", "Norte||Sur", listOf(1), null), emptyList())
     private val routes = listOf("Norte", "Sur").mapIndexed { direction, name ->
         ServiceRoute("$direction", List(40) { i -> RouteStop("$direction:$i", if (i == 39) name else "Parada $direction/$i") })
+    }
+
+    private fun screenshot(name: String) {
+        compose.waitForIdle()
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val file = java.io.File(instrumentation.targetContext.externalCacheDir, name)
+        file.outputStream().use { instrumentation.uiAutomation.takeScreenshot().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    private fun homeEdges(dark: Boolean, name: String) {
+        val board = Board("1", "estacion:0", PlaceKind.ESTACION, "TM0", "Ricaurte - NQS", null, emptyList())
+        val arrivals = List(40) { i -> Arrival("E48", "CAD $i", i, i, "Entre 2 y 4 min", "200 mts", Occupancy.UNKNOWN, null) }
+        compose.setContent { TransmicroneTheme(darkTheme = dark, dynamicColor = false) {
+            HomeScreen(listOf(BoardView(board, arrivals), BoardView(board.copy(boardId = "2", displayName = "León XIII"), arrivals)), 0, {}, {}, {}, {})
+        } }
+        compose.mainClock.advanceTimeBy(6_000)
+        compose.onNodeWithTag("arrival-edge-top").assertDoesNotExist()
+        if (dark) screenshot("glass-step3b-rest.png")
+        compose.onNodeWithTag("scroll-edge-top").assertDoesNotExist()
+        compose.onNodeWithTag("scroll-edge-bottom").assertExists()
+        compose.onNodeWithTag("arrival-viewport").performScrollToIndex(18)
+        compose.onNodeWithTag("scroll-edge-top").assertDoesNotExist()
+        compose.onNodeWithTag("arrival-edge-top").assertExists()
+        screenshot(name)
+        compose.onNodeWithTag("arrival-viewport").performScrollToIndex(0)
+        compose.onNodeWithTag("arrival-edge-top").assertDoesNotExist()
+        compose.onNodeWithTag("arrival-viewport").performScrollToIndex(40)
+        compose.onNodeWithTag("scroll-edge-bottom").assertDoesNotExist()
+    }
+
+    @Test fun homeScrollEdgesDark() = homeEdges(true, "glass-step3b-scrolled.png")
+    @Test fun homeScrollEdgesLight() = homeEdges(false, "glass-step3b-scrolled-light.png")
+
+    @Test fun detailsScrollEdgesScreenshot() {
+        compose.setContent { TransmicroneTheme(darkTheme = true, dynamicColor = false) {
+            CatalogDetailsScreen(service, {}, {}, {}, {}, RouteState.Loaded(routes))
+        } }
+        compose.onNode(hasScrollAction()).performScrollToIndex(18)
+        compose.onNodeWithTag("scroll-edge-top").assertExists()
+        compose.onNodeWithTag("scroll-edge-bottom").assertExists()
+        screenshot("glass-step3-details.png")
+    }
+
+    @Test fun edgeBandsPassPhysicalTapsToContent() {
+        var taps = 0
+        compose.setContent { TransmicroneTheme {
+            FloatingScaffold(topBar = { Box(Modifier.height(80.dp)) }, bottomEdgeBlur = true,
+                contentWindowInsets = WindowInsets(0, 0, 0, 0)) {
+                androidx.compose.foundation.lazy.LazyColumn {
+                    items(30) { index ->
+                        Box(Modifier.height(80.dp).width(200.dp).clickable { taps++ }.testTag("under-edge-$index"))
+                    }
+                }
+            }
+        } }
+        compose.onNodeWithTag("scroll-edge-top").assertExists()
+        compose.onNodeWithTag("under-edge-0").performTouchInput { click(center) }
+        compose.runOnIdle { assertEquals(1, taps) }
     }
 
     @Test fun undoSnackbarClearsHomeDockAndKeepsMaterialSemantics() {
@@ -221,6 +281,8 @@ class GlassControlsTest {
             CatalogDetailsScreen(service, {}, {}, {}, {}, RouteState.Loaded(routes),
                 routeIndex = index.intValue, onSelectRoute = { index.intValue = it })
         } }
+        compose.onNodeWithTag("scroll-edge-top").assertDoesNotExist()
+        compose.onNodeWithTag("scroll-edge-bottom").assertExists()
         val before = compose.onNodeWithContentDescription("Hacia Sur").getUnclippedBoundsInRoot()
         val list = compose.onNode(hasScrollAction()).getUnclippedBoundsInRoot()
         assertTrue("Directions belong in the bottom dock", before.top > (list.top + list.bottom) / 2)
@@ -246,6 +308,7 @@ class GlassControlsTest {
                 } }
             }
         }
+        compose.onNodeWithTag("scroll-edge-bottom").assertDoesNotExist()
         compose.onNode(hasScrollAction()).performScrollToNode(hasContentDescription("Hacia Sur"))
         compose.onNodeWithContentDescription("Hacia Sur").assertIsDisplayed().performClick()
         compose.onNode(hasScrollAction()).performScrollToNode(hasText("Parada 1/35"))

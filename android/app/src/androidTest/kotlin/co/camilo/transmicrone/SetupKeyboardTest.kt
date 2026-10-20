@@ -70,6 +70,7 @@ class SetupKeyboardTest {
             ViewCompat.getRootWindowInsets(compose.activity.window.decorView)
                 ?.isVisible(WindowInsetsCompat.Type.ime()) == true
         }
+        compose.onNodeWithTag("scroll-edge-bottom").assertDoesNotExist()
         compose.onNodeWithText("Nombre del tablero (opcional)").assertIsDisplayed()
         compose.onNode(hasScrollAction()).performScrollToNode(hasText("Guardar tablero"))
         compose.onNodeWithText("Guardar tablero").assertIsDisplayed()

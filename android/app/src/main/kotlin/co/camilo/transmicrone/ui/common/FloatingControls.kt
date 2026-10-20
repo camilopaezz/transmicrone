@@ -1,6 +1,11 @@
 package co.camilo.transmicrone.ui.common
 
+import android.os.Build
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -10,10 +15,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
-import dev.chrisbanes.haze.*
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import dev.chrisbanes.haze.*
 
 internal val FloatingHeaderHeight = 52.dp
 
@@ -40,6 +50,10 @@ internal fun FloatingScaffold(
     floatingActionButton: @Composable () -> Unit = {},
     floatingActionButtonPosition: FabPosition = FabPosition.End,
     backdrop: HazeState = rememberHazeState(),
+    topEdgeVisible: () -> Boolean = { true },
+    bottomEdgeBlur: Boolean = false,
+    bottomEdgeVisible: () -> Boolean = { true },
+    bottomEdgeHeight: Dp = 96.dp,
     contentWindowInsets: WindowInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout),
     content: @Composable (PaddingValues) -> Unit,
 ) {
@@ -52,16 +66,55 @@ internal fun FloatingScaffold(
             contentWindowInsets = contentWindowInsets,
         ) { padding ->
             // Keep system status icons over a clear background. Only the app controls overlap the list.
-            Box(Modifier.fillMaxSize().windowInsetsPadding(contentWindowInsets.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)).hazeSource(backdrop)) {
-                content(PaddingValues(
-                    start = 0.dp,
-                    top = (padding.calculateTopPadding() - statusHeight).coerceAtLeast(0.dp),
-                    end = 0.dp,
-                    bottom = padding.calculateBottomPadding(),
-                ))
+            Box(Modifier.fillMaxSize().windowInsetsPadding(contentWindowInsets.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))) {
+                Box(Modifier.fillMaxSize().hazeSource(backdrop)) {
+                    content(PaddingValues(
+                        start = 0.dp,
+                        top = (padding.calculateTopPadding() - statusHeight).coerceAtLeast(0.dp),
+                        end = 0.dp,
+                        bottom = padding.calculateBottomPadding(),
+                    ))
+                }
+                ScrollEdgeBand(backdrop, true, topEdgeVisible(),
+                    (padding.calculateTopPadding() - statusHeight).coerceAtLeast(0.dp) + 20.dp, Modifier.align(Alignment.TopCenter))
+                if (bottomEdgeBlur) ScrollEdgeBand(backdrop, false, bottomEdgeVisible(),
+                    maxOf(bottomEdgeHeight, padding.calculateBottomPadding()) + 20.dp, Modifier.align(Alignment.BottomCenter))
             }
         }
     }
+}
+
+/** Draw-only siblings of the source, so controls and bands cannot feed back into the blur. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun ScrollEdgeBand(backdrop: HazeState, top: Boolean, visible: Boolean, height: Dp, modifier: Modifier) {
+    val alpha by animateFloatAsState(if (visible) 1f else 0f, MaterialTheme.motionScheme.fastEffectsSpec(), label = "edgeBlur")
+    FloatingEdgeBand(backdrop, top, alpha, height, modifier, if (top) "scroll-edge-top" else "scroll-edge-bottom")
+}
+
+@Composable
+internal fun FloatingEdgeBand(backdrop: HazeState, top: Boolean, alpha: Float, height: Dp, modifier: Modifier, tag: String) {
+    if (alpha <= 0f) return
+    val surface = MaterialTheme.colorScheme.surface
+    val gradient = Brush.verticalGradient(*if (top) arrayOf(
+        0f to surface.copy(alpha = alpha), .35f to surface.copy(alpha = .6f * alpha), 1f to Color.Transparent,
+    ) else arrayOf(
+        0f to Color.Transparent, .65f to surface.copy(alpha = .6f * alpha), 1f to surface.copy(alpha = alpha),
+    ))
+    val heightPx = with(LocalDensity.current) { height.toPx() }
+    val effect = if (Build.VERSION.SDK_INT >= 31) Modifier.hazeEffect(backdrop, HazeStyle(
+        backgroundColor = surface, tint = HazeTint(Color.Transparent), blurRadius = 20.dp, noiseFactor = 0f,
+    )) {
+        this.alpha = alpha
+        // Keep edge-clamped samples beneath the stronger scrim; the inner half stays sharp.
+        progressive = HazeProgressive.verticalGradient(
+            easing = if (top) LinearOutSlowInEasing else FastOutLinearInEasing,
+            startY = if (top) 0f else heightPx * .5f, endY = if (top) heightPx * .5f else heightPx,
+            startIntensity = if (top) 1f else 0f, endIntensity = if (top) 0f else 1f,
+        )
+    } else Modifier
+    Box(modifier.fillMaxWidth().height(height).clip(RectangleShape)
+        .testTag(tag).then(effect).background(gradient))
 }
 
 /** Clip the backdrop blur to each control, leaving the space between controls transparent. */
