@@ -5,6 +5,7 @@ import co.camilo.transmicrone.data.feed.FeedClient
 import co.camilo.transmicrone.data.local.FileArrivalsCache
 import co.camilo.transmicrone.domain.*
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -36,14 +37,14 @@ class CacheLifecycleTest {
                 "TM0069", "Ricaurte", null, listOf(SelectedServicio("S43", "San Mateo", emptyList())))
             val repo = ArrivalsRepository(feed, cache)
             cache.write(board.boardId, CachedArrivals(emptyList(), now))
-            val pending = async { repo.refresh(board) }
+            val pending = async { repo.refreshUpdates(board).toList() }
             entered.await()
             repo.remove(board.boardId)
             assertNull(cache.read(board.boardId))
             response.complete(FetchResult.Empty(now))
             pending.await()
             assertNull(cache.read(board.boardId))
-            repo.refresh(board)
+            repo.refreshUpdates(board).toList()
             assertNotNull(cache.read(board.boardId))
         } finally {
             dir.deleteRecursively()

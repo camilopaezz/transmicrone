@@ -9,6 +9,9 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
@@ -35,6 +38,41 @@ import java.time.Instant
 class HomeUiTest {
     @get:Rule
     val compose = createComposeRule()
+
+    @Test
+    fun pullDownIsAcceptedRepeatedlyWhileFetchIsRunning() {
+        var refreshes = 0
+        compose.setContent {
+            TransmicroneTheme {
+                HomeScreen(
+                    boards = listOf(BoardView(board = sampleBoard(), freshness = Freshness.Loading)),
+                    pageIndex = 0, onPage = {}, onAdd = {}, onEdit = {},
+                    onRefresh = { refreshes++ },
+                )
+            }
+        }
+        repeat(2) {
+            compose.onNodeWithTag("arrival-viewport").performTouchInput { swipeDown() }
+            compose.waitForIdle()
+        }
+        compose.runOnIdle { assertTrue("Each pull must reach the refresh handler while fetching", refreshes == 2) }
+    }
+
+    @Test
+    fun pullDownRetriesAfterFailedFetchWithoutCachedArrivals() {
+        var refreshes = 0
+        compose.setContent {
+            TransmicroneTheme {
+                HomeScreen(
+                    boards = listOf(BoardView(board = sampleBoard(), freshness = Freshness.Failed(FailureKind.TIMEOUT))),
+                    pageIndex = 0, onPage = {}, onAdd = {}, onEdit = {},
+                    onRefresh = { refreshes++ },
+                )
+            }
+        }
+        compose.onNodeWithTag("arrival-viewport").performTouchInput { swipeDown() }
+        compose.runOnIdle { assertTrue("Pulling down after a failure must request a retry", refreshes == 1) }
+    }
 
     @Test
     fun oldBusReportDoesNotClaimArrivingAfterFreshFetch() {

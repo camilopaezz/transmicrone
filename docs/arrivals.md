@@ -96,7 +96,7 @@ Use this to calibrate clocks. Do not treat it as a live position.
 
 At 08:19 Bogota, simultaneous S43 / TM0069 requests disagreed: the service summary said “Servicio llegando”, 563 m, while the nearest identified vehicle was 41405 / T10405 at 2594 m with “Entre 4 min. y 7 min. a: 2Km” and source report 08:18:07 AM. Android station boards now query `/getServicios` for all selected route IDs with `Nombre` set to the destination and `Distancia: 12000`, matching the working PC script. Results are filtered to the selected service/destination/route IDs and deduplicated by vehicle identity. Stop boards retain service summaries.
 
-Fetch time and source report time are separate. `lasttime` is interpreted as a Bogota clock time on the most recent date with five minutes of clock-skew tolerance. Reports older than two minutes are visibly stale even when fetched successfully. The parser retains missing or invalid source times as unavailable; the current cards omit individual source timestamps and ages. Only known reports older than two minutes receive the stale label. Time ranges remain server phrases, without an invented countdown. Any failed variant request preserves the last complete board, with its failure state.
+Fetch time and source report time are separate. `lasttime` is interpreted as a Bogota clock time on the most recent date with five minutes of clock-skew tolerance. Reports older than two minutes are visibly stale even when fetched successfully. The parser retains missing or invalid source times as unavailable; the current cards omit individual source timestamps and ages. Only known reports older than two minutes receive the stale label. Time ranges remain server phrases, without an invented countdown. A failed variant preserves the last complete results for its selected service, with its failure state; other services can update independently.
 
 A successful `/getServicios` response can also have an empty body rather than `[]`, observed for S48 / TM0069 on 2026-10-02. Android treats that vehicle-endpoint response as no nearby results, matching the PC script. Blank service-summary bodies remain malformed; non-200 statuses remain failures.
 
@@ -117,5 +117,33 @@ resolution. Unknown composite mappings return Unsupported for station requests
 rather than a successful empty board. Add mappings only with directional live
 ID evidence; paired headsign text alone is insufficient. Ordinary service code,
 destination, and route ID guards remain in place. Composite rows additionally
-require the reported route ID. Requests remain limited to two at a time and any
-failed request preserves the previous complete board.
+require the reported route ID. All selected variant requests start concurrently,
+without an application-level per-board cap. Any failed request preserves the
+previous complete results for its service. The comparison with the previous two-request cap is documented in
+[the concurrency measurements](performance/2026-10-16-arrivals.md).
+
+## Progressive service updates
+
+Station boards publish each selected service after all of that service's variants
+finish. Requests for every service start concurrently, and identical resolved
+queries share a request. A successful service replaces only its own cards. An
+empty success clears only that service; a pending, failed, or unsupported service
+retains its last successful cards and fetch time. No partial variant list is
+published as a complete service. Stop boards still make one summary request and
+apply its outcome to each selected service.
+
+The existing board layout and service badges remain unchanged. Cards update as
+each service finishes, and the board's progress strip remains active until all
+selected services finish. Per-service outcomes and timestamps stay internal;
+cancelling or reopening preserves prior empty results and their timestamps. A
+call timeout emits a failure for its service while sibling requests continue.
+Fetch age remains separate from the vehicle source-report age used by the cards'
+stale-report label.
+
+Successful per-service results are persisted immediately, including empty results.
+The cache records the normalized place query and original saved service selection,
+including its variant IDs. Changed places and changed variant sets cannot inherit
+a previous selection's results. Old board-wide caches are imported as cached data
+with their original fetch time. Cancellation retains completed services, and late
+results cannot recreate a deleted board's cache. Complete-board feed consumers,
+such as the comparison benchmark, retain the aggregate result contract.
