@@ -13,6 +13,7 @@ import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 import build_catalog
 from pack_android_catalog import pack
@@ -30,6 +31,13 @@ def encode(value: object) -> bytes:
 
 def sha(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
+
+
+def verify_public(obj: dict) -> None:
+    import urllib.request
+    with urllib.request.urlopen(obj['url'], timeout=60) as response:
+        if sha(response.read()) != obj['sha256']:
+            raise RuntimeError('Public catalog download checksum mismatch')
 
 
 def clean(value):
@@ -60,7 +68,7 @@ def compare(before: dict, after: dict) -> dict:
     return result
 
 
-def assess(catalog: dict, baseline: dict, build_exit: int, now: datetime) -> dict:
+def assess(catalog: dict, baseline: dict, build_exit: int, now: datetime, prior_observation: dict | None = None) -> dict:
     errors, holds = [], []
     if build_exit:
         errors.append(f"Builder exited {build_exit}")
@@ -106,7 +114,16 @@ def assess(catalog: dict, baseline: dict, build_exit: int, now: datetime) -> dic
     changes = compare(baseline, catalog)
     for section, change in changes.items():
         if baseline and change['removed']:
-            holds.append(f"{section}: {len(change['removed'])} removed identities require confirmation")
+            confirmed = set()
+            if prior_observation and prior_observation.get('valid'):
+                # Different Bogotá calendar days, not repeated manual runs of one snapshot.
+                prior_day = datetime.fromisoformat(prior_observation['started_at']).astimezone(ZoneInfo('America/Bogota')).date()
+                today = now.astimezone(ZoneInfo('America/Bogota')).date()
+                if prior_day < today:
+                    confirmed = set(prior_observation.get('changes', {}).get(section, {}).get('removed', []))
+            unconfirmed = set(change['removed']) - confirmed
+            if unconfirmed:
+                holds.append(f"{section}: {len(unconfirmed)} removed identities need a second complete daily observation")
         old_count = len(baseline.get(section, []))
         if old_count and len(catalog.get(section, [])) < old_count * 0.9:
             errors.append(f'{section}: more than 10% of records disappeared')
@@ -172,7 +189,7 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     now = datetime.now(timezone.utc)
     version = now.strftime('%Y%m%dT%H%M%SZ') + '-' + os.environ.get('GITHUB_RUN_ID', 'local') + '-' + os.environ.get('GITHUB_RUN_ATTEMPT', '1')
-    store, previous_manifest, baseline = None, None, {}
+    store, previous_manifest, prior_observation, baseline = None, None, None, {}
     report = {'version': version, 'started_at': now.isoformat(), 'mode': 'build-only' if args.build_only else 'r2',
               'run_url': f"https://github.com/{os.environ.get('GITHUB_REPOSITORY', 'camilopaezz/transmicrone')}/actions/runs/{os.environ.get('GITHUB_RUN_ID', '')}"}
     code = 1
@@ -181,6 +198,8 @@ def main():
             store = R2()
             previous = store.read('current.json')
             previous_manifest = json.loads(previous) if previous else None
+            observation = store.read('latest-observation.json')
+            prior_observation = json.loads(observation) if observation else None
             if previous_manifest:
                 raw = store.read(previous_manifest['source_catalog']['key'])
                 if raw is None or sha(raw) != previous_manifest['source_catalog']['sha256']:
@@ -203,7 +222,7 @@ def main():
         if not (out / 'catalog.json').exists():
             raise RuntimeError('Builder did not produce a candidate catalog')
         candidate = json.loads((out / 'catalog.json').read_text())
-        assessment = assess(candidate, baseline if previous_manifest else {}, build_exit, now)
+        assessment = assess(candidate, baseline if previous_manifest else {}, build_exit, now, prior_observation)
         # The bundled catalog is useful for first-run comparison, but is not a prior publication.
         assessment['changes'] = compare(baseline, candidate)
         report.update(assessment)
@@ -222,14 +241,12 @@ def main():
             artifact = store.put(f'{base}/catalog.json.gz', packed, 'application/gzip')
             manifest = {'schema_version': 1, 'catalog_schema_version': 1, 'version': version,
                         'generated_at': candidate['generated_at'], 'content_sha256': report['content_sha256'],
+                        'checked_at': now.isoformat(),
                         'catalog': artifact, 'source_catalog': source_object, 'run_url': report['run_url']}
             report['candidate_manifest'] = store.put(f'{base}/manifest.json', encode(manifest))
             # Public read-back exercises the same path a future app will use.
-            import urllib.request
             for obj in (artifact, report['candidate_manifest']):
-                with urllib.request.urlopen(obj['url'], timeout=60) as response:
-                    if sha(response.read()) != obj['sha256']:
-                        raise RuntimeError('Public catalog download checksum mismatch')
+                verify_public(obj)
             unchanged = previous_manifest and previous_manifest['content_sha256'] == report['content_sha256']
             report['publication'] = 'unchanged' if unchanged else 'held'
             # Archive evidence before promoting the pointer, even when validation holds it.
@@ -249,8 +266,13 @@ def main():
                 if (out / 'responses.tar.gz').exists():
                     store.archive(f'observations/{version}/responses.tar.gz', out / 'responses.tar.gz')
                 if code == 0 and report.get('publication') != 'unchanged':
-                    store.put('current.json', encode(report['manifest']), mutable=True)
+                    current = store.put('current.json', encode(report['manifest']), mutable=True)
                     report['publication'] = 'published'
+                    verify_public(current)
+                elif code == 0:
+                    refreshed = {**previous_manifest, 'checked_at': now.isoformat(), 'last_checked_run_url': report['run_url']}
+                    current = store.put('current.json', encode(refreshed), mutable=True)
+                    verify_public(current)
                 store.put(f'observations/{version}/report.json', encode(report))
                 store.put('latest-observation.json', encode(report), mutable=True)
         except Exception as error:

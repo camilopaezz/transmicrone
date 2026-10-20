@@ -43,12 +43,21 @@ jobs:
           python3 -m unittest discover -s tests -q
       - name: Collect, build, validate, and publish
         env:
-          BUILD_ONLY: ${{ inputs.build_only || github.event_name == 'push' }}
+          BUILD_ONLY: ${{ inputs.build_only || (github.event_name == 'push' && vars.CATALOG_R2_READY != 'true') }}
         run: |
           if [ "$BUILD_ONLY" = true ]; then
             python3 -u tools/catalog_daily.py --out "$RUNNER_TEMP/catalog-daily" --build-only
           else
             python3 -u tools/catalog_daily.py --out "$RUNNER_TEMP/catalog-daily"
+          fi
+      - name: Select complete archive or partial response directory
+        id: evidence
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/catalog-daily/responses.tar.gz" ]; then
+            echo "responses_path=$RUNNER_TEMP/catalog-daily/responses.tar.gz" >> "$GITHUB_OUTPUT"
+          else
+            echo "responses_path=$RUNNER_TEMP/catalog-daily/responses" >> "$GITHUB_OUTPUT"
           fi
       - name: Retain evidence even on failure
         if: always()
@@ -61,8 +70,7 @@ jobs:
             ${{ runner.temp }}/catalog-daily/catalog.json
             ${{ runner.temp }}/catalog-daily/catalog.json.gz
             ${{ runner.temp }}/catalog-daily/source-catalog.json.gz
-            ${{ runner.temp }}/catalog-daily/responses.tar.gz
-            ${{ runner.temp }}/catalog-daily/responses/
+            ${{ steps.evidence.outputs.responses_path }}
           if-no-files-found: warn
           retention-days: 30
           compression-level: 0

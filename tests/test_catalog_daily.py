@@ -78,6 +78,27 @@ class AssessmentTests(unittest.TestCase):
         new['service_routes'][0]['stops'].append({'name': 'Two'})
         self.assertEqual(daily.compare(old, new)['service_routes']['changed'], ['1'])
 
+    def test_complete_removal_on_a_prior_day_is_confirmed(self):
+        value = candidate()
+        baseline = copy.deepcopy(value)
+        baseline['places'][0]['place_id'] = 'old-id'
+        for i in range(10):
+            baseline['places'].append({'place_id': f'unchanged-{i}'})
+            value['places'].append({'place_id': f'unchanged-{i}'})
+        prior = {'valid': True, 'started_at': '2026-01-01T12:00:00+00:00',
+                 'changes': {'places': {'removed': ['old-id']}}}
+        result = daily.assess(value, baseline, 0, datetime.now(timezone.utc), prior)
+        self.assertTrue(result['promotable'], result)
+
+    def test_same_day_or_failed_observation_cannot_confirm_removal(self):
+        value = candidate()
+        baseline = copy.deepcopy(value)
+        baseline['places'][0]['place_id'] = 'old-id'
+        for valid in (True, False):
+            prior = {'valid': valid, 'started_at': datetime.now(timezone.utc).isoformat(),
+                     'changes': {'places': {'removed': ['old-id']}}}
+            self.assertFalse(daily.assess(value, baseline, 0, datetime.now(timezone.utc), prior)['promotable'])
+
 
 class FakeR2:
     def __init__(self, archive_fails=False):
@@ -136,3 +157,14 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual(result, 1)
         self.assertNotIn('current.json', store.objects)
         self.assertIn('publication_error', report)
+
+    def test_unchanged_data_keeps_version_and_updates_check_time(self):
+        store = FakeR2()
+        self.assertEqual(self.run_daily(store)[0], 0)
+        original = json.loads(store.objects['current.json'])
+        result, report = self.run_daily(store)
+        self.assertEqual(result, 0)
+        self.assertEqual(report['publication'], 'unchanged')
+        current = json.loads(store.objects['current.json'])
+        self.assertEqual(current['version'], original['version'])
+        self.assertGreaterEqual(current['checked_at'], original['checked_at'])

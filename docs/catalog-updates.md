@@ -124,10 +124,64 @@ because their earlier bodies were not retained. Publication validation still
 needs source freshness, identity and join checks, completeness checks, and
 confirmation of removals. Fetch success alone must not approve publication.
 
-## Next steps
+## Daily R2 publication
 
-Run the full builder on hosted infrastructure, then add completeness and change
-validation before enabling unattended publication. The intended distribution
-is versioned catalog files and a compatibility manifest in object storage.
-Storage publishing, scheduled generation, Android downloads, and saved-board
-reconciliation are not implemented by this probe.
+`catalog-daily.yml` runs the full builder once a day at 10:37 UTC, 05:37 Bogotá
+time, after the observed official GTFS publication window. GitHub schedules
+run from the default branch and can be delayed by runner availability. Manual
+dispatch supports a build-only run for diagnostics. Publication is independent
+of Android releases; the app continues using its bundled catalog.
+
+The daily job collects every catalog variant's route detail, all GIS pages,
+the route list and hours, and a fresh GTFS archive. It makes sequential requests
+with a 0.2-second pause between details. Transient network failures and selected
+HTTP failures receive up to two retries, with every attempt retained. It builds
+in runner scratch space; the checked-in catalog and Android asset are untouched.
+
+R2 configuration uses bucket `transminuto-catalog` and custom hostname
+`https://transminuto-catalog.cpzhmlb.uk`. The bucket-scoped credential has Object
+Read & Write permissions, with no administration access or access to other
+buckets. GitHub stores `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` as encrypted
+secrets. Repository variables `R2_ACCOUNT_ID`, `R2_BUCKET`, and `R2_PUBLIC_URL`
+select the destination. `CATALOG_R2_READY=true` also permits the experimental
+branch push trigger to exercise publication. Scheduled and manual publication
+require R2 configuration and fail if it is missing.
+
+Files under the bucket's `catalog/` prefix:
+
+- `versions/<version>/catalog.json.gz`: the exact compact catalog format the
+  app currently understands, with size and SHA-256 recorded in its manifest.
+- `versions/<version>/source-catalog.json.gz`: complete generated source catalog
+  used for comparisons with the last published version.
+- `versions/<version>/manifest.json`: immutable candidate manifest, including
+  schema versions, artifact URLs, checksums, build time, and content digest.
+- `observations/<version>/responses.tar.gz`: original source response bodies,
+  request metadata, and errors, including all route-detail variants and GTFS.
+- `observations/<version>/report.json`: source validation and added, removed,
+  and changed record identities, with before/after examples.
+- `latest-observation.json`: the latest completed report, including held candidates.
+- `current.json`: the current published manifest. An unchanged catalog keeps
+  its published version and updates `checked_at` after a successful daily check.
+
+Immutable objects use conditional creation, and catalog/manifest uploads receive
+authenticated read-back and public HTTPS checksum verification. Evidence upload
+must complete before `current.json` can advance. Public download verification
+also checks `current.json` after updating it. Workflow concurrency serializes
+publication runs. Previous version objects remain available for recovery.
+
+Publication fails closed on missing or failed sources, incomplete or stale route
+details, duplicate identities, broken place/route joins, expired GTFS validity,
+or a GTFS archive older than two days. A loss of more than 10% of any compared
+record section also blocks publication. Ordinary removals must appear in two
+complete observations on different Bogotá calendar days. A failed source run or
+multiple manual runs on one day cannot confirm a removal. First publication
+bootstraps from a complete fresh build and records a comparison with the bundled
+catalog. These checks are initial conservative rules to evaluate over daily runs.
+
+Held candidates retain their evidence and candidate manifests but do not replace
+`current.json`. A nonzero job result makes the hold or failure visible in Actions.
+Workflow artifacts retain reports, the candidate, and full responses for 30 days;
+R2 objects currently have no automatic deletion policy. GitHub artifacts also
+include loose response files so a timeout before archiving does not discard them.
+
+Android downloads and saved-board reconciliation remain separate future work.
