@@ -1,5 +1,12 @@
 package co.camilo.transmicrone.ui.home
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateDpAsState
 import co.camilo.transmicrone.ui.common.FloatingSnackbarHost
 import dev.chrisbanes.haze.rememberHazeState
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
@@ -57,7 +64,7 @@ import co.camilo.transmicrone.ui.common.FloatingScaffold
 import co.camilo.transmicrone.ui.common.FloatingControlSurface
 import co.camilo.transmicrone.ui.common.relativeTime
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun HomeScreen(
     boards: List<BoardView>, pageIndex: Int,
@@ -108,6 +115,11 @@ fun HomeScreen(
         val listStates by rememberUpdatedState(displayedBoards.associate { view ->
             view.board.boardId to key(view.board.boardId) { rememberLazyListState() }
         })
+        val collapseEnabled = rememberDockCollapseEnabled() && !compactHeight
+        var dockCollapsed by remember(current.board.boardId, collapseEnabled) { mutableStateOf(false) }
+        val currentList = listStates.getValue(current.board.boardId)
+        val dockExpanded = !collapseEnabled || !dockCollapsed || scrolling || !currentList.canScrollBackward || !currentList.canScrollForward
+        val dockThreshold = with(density) { 10.dp.toPx() }
         var swipeHintDismissed by swipeHintDismissal
         val dragging by pager.interactionSource.collectIsDraggedAsState()
         LaunchedEffect(dragging, pager.isScrollInProgress) {
@@ -138,6 +150,10 @@ fun HomeScreen(
         }
         val addLabel = stringResource(R.string.add_board)
         val backdrop = rememberHazeState()
+        val spatialSpec = MaterialTheme.motionScheme.defaultSpatialSpec<androidx.compose.ui.unit.IntSize>()
+        val effectsSpec = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
+        val addPadding by animateDpAsState(if (dockExpanded) 16.dp else 12.dp,
+            MaterialTheme.motionScheme.defaultSpatialSpec(), label = "addPadding")
         FloatingScaffold(
             backdrop = backdrop,
             snackbarHost = { FloatingSnackbarHost(snackbarHostState) },
@@ -145,16 +161,23 @@ fun HomeScreen(
             floatingActionButtonPosition = FabPosition.Center,
             floatingActionButton = {
                 if (!compactHeight) FloatingControlSurface {
-                    Row(Modifier.widthIn(max = dockMaxWidth).onSizeChanged { dockHeight = with(density) { it.height.toDp() } }.padding(6.dp), verticalAlignment = Alignment.CenterVertically,
+                    Row(Modifier.widthIn(max = dockMaxWidth).onSizeChanged { dockHeight = with(density) { it.height.toDp() } }.animateContentSize(spatialSpec).padding(6.dp), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         IconButton(onClick = { onEdit(current.board.boardId) }, modifier = Modifier.size(48.dp)) {
                             Icon(Icons.Default.Edit, stringResource(R.string.edit_board))
                         }
-                        Button(onClick = onAdd, modifier = Modifier.weight(1f, fill = false).heightIn(min = 48.dp)
+                        Button(onClick = onAdd, contentPadding = PaddingValues(horizontal = addPadding, vertical = 8.dp),
+                            modifier = Modifier.weight(1f, fill = false).widthIn(min = 48.dp).heightIn(min = 48.dp)
                             .semantics { contentDescription = addLabel }) {
                             Icon(Icons.Default.Add, null)
-                            Spacer(Modifier.width(8.dp))
-                            Text(stringResource(R.string.add_board))
+                            AnimatedVisibility(dockExpanded,
+                                enter = expandHorizontally(spatialSpec, expandFrom = Alignment.Start) + fadeIn(effectsSpec),
+                                exit = shrinkHorizontally(spatialSpec, shrinkTowards = Alignment.Start) + fadeOut(effectsSpec)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(addLabel)
+                                }
+                            }
                         }
                     }
                 }
@@ -194,8 +217,29 @@ fun HomeScreen(
                             }
                         }
                     }
+                    val dockScroll = remember(listState, visibleIndex, scrolling, collapseEnabled) {
+                        object : NestedScrollConnection {
+                            var distance = 0f
+                            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                                if (page != visibleIndex || scrolling || !collapseEnabled) return Offset.Zero
+                                val delta = consumed.y
+                                if (!listState.canScrollBackward || !listState.canScrollForward) {
+                                    distance = 0f
+                                    dockCollapsed = false
+                                } else if (delta != 0f) {
+                                    if (distance * delta < 0f) distance = 0f
+                                    distance += delta
+                                    if (kotlin.math.abs(distance) >= dockThreshold) {
+                                        dockCollapsed = distance < 0f
+                                        distance = 0f
+                                    }
+                                }
+                                return Offset.Zero
+                            }
+                        }
+                    }
                     Box(
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize().nestedScroll(dockScroll)
                             .pointerInput(listState) {
                                 awaitEachGesture {
                                     awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)

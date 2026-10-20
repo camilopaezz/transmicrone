@@ -18,6 +18,8 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import co.camilo.transmicrone.domain.*
+import co.camilo.transmicrone.ui.UiState
+import co.camilo.transmicrone.ui.common.ScreenTransition
 import co.camilo.transmicrone.ui.BoardView
 import co.camilo.transmicrone.ui.RouteState
 import co.camilo.transmicrone.ui.common.FloatingScaffold
@@ -60,6 +62,73 @@ class GlassControlsTest {
         compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.Dismiss), useUnmergedTree = true).assertExists()
         compose.onNodeWithText("Deshacer").assertHeightIsAtLeast(48.dp).performClick()
         compose.runOnIdle { assertEquals(SnackbarResult.ActionPerformed, result) }
+    }
+
+    @Test fun homeDockContractsOnScrollAndExpandsOnReturnAndPageChange() {
+        var adds = 0
+        val page = mutableIntStateOf(0)
+        val board = Board("1", "estacion:0", PlaceKind.ESTACION, "TM0", "Estación 0", null, emptyList())
+        val arrivals = List(40) { i -> Arrival("E48", "CAD $i", i, i, "Entre 2 y 4 min", "200 mts", Occupancy.UNKNOWN, null) }
+        compose.setContent { TransmicroneTheme {
+            val host = remember { SnackbarHostState() }
+            LaunchedEffect(Unit) { host.showSnackbar("Mensaje", duration = SnackbarDuration.Indefinite) }
+            ScreenTransition(UiState()) {
+                HomeScreen(listOf(BoardView(board, arrivals), BoardView(board.copy(boardId = "2", displayName = "Estación 1"), arrivals)),
+                    page.intValue, { page.intValue = it }, { adds++ }, {}, {}, snackbarHostState = host)
+            }
+        } }
+        fun assertSnackbarClearance() {
+            val snackbar = compose.onNodeWithTag("floating-snackbar").getUnclippedBoundsInRoot()
+            val edit = compose.onNodeWithContentDescription("Editar tablero").getUnclippedBoundsInRoot()
+            assertTrue("Snackbar keeps 12 dp above dock padding", snackbar.bottom <= edit.top - 18.dp)
+        }
+        val add = compose.onNodeWithContentDescription("Agregar tablero")
+        compose.onNodeWithText("Agregar tablero").assertIsDisplayed()
+        val expanded = add.getUnclippedBoundsInRoot().let { it.right - it.left }
+        assertSnackbarClearance()
+        val list = compose.onNodeWithTag("arrival-viewport")
+        list.performTouchInput { swipeUp(durationMillis = 600) }
+        compose.onNodeWithText("Agregar tablero").assertDoesNotExist()
+        add.assertIsDisplayed().assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp).performClick()
+        assertTrue("Add contracts to 48 dp", add.getUnclippedBoundsInRoot().let { it.right - it.left } <= 49.dp)
+        assertSnackbarClearance()
+        compose.runOnIdle { assertEquals(1, adds) }
+        list.performTouchInput { swipeDown(durationMillis = 600) }
+        compose.onNodeWithText("Agregar tablero").assertIsDisplayed()
+        assertEquals(expanded, add.getUnclippedBoundsInRoot().let { it.right - it.left })
+        list.performTouchInput { swipeUp(durationMillis = 600) }
+        compose.onNodeWithText("Agregar tablero").assertDoesNotExist()
+        compose.runOnIdle { page.intValue = 1 }
+        compose.onNodeWithText("Agregar tablero").assertIsDisplayed()
+        compose.onNodeWithTag("arrival-viewport").performScrollToIndex(40)
+        compose.onNodeWithText("Fuente no oficial. Las frases de llegada no son un reloj.").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Agregar tablero").assertIsDisplayed()
+    }
+
+    @Test fun homeDockStaysExpandedWhenSystemAnimationsAreDisabled() {
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        fun shell(command: String): String = automation.executeShellCommand(command).use { descriptor ->
+            android.os.ParcelFileDescriptor.AutoCloseInputStream(descriptor).bufferedReader().use { it.readText().trim() }
+        }
+        val original = shell("settings get global animator_duration_scale")
+        try {
+            shell("settings put global animator_duration_scale 1")
+            val board = Board("1", "estacion:0", PlaceKind.ESTACION, "TM0", "Estación 0", null, emptyList())
+            val arrivals = List(40) { i -> Arrival("E48", "CAD $i", i, i, "Entre 2 y 4 min", "200 mts", Occupancy.UNKNOWN, null) }
+            compose.setContent { TransmicroneTheme {
+                HomeScreen(listOf(BoardView(board, arrivals)), 0, {}, {}, {}, {})
+            } }
+            val list = compose.onNodeWithTag("arrival-viewport")
+            list.performTouchInput { swipeUp(durationMillis = 600) }
+            compose.onNodeWithText("Agregar tablero").assertDoesNotExist()
+            shell("settings put global animator_duration_scale 0")
+            compose.waitUntil { compose.onAllNodesWithText("Agregar tablero").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("Agregar tablero").assertIsDisplayed()
+            list.performTouchInput { swipeUp(durationMillis = 600) }
+            compose.onNodeWithText("Agregar tablero").assertIsDisplayed()
+        } finally {
+            shell(if (original == "null") "settings delete global animator_duration_scale" else "settings put global animator_duration_scale $original")
+        }
     }
 
     @Test fun snackbarClearsSavePanel() {
