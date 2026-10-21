@@ -30,6 +30,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import androidx.compose.runtime.saveable.rememberSaveable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -95,6 +96,7 @@ fun HomeScreen(
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
     onSearch: () -> Unit = {},
     onSettings: () -> Unit = {},
+    allowCollapse: Boolean = rememberDockCollapseEnabled(),
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compactHeight = maxHeight < 480.dp || maxHeight / maxOf(1f, LocalDensity.current.fontScale) < 360.dp
@@ -135,7 +137,7 @@ fun HomeScreen(
         val listStates by rememberUpdatedState(displayedBoards.associate { view ->
             view.board.boardId to key(view.board.boardId) { rememberLazyListState() }
         })
-        val collapseEnabled = rememberDockCollapseEnabled() && !compactHeight
+        val collapseEnabled = allowCollapse && !compactHeight
         var dockCollapsed by remember(current.board.boardId, collapseEnabled) { mutableStateOf(false) }
         val currentList = listStates.getValue(current.board.boardId)
         val titleCollapse = remember { TitleCollapse() }
@@ -143,14 +145,25 @@ fun HomeScreen(
         val titleDecay = rememberSplineBasedDecay<Float>()
         LaunchedEffect(current.board.boardId, collapseEnabled) {
             if (!collapseEnabled) titleCollapse.offset = 0f
-            else if (!currentList.canScrollBackward) {
-                titleCollapse.expansion = currentCoroutineContext()[Job]
-                try {
-                    animate(titleCollapse.offset, 0f, animationSpec = titleSpatialSpec) { value, _ ->
-                        titleCollapse.offset = value.coerceIn(0f, titleCollapse.height)
+            else {
+                var enteringPage = true
+                snapshotFlow { Triple(currentList.canScrollBackward, currentList.canScrollForward, currentList.isScrollInProgress) }
+                    .collectLatest { (backward, forward, moving) ->
+                        val entering = enteringPage
+                        enteringPage = false
+                        if (entering && backward) titleCollapse.offset = titleCollapse.height
+                        else if (!backward && (entering || (!forward && !moving)) && !titleCollapse.expanded) {
+                            // A live update can make a collapsed list fit. Wait for the drag to end.
+                            // collectLatest gives consume() a cancellable animation job, not the observer.
+                            titleCollapse.expansion = currentCoroutineContext()[Job]
+                            try {
+                                animate(titleCollapse.offset, 0f, animationSpec = titleSpatialSpec) { value, _ ->
+                                    titleCollapse.offset = value.coerceIn(0f, titleCollapse.height)
+                                }
+                            } finally { titleCollapse.expansion = null }
+                        }
                     }
-                } finally { titleCollapse.expansion = null }
-            } else titleCollapse.offset = titleCollapse.height
+            }
         }
         val headerBoard by remember(collapseEnabled) { derivedStateOf {
             collapseEnabled && titleCollapse.height > 0f && titleCollapse.offset / titleCollapse.height > .6f
@@ -229,7 +242,7 @@ fun HomeScreen(
                 }
             },
         ) { insets ->
-            val contentTop = { if (compactHeight) 0 else with(density) { insets.calculateTopPadding().roundToPx() } +
+            val contentTop = { if (!collapseEnabled) 0 else with(density) { insets.calculateTopPadding().roundToPx() } +
                 (titleCollapse.height - titleCollapse.offset).roundToInt().coerceAtLeast(0) }
             val contentInsets = if (compactHeight) insets else PaddingValues(
                 start = insets.calculateStartPadding(androidx.compose.ui.platform.LocalLayoutDirection.current),
@@ -244,7 +257,9 @@ fun HomeScreen(
                 // Prepare neighbors before a tap starts moving the pager.
                 HorizontalPager(
                     state = pager, beyondViewportPageCount = 1, key = { pagerBoards.value.getOrNull(it)?.board?.boardId ?: it },
-                    modifier = Modifier.fillMaxSize().testTag("board-pager"),
+                    modifier = Modifier.fillMaxSize()
+                        .then(if (!compactHeight && !collapseEnabled) Modifier.padding(top = insets.calculateTopPadding() + with(density) { titleCollapse.height.toDp() }) else Modifier)
+                        .testTag("board-pager"),
                 ) { page ->
                     val view = pagerBoards.value.getOrNull(page) ?: return@HorizontalPager
                     val listState = listStates[view.board.boardId] ?: return@HorizontalPager
@@ -363,20 +378,20 @@ fun HomeScreen(
                         Box(Modifier.fillMaxSize().clipToBounds()) {
                             Box(Modifier.fillMaxSize().clipToBounds().drawWithContent {
                                 // Keep the expanded title clear; the full list is exposed once it exits.
-                                clipRect(top = if (compactHeight || titleCollapse.collapsed) 0f else contentTop().toFloat()) {
+                                clipRect(top = if (!collapseEnabled || titleCollapse.collapsed) 0f else contentTop().toFloat()) {
                                     this@drawWithContent.drawContent()
                                 }
                             }) {
                                 ArrivalList(
                                     view.arrivals, empty,
-                                    (if (compactHeight) Modifier.fillMaxSize().testTag("arrival-viewport")
+                                    (if (!collapseEnabled) Modifier.fillMaxSize().testTag("arrival-viewport")
                                         else Modifier.arrivalsViewport(contentTop))
                                         .offset { IntOffset(0, gap.roundToPx()) }
                                         .hazeSource(arrivalsBackdrop)
                                         .nestedScroll(titleScroll),
                                     state = listState,
                                     header = {
-                                        if (!compactHeight) Spacer(Modifier.fillMaxWidth().layout { _, constraints ->
+                                        if (collapseEnabled) Spacer(Modifier.fillMaxWidth().layout { _, constraints ->
                                             layout(constraints.maxWidth, contentTop()) {}
                                         })
                                         // Compact headers hold add/edit instead of the brand, so sample data is marked here.

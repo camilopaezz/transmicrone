@@ -1,5 +1,6 @@
 package co.camilo.transmicrone
 
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
@@ -39,6 +40,60 @@ class HomeCollapsingTitleTest {
         compose.onNodeWithTag("board-title-selector").assertIsDisplayed()
         compose.onNodeWithText("TransMinuto").assertIsDisplayed()
         compose.onNodeWithTag("home-title-capsule").assertHasNoClickAction()
+    }
+
+    @Test fun disabledCollapseKeepsFocusedArrivalsBelowTitle() {
+        compose.setContent { TransmicroneTheme {
+            HomeScreen(listOf(BoardView(board, List(20) { arrival.copy(nodo = it, destino = "Destino $it") })),
+                0, {}, {}, {}, {}, allowCollapse = false)
+        } }
+        val title = compose.onNodeWithTag("board-title-selector").fetchSemanticsNode().boundsInRoot
+        val list = compose.onNodeWithTag("arrival-viewport")
+        org.junit.Assert.assertTrue(list.fetchSemanticsNode().boundsInRoot.top >= title.bottom)
+        list.performScrollToIndex(11)
+        val destination = compose.onNodeWithText("Destino 10", useUnmergedTree = true).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        org.junit.Assert.assertTrue(destination.top >= title.bottom)
+        val card = compose.onNodeWithContentDescription("E48 a Destino 10", substring = true).fetchSemanticsNode().boundsInRoot
+        val viewport = list.fetchSemanticsNode().boundsInRoot
+        org.junit.Assert.assertTrue(card.top >= viewport.top && card.bottom <= viewport.bottom)
+        compose.onNodeWithTag("board-title-selector").assertIsDisplayed()
+        compose.onNodeWithText("TransMinuto").assertIsDisplayed()
+    }
+
+    @Test fun shortLiveUpdateRestoresTitleAndAllowsFreshPull() {
+        val boards = mutableStateOf(listOf(BoardView(board, List(20) { arrival.copy(nodo = it) })))
+        var refreshes = 0
+        compose.setContent { TransmicroneTheme {
+            HomeScreen(boards.value, 0, {}, {}, {}, { refreshes++ })
+        } }
+        val list = compose.onNodeWithTag("arrival-viewport")
+        list.performTouchInput { swipeUp() }
+        compose.onNodeWithTag("board-title-selector").assertIsNotDisplayed()
+        compose.runOnIdle { boards.value = listOf(BoardView(board, listOf(arrival))) }
+        compose.onNodeWithTag("board-title-selector").assertIsDisplayed()
+        compose.onNodeWithText("TransMinuto").assertIsDisplayed()
+        assertEquals(0f, list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].maxValue())
+        list.performTouchInput { swipeDown() }
+        compose.runOnIdle { assertEquals(1, refreshes) }
+    }
+
+    @Test fun shortLiveUpdateWaitsForActiveDragToEnd() {
+        val boards = mutableStateOf(listOf(BoardView(board, List(20) { arrival.copy(nodo = it) })))
+        compose.setContent { TransmicroneTheme {
+            HomeScreen(boards.value, 0, {}, {}, {}, {})
+        } }
+        val list = compose.onNodeWithTag("arrival-viewport")
+        list.performTouchInput { swipeUp() }
+        list.performScrollToIndex(0)
+        list.performTouchInput {
+            down(center)
+            moveBy(Offset(0f, -height * .1f), delayMillis = 300)
+        }
+        compose.runOnIdle { boards.value = listOf(BoardView(board, listOf(arrival))) }
+        compose.onNodeWithTag("board-title-selector").assertIsNotDisplayed()
+        list.performTouchInput { up() }
+        compose.onNodeWithTag("board-title-selector").assertIsDisplayed()
+        compose.onNodeWithText("TransMinuto").assertIsDisplayed()
     }
 
     @Test fun expandedTitleKeepsBrand() {
