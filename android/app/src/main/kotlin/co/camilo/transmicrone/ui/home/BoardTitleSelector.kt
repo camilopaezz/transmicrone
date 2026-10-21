@@ -1,5 +1,8 @@
 package co.camilo.transmicrone.ui.home
 
+import co.camilo.transmicrone.ui.common.FloatingControlSurface
+import dev.chrisbanes.haze.HazeState
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.Canvas
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -66,7 +69,7 @@ internal fun BoardTitleSelector(
         }
     }
     val titleStyle = MaterialTheme.typography.headlineLarge
-    Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 24.dp)) {
+    Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp)) {
         Box(
             modifier = Modifier.fillMaxWidth().clipToBounds()
                 .scrollable(pager, Orientation.Horizontal,
@@ -167,36 +170,40 @@ internal fun BoardTitleSelector(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun BoardPickerSheet(
-    boards: List<BoardView>, selectedId: String, onDismiss: () -> Unit,
+    backdrop: HazeState, boards: List<BoardView>, selectedId: String, onDismiss: () -> Unit,
     onSelect: (String) -> Unit, onAdd: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(Modifier.fillMaxWidth().heightIn(max = 560.dp).padding(horizontal = 24.dp)) {
-            Text(stringResource(R.string.choose_board_title), style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(bottom = 16.dp))
-            LazyColumn(Modifier.weight(1f, fill = false).testTag("board-picker-list"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(boards, key = { it.board.boardId }) { view ->
-                    val board = view.board
-                    val selected = board.boardId == selectedId
-                    Surface(shape = MaterialTheme.shapes.large,
-                        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow) {
-                        Row(Modifier.fillMaxWidth().selectable(selected, role = Role.RadioButton, onClick = { onSelect(board.boardId) })
-                            .padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(board.displayName, style = MaterialTheme.typography.titleMedium)
-                                Text(listOfNotNull(board.disambiguator, board.servicios.joinToString(" · ") { it.painted })
-                                    .filter { it.isNotBlank() }.joinToString(" · "),
-                                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = Color.Transparent, dragHandle = null, tonalElevation = 0.dp) {
+        FloatingControlSurface(shape = BottomSheetDefaults.ExpandedShape, backdrop = backdrop) {
+            Column(Modifier.fillMaxWidth().heightIn(max = 640.dp).padding(horizontal = 24.dp)) {
+                BottomSheetDefaults.DragHandle(modifier = Modifier.align(Alignment.CenterHorizontally))
+                Text(stringResource(R.string.choose_board_title), style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.padding(bottom = 16.dp))
+                LazyColumn(Modifier.weight(1f, fill = false).testTag("board-picker-list"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(boards, key = { it.board.boardId }) { view ->
+                        val board = view.board
+                        val selected = board.boardId == selectedId
+                        Surface(shape = MaterialTheme.shapes.large,
+                            color = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent) {
+                            Row(Modifier.fillMaxWidth().selectable(selected, role = Role.RadioButton, onClick = { onSelect(board.boardId) })
+                                .padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(board.displayName, style = MaterialTheme.typography.titleMedium)
+                                    Text(listOfNotNull(board.disambiguator, board.servicios.joinToString(" · ") { it.painted })
+                                        .filter { it.isNotBlank() }.joinToString(" · "),
+                                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                if (selected) Icon(Icons.Default.Check, stringResource(R.string.board_selected), Modifier.size(24.dp))
                             }
-                            if (selected) Icon(Icons.Default.Check, stringResource(R.string.board_selected), Modifier.size(24.dp))
                         }
                     }
                 }
-            }
-            TextButton(onClick = onAdd, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(vertical = 8.dp)) {
-                Icon(Icons.Default.Add, null)
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.add_board))
+                TextButton(onClick = onAdd, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(vertical = 8.dp)) {
+                    Icon(Icons.Default.Add, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.add_board))
+                }
             }
         }
     }

@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="catalog_search">Buscar</string>
-    <string name="catalog_search_hint">Servicio o código de estación/paradero</string>
+    <string name="catalog_search_hint">Servicio, estación o paradero</string>
+    <string name="catalog_your_services">Tus servicios</string>
+    <string name="catalog_your_places">Tus estaciones y paraderos</string>
     <string name="catalog_search_example">Busca por código, destino o nombre. Por ejemplo, E48, CAD o León XIII.</string>
     <string name="catalog_services">Servicios</string>
     <string name="catalog_service">Servicio</string>

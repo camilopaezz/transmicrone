@@ -16,8 +16,12 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.performClick
+import co.camilo.transmicrone.domain.Board
 import co.camilo.transmicrone.domain.CatalogEntry
+import co.camilo.transmicrone.domain.SelectedServicio
 import co.camilo.transmicrone.domain.CatalogResults
 import co.camilo.transmicrone.domain.Place
 import co.camilo.transmicrone.domain.PlaceKind
@@ -39,6 +43,26 @@ import org.junit.Test
 
 class CatalogUiTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun emptySearchOffersSavedServicesAndPlaces() {
+        val boards = listOf(
+            Board("1", "estacion:0", PlaceKind.ESTACION, "TM0", "León XIII", null,
+                listOf(SelectedServicio("E48", "CAD", listOf(13266)), SelectedServicio("K43", "ElDorado", listOf(1)))),
+            Board("2", "estacion:1", PlaceKind.ESTACION, "TM1", "Casa", null,
+                listOf(SelectedServicio("E48", "CAD", listOf(13266)))),
+        )
+        val queries = mutableListOf<String>()
+        compose.setContent { TransmicroneTheme {
+            CatalogSearchScreen("", CatalogResults(), false, false, { queries += it }, {}, {}, boards)
+        } }
+        compose.onNodeWithText("Tus servicios").assertIsDisplayed()
+        compose.onNodeWithText("K43").performClick()
+        // A renamed board keeps its label but searches by the place code.
+        compose.onNodeWithText("Casa").performClick()
+        compose.runOnIdle { assertEquals(listOf("K43", "TM1"), queries) }
+        // Duplicate services across boards appear once.
+        compose.onAllNodesWithText("E48").assertCountEquals(1)
+    }
 
     private val option = ServicioOption("E48", "CAD||Portal Norte", listOf(1), null)
     private val place = Place("estacion:TM0101", PlaceKind.ESTACION, "León XIII", "leon xiii", "Soacha", "TM0101", listOf(option))

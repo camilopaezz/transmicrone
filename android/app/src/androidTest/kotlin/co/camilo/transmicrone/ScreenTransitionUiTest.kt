@@ -4,17 +4,25 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performClick
+import co.camilo.transmicrone.domain.Board
 import co.camilo.transmicrone.domain.CatalogEntry
 import co.camilo.transmicrone.domain.CatalogResults
 import co.camilo.transmicrone.domain.Place
 import co.camilo.transmicrone.domain.PlaceKind
+import co.camilo.transmicrone.ui.BoardView
 import co.camilo.transmicrone.ui.Screen
 import co.camilo.transmicrone.ui.UiState
 import co.camilo.transmicrone.ui.common.ScreenTransition
+import co.camilo.transmicrone.ui.home.HomeScreen
 import co.camilo.transmicrone.ui.search.CatalogSearchScreen
 import co.camilo.transmicrone.ui.theme.TransmicroneTheme
 import org.junit.Assert.assertEquals
@@ -112,5 +120,38 @@ class ScreenTransitionUiTest {
         compose.onNode(hasSetTextAction()).assertIsNotFocused()
         compose.mainClock.advanceTimeBy(400)
         compose.onNode(hasSetTextAction()).assertIsFocused()
+    }
+
+    @Test
+    fun homeSearchMorphsIntoCatalogSearchAndBack() {
+        val state = mutableStateOf(UiState())
+        val board = Board("1", "estacion:0", PlaceKind.ESTACION, "TM0", "Estación 0", null, emptyList())
+        compose.setContent {
+            TransmicroneTheme {
+                ScreenTransition(state.value) { displayed ->
+                    when (displayed.screen) {
+                        Screen.HOME -> HomeScreen(
+                            boards = listOf(BoardView(board)),
+                            pageIndex = 0, onPage = {}, onAdd = {}, onEdit = {}, onRefresh = {},
+                            onSearch = { state.value = UiState(screen = Screen.SEARCH) },
+                        )
+                        Screen.SEARCH -> CatalogSearchScreen(
+                            "", CatalogResults(), false, false, {}, {},
+                            { state.value = UiState() },
+                        )
+                        else -> Text(displayed.screen.name)
+                    }
+                }
+            }
+        }
+        compose.onNodeWithContentDescription("Buscar").assertIsDisplayed().performClick()
+        compose.waitForIdle()
+        compose.onNode(hasSetTextAction()).assertIsDisplayed().assertIsFocused()
+        compose.onAllNodesWithContentDescription("Buscar").assertCountEquals(0)
+        compose.onNodeWithContentDescription("Atrás").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Buscar").assertIsDisplayed()
+        compose.onAllNodesWithContentDescription("Buscar").assertCountEquals(1)
+        compose.onNode(hasSetTextAction()).assertDoesNotExist()
     }
 }
