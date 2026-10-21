@@ -25,6 +25,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -140,6 +142,14 @@ internal fun FloatingControlSurface(
     // The overlay has no haze source; keep the solid fallback until the morph settles.
     val source = if (blurred && !(sharedKey != null && shared?.isTransitionActive == true)) backdrop else null
     val colors = MaterialTheme.colorScheme
+    val rim = remember(colors.surface, colors.surfaceContainerHigh, colors.outlineVariant) {
+        val highlight = if (colors.surface.luminance() < .5f) .55f else .85f
+        Brush.verticalGradient(listOf(
+            lerp(colors.surfaceContainerHigh, Color.White, .55f).copy(alpha = highlight),
+            Color.Transparent,
+            colors.outlineVariant.copy(alpha = .25f),
+        ))
+    }
     val spatialSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Rect>()
     val sharedModifier = if (sharedKey != null && shared != null && visibility != null && morphEnabled) with(shared) {
         Modifier.sharedBounds(
@@ -167,7 +177,7 @@ internal fun FloatingControlSurface(
         shape = shape,
         color = if (source != null) Color.Transparent else colors.surfaceContainerHigh,
         contentColor = colors.onSurface,
-        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .30f)),
+        border = BorderStroke(1.dp, rim),
         content = content,
     )
 }
