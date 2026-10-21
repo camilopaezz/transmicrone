@@ -79,7 +79,8 @@ fun CatalogSearchScreen(
                         SectionTitle(stringResource(R.string.catalog_your_places))
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             places.forEach { board ->
-                                SuggestionChip(onClick = { onQuery(board.displayName) }, label = { Text(board.displayName) },
+                                // Boards may carry custom names; the catalog matches the place code.
+                                SuggestionChip(onClick = { onQuery(board.queryParadero) }, label = { Text(board.displayName) },
                                     shape = CircleShape)
                             }
                         }

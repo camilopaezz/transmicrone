@@ -130,4 +130,33 @@ class AdaptiveLayoutTest {
         compose.onNodeWithTag("arrival-viewport").performTouchInput { cancel() }
     }
 
+    @Test fun compactHeaderKeepsSampleDataLabelInMockBuilds() {
+        compose.setContent { TransmicroneTheme {
+            Box(Modifier.height(280.dp).clipToBounds()) {
+                HomeScreen(listOf(BoardView(board)), 0, {}, {}, {}, {})
+            }
+        } }
+        compose.onNodeWithContentDescription("Agregar tablero").assertIsDisplayed()
+        // Sample arrivals must stay identifiable when the brand capsule gives way to add/edit.
+        if (co.camilo.transmicrone.BuildConfig.DEBUG && co.camilo.transmicrone.BuildConfig.MOCK_FEED) {
+            compose.onNodeWithText("Datos de ejemplo").assertIsDisplayed()
+        } else compose.onNodeWithText("Datos de ejemplo").assertDoesNotExist()
+    }
+
+    @Test fun manualRefreshGapKeepsTheListEndReachable() {
+        val arrivals = List(20) { i -> Arrival("E48", "CAD $i", i, i, "Entre 2 y 4 min", "200 mts", Occupancy.UNKNOWN, null) }
+        compose.setContent { TransmicroneTheme {
+            Box(Modifier.height(280.dp).clipToBounds()) {
+                HomeScreen(listOf(BoardView(board, arrivals, Freshness.Loading, CachedArrivals(arrivals, Instant.now()))),
+                    0, {}, {}, {}, {})
+            }
+        } }
+        val notice = "Fuente no oficial. Las frases de llegada no son un reloj."
+        compose.onNodeWithTag("arrival-viewport").performScrollToNode(hasText(notice))
+        compose.waitForIdle()
+        val viewport = compose.onNodeWithTag("arrival-viewport").fetchSemanticsNode().boundsInRoot
+        val end = compose.onNodeWithText(notice).fetchSemanticsNode().boundsInRoot
+        assertTrue("The list end must clear the bottom while the refresh gap is open", end.bottom <= viewport.bottom)
+    }
+
 }

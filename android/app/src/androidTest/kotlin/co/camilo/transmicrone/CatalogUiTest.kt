@@ -48,7 +48,7 @@ class CatalogUiTest {
         val boards = listOf(
             Board("1", "estacion:0", PlaceKind.ESTACION, "TM0", "León XIII", null,
                 listOf(SelectedServicio("E48", "CAD", listOf(13266)), SelectedServicio("K43", "ElDorado", listOf(1)))),
-            Board("2", "estacion:1", PlaceKind.ESTACION, "TM1", "Ricaurte - NQS", null,
+            Board("2", "estacion:1", PlaceKind.ESTACION, "TM1", "Casa", null,
                 listOf(SelectedServicio("E48", "CAD", listOf(13266)))),
         )
         val queries = mutableListOf<String>()
@@ -57,8 +57,9 @@ class CatalogUiTest {
         } }
         compose.onNodeWithText("Tus servicios").assertIsDisplayed()
         compose.onNodeWithText("K43").performClick()
-        compose.onNodeWithText("Ricaurte - NQS").performClick()
-        compose.runOnIdle { assertEquals(listOf("K43", "Ricaurte - NQS"), queries) }
+        // A renamed board keeps its label but searches by the place code.
+        compose.onNodeWithText("Casa").performClick()
+        compose.runOnIdle { assertEquals(listOf("K43", "TM1"), queries) }
         // Duplicate services across boards appear once.
         compose.onAllNodesWithText("E48").assertCountEquals(1)
     }

@@ -308,10 +308,14 @@ fun HomeScreen(
                                         .hazeSource(arrivalsBackdrop),
                                     state = listState,
                                     header = {
+                                        // Compact headers hold add/edit instead of the brand, so sample data is marked here.
+                                        if (compactHeight && BuildConfig.DEBUG && BuildConfig.MOCK_FEED) Text(stringResource(R.string.sample_data),
+                                            Modifier.padding(horizontal = 4.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                                         if (compactHeight) BoardTitleSelector(displayedBoards.map { it.board.displayName }, pager, showSwipeHint) { choosingBoard = true }
                                         StationHeader(view)
                                     },
-                                    bottomContentPadding = if (compactHeight) 24.dp else dockHeight + 48.dp,
+                                    // The refresh gap pushes the list down, so the end needs the same extra room.
+                                    bottomContentPadding = (if (compactHeight) 24.dp else dockHeight + 48.dp) + gap,
                                     colorForArrival = { arrival -> routeColor(view, arrival.painted, arrival.routeId) },
                                     active = page == visibleIndex && !scrolling,
                                     initialLoading = view.cache == null && view.freshness == Freshness.Loading,
