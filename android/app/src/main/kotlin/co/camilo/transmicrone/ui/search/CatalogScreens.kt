@@ -47,7 +47,7 @@ fun CatalogSearchScreen(
     LaunchedEffect(screenEntered) { if (screenEntered) focus.requestFocus() }
     val list = rememberLazyListState()
     FloatingScaffold(topEdgeVisible = { list.canScrollBackward }, topBar = {
-        FloatingSearchHeader(query, onQuery, stringResource(R.string.catalog_search_hint), focus, onBack) { keyboard?.hide() }
+        FloatingSearchHeader(query, onQuery, stringResource(R.string.catalog_search_hint), focus, onBack, sharedKey = "search-capsule") { keyboard?.hide() }
     }) { insets ->
         LazyColumn(Modifier.fillMaxSize().padding(bottom = insets.calculateBottomPadding()).consumeWindowInsets(PaddingValues(bottom = insets.calculateBottomPadding())).imePadding(),
             state = list, contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = insets.calculateTopPadding() + 12.dp, bottom = 20.dp),

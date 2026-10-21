@@ -30,35 +30,38 @@ internal fun FloatingSearchHeader(
     hint: String,
     focusRequester: FocusRequester,
     onBack: () -> Unit,
+    sharedKey: Any? = null,
     onSearch: () -> Unit,
 ) {
     Row(Modifier.floatingHeaderPadding(), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        FloatingControlSurface {
+        FloatingControlSurface(Modifier.navQuickEnterExit()) {
             IconButton(onClick = onBack, modifier = Modifier.size(FloatingHeaderHeight)) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back))
             }
         }
-        FloatingControlSurface(Modifier.weight(1f)) {
-            TextField(
-                value = query, onValueChange = onQuery,
-                modifier = Modifier.fillMaxWidth().focusRequester(focusRequester).semantics { contentDescription = hint },
-                textStyle = MaterialTheme.typography.titleMedium,
-                placeholder = { Text(hint, style = MaterialTheme.typography.titleMedium) },
-                leadingIcon = { Icon(Icons.Default.Search, null) },
-                trailingIcon = if (query.isNotEmpty()) ({
-                    IconButton(onClick = { onQuery("") }) {
-                        Icon(Icons.Default.Close, stringResource(R.string.clear_search))
-                    }
-                }) else null,
-                singleLine = true, shape = CircleShape,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { onSearch() }),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
-                ),
-            )
+        FloatingControlSurface(Modifier.weight(1f), sharedKey = sharedKey) {
+            MorphContent(Modifier.fillMaxWidth(), enabled = sharedKey != null) {
+                TextField(
+                    value = query, onValueChange = onQuery,
+                    modifier = Modifier.fillMaxWidth().focusRequester(focusRequester).semantics { contentDescription = hint },
+                    textStyle = MaterialTheme.typography.titleMedium,
+                    placeholder = { Text(hint, style = MaterialTheme.typography.titleMedium) },
+                    leadingIcon = { Icon(Icons.Default.Search, null) },
+                    trailingIcon = if (query.isNotEmpty()) ({
+                        IconButton(onClick = { onQuery("") }) {
+                            Icon(Icons.Default.Close, stringResource(R.string.clear_search))
+                        }
+                    }) else null,
+                    singleLine = true, shape = CircleShape,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
+                    ),
+                )
+            }
         }
     }
 }

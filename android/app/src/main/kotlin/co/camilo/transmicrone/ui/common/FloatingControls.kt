@@ -1,9 +1,14 @@
 package co.camilo.transmicrone.ui.common
 
 import android.os.Build
+import androidx.compose.animation.BoundsTransform
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -15,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
@@ -118,16 +124,34 @@ internal fun FloatingEdgeBand(backdrop: HazeState, top: Boolean, alpha: Float, h
 }
 
 /** Clip the backdrop blur to each control, leaving the space between controls transparent. */
+@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun FloatingControlSurface(
     modifier: Modifier = Modifier,
     shape: Shape = CircleShape,
     blurred: Boolean = true,
+    sharedKey: Any? = null,
     backdrop: HazeState? = LocalBackdrop.current,
     content: @Composable () -> Unit,
 ) {
-    val source = if (blurred) backdrop else null
+    val shared = LocalSharedTransitionScope.current
+    val visibility = LocalNavAnimatedScope.current
+    val morphEnabled = rememberSharedMorphEnabled()
+    // The overlay has no haze source; keep the solid fallback until the morph settles.
+    val source = if (blurred && !(sharedKey != null && shared?.isTransitionActive == true)) backdrop else null
     val colors = MaterialTheme.colorScheme
+    val spatialSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Rect>()
+    val sharedModifier = if (sharedKey != null && shared != null && visibility != null && morphEnabled) with(shared) {
+        Modifier.sharedBounds(
+            rememberSharedContentState(sharedKey),
+            visibility,
+            enter = EnterTransition.None,
+            exit = ExitTransition.None,
+            boundsTransform = BoundsTransform { _, _ -> spatialSpec },
+            resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
+            clipInOverlayDuringTransition = OverlayClip(shape),
+        )
+    } else Modifier
     val effect = if (source != null) Modifier.clip(shape).hazeEffect(
         state = source,
         style = HazeStyle(
@@ -139,7 +163,7 @@ internal fun FloatingControlSurface(
         ),
     ) else Modifier
     Surface(
-        modifier = modifier.then(effect),
+        modifier = modifier.then(sharedModifier).then(effect),
         shape = shape,
         color = if (source != null) Color.Transparent else colors.surfaceContainerHigh,
         contentColor = colors.onSurface,

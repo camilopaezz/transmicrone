@@ -67,6 +67,8 @@ import co.camilo.transmicrone.ui.common.FloatingHeaderHeight
 import co.camilo.transmicrone.ui.common.floatingHeaderPadding
 import co.camilo.transmicrone.ui.common.FloatingScaffold
 import co.camilo.transmicrone.ui.common.FloatingControlSurface
+import co.camilo.transmicrone.ui.common.MorphContent
+import co.camilo.transmicrone.ui.common.navQuickEnterExit
 import co.camilo.transmicrone.ui.common.relativeTime
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -431,7 +433,7 @@ private fun FloatingHomeHeader(
                     Icon(Icons.Default.Edit, stringResource(R.string.edit_board))
                 }
             }
-        } else FloatingControlSurface {
+        } else FloatingControlSurface(Modifier.navQuickEnterExit()) {
             Column(Modifier.heightIn(min = FloatingHeaderHeight).padding(horizontal = 18.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.Center) {
                 Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleMedium)
@@ -441,13 +443,15 @@ private fun FloatingHomeHeader(
                 }
             }
         }
-        FloatingControlSurface {
-            Row {
-                IconButton(onClick = onSearch, modifier = Modifier.size(FloatingHeaderHeight)) {
-                    Icon(Icons.Default.Search, stringResource(R.string.catalog_search))
-                }
-                IconButton(onClick = onSettings, modifier = Modifier.size(FloatingHeaderHeight)) {
-                    Icon(Icons.Default.Settings, stringResource(R.string.settings_title))
+        FloatingControlSurface(sharedKey = "search-capsule") {
+            MorphContent {
+                Row {
+                    IconButton(onClick = onSearch, modifier = Modifier.size(FloatingHeaderHeight)) {
+                        Icon(Icons.Default.Search, stringResource(R.string.catalog_search))
+                    }
+                    IconButton(onClick = onSettings, modifier = Modifier.size(FloatingHeaderHeight)) {
+                        Icon(Icons.Default.Settings, stringResource(R.string.settings_title))
+                    }
                 }
             }
         }
