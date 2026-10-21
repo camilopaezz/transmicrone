@@ -23,16 +23,17 @@ class HomeCollapsingTitleTest {
         listOf(SelectedServicio("E48", "CAD", listOf(13266))))
     private val arrival = Arrival("E48", "CAD", 13266, 62282, "Entre 2 y 4 min", "200 mts", Occupancy.UNKNOWN, null)
 
+    // Exercise collapse independently of CI's system animation scales.
     private fun home(onRefresh: () -> Unit = {}) {
         compose.setContent { TransmicroneTheme {
             HomeScreen(listOf(BoardView(board, List(20) { arrival.copy(nodo = it) }),
-                BoardView(board.copy(boardId = "2", displayName = "General Santander"))), 0, {}, {}, {}, onRefresh)
+                BoardView(board.copy(boardId = "2", displayName = "General Santander"))), 0, {}, {}, {}, onRefresh, allowCollapse = true)
         } }
     }
 
     @Test fun shortListKeepsTitleAndBrandAfterUpwardDrag() {
         compose.setContent { TransmicroneTheme {
-            HomeScreen(listOf(BoardView(board, listOf(arrival))), 0, {}, {}, {}, {})
+            HomeScreen(listOf(BoardView(board, listOf(arrival))), 0, {}, {}, {}, {}, allowCollapse = true)
         } }
         val list = compose.onNodeWithTag("arrival-viewport")
         assertEquals(0f, list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].maxValue())
@@ -64,7 +65,7 @@ class HomeCollapsingTitleTest {
         val boards = mutableStateOf(listOf(BoardView(board, List(20) { arrival.copy(nodo = it) })))
         var refreshes = 0
         compose.setContent { TransmicroneTheme {
-            HomeScreen(boards.value, 0, {}, {}, {}, { refreshes++ })
+            HomeScreen(boards.value, 0, {}, {}, {}, { refreshes++ }, allowCollapse = true)
         } }
         val list = compose.onNodeWithTag("arrival-viewport")
         list.performTouchInput { swipeUp() }
@@ -80,7 +81,7 @@ class HomeCollapsingTitleTest {
     @Test fun shortLiveUpdateWaitsForActiveDragToEnd() {
         val boards = mutableStateOf(listOf(BoardView(board, List(20) { arrival.copy(nodo = it) })))
         compose.setContent { TransmicroneTheme {
-            HomeScreen(boards.value, 0, {}, {}, {}, {})
+            HomeScreen(boards.value, 0, {}, {}, {}, {}, allowCollapse = true)
         } }
         val list = compose.onNodeWithTag("arrival-viewport")
         list.performTouchInput { swipeUp() }
