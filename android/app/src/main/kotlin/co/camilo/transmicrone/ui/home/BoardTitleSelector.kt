@@ -21,6 +21,13 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.*
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -53,8 +60,20 @@ import kotlinx.coroutines.launch
 /** A stationary viewport driven directly by the arrival pager, including title drags. */
 @Composable
 internal fun BoardTitleSelector(
-    names: List<String>, pager: PagerState, showSwipeHint: Boolean, onChoose: () -> Unit,
+    names: List<String>, pager: PagerState, showSwipeHint: Boolean, collapseFraction: () -> Float = { 0f }, collapseOffset: () -> Float = { 0f }, onChoose: () -> Unit,
 ) {
+    val inset = with(LocalDensity.current) { 8.dp.toPx() }
+    var titleHeight by remember { mutableIntStateOf(0) }
+    // The bottom-aligned layout reaches glyphs before the nominal fade ends.
+    // Finish each row's fade within its clearance above the clip edge.
+    val titleOpacity = { 1f - (collapseOffset() + inset * collapseFraction()) / inset }
+    val pagesOpacity = { 1f - (collapseOffset() + inset * collapseFraction()) / (inset + titleHeight) }
+    val titleHidden by remember(collapseFraction, collapseOffset, inset) { derivedStateOf {
+        collapseFraction() >= .45f || titleOpacity() <= 0f
+    } }
+    val pagesHidden by remember(collapseFraction, collapseOffset, inset) { derivedStateOf {
+        collapseFraction() >= .7f || pagesOpacity() <= 0f
+    } }
     val chooseLabel = stringResource(R.string.choose_board)
     val previousLabel = stringResource(R.string.previous_board)
     val nextLabel = stringResource(R.string.next_board)
@@ -71,10 +90,12 @@ internal fun BoardTitleSelector(
     val titleStyle = MaterialTheme.typography.headlineLarge
     Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp)) {
         Box(
-            modifier = Modifier.fillMaxWidth().clipToBounds()
+            modifier = Modifier.fillMaxWidth().clipToBounds().onSizeChanged { titleHeight = it.height }
+                .titleCollapseFade(collapseFraction, .45f, titleOpacity)
+                .then(if (titleHidden) Modifier.clearAndSetSemantics {} else Modifier)
                 .scrollable(pager, Orientation.Horizontal,
                     reverseDirection = reverseDirection, flingBehavior = PagerDefaults.flingBehavior(pager))
-                .combinedClickable(role = Role.Button, onClickLabel = chooseLabel,
+                .combinedClickable(enabled = !titleHidden, role = Role.Button, onClickLabel = chooseLabel,
                     onClick = onChoose, onLongClick = onChoose)
                 .testTag("board-title-selector"),
         ) {
@@ -129,7 +150,7 @@ internal fun BoardTitleSelector(
             }
             if (count > 1) Row(Modifier.matchParentSize()) {
                 Box(Modifier.weight(1f).fillMaxHeight()
-                    .clickable(role = Role.Button, onClickLabel = previousLabel) { step(-1) }
+                    .clickable(enabled = !titleHidden, role = Role.Button, onClickLabel = previousLabel) { step(-1) }
                     .semantics {
                         contentDescription = previousLabel
                         if (pager.targetPage == 0) disabled()
@@ -137,7 +158,7 @@ internal fun BoardTitleSelector(
                     .testTag("board-title-previous"))
                 Spacer(Modifier.weight(1f))
                 Box(Modifier.weight(1f).fillMaxHeight()
-                    .clickable(role = Role.Button, onClickLabel = nextLabel) { step(1) }
+                    .clickable(enabled = !titleHidden, role = Role.Button, onClickLabel = nextLabel) { step(1) }
                     .semantics {
                         contentDescription = nextLabel
                         if (pager.targetPage == count - 1) disabled()
@@ -149,13 +170,14 @@ internal fun BoardTitleSelector(
             val pageLabel = stringResource(R.string.board_page_description, index + 1, count)
             val track = MaterialTheme.colorScheme.outlineVariant
             val fill = MaterialTheme.colorScheme.primary
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().titleCollapseFade(collapseFraction, .7f, pagesOpacity)
+                .then(if (pagesHidden) Modifier.clearAndSetSemantics {} else Modifier), verticalAlignment = Alignment.CenterVertically) {
                 Canvas(Modifier.width(48.dp).height(4.dp).clearAndSetSemantics {}) {
                     drawLine(track, Offset(0f, size.height / 2), Offset(size.width, size.height / 2), size.height, StrokeCap.Round)
                     val position = (pager.currentPage + 1 + pager.currentPageOffsetFraction).coerceIn(1f, count.toFloat()) / count
                     drawLine(fill, Offset(0f, size.height / 2), Offset(size.width * position, size.height / 2), size.height, StrokeCap.Round)
                 }
-                TextButton(onClick = onChoose,
+                TextButton(onClick = onChoose, enabled = !pagesHidden,
                     modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "$chooseLabel, $pageLabel" }
                         .testTag("board-page-selector")) {
                     Text(stringResource(R.string.board_page_count, index + 1, count), style = MaterialTheme.typography.labelMedium)

@@ -1,5 +1,11 @@
 package co.camilo.transmicrone.ui.home
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.rememberSplineBasedDecay
+import androidx.compose.animation.core.animate
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.shrinkHorizontally
@@ -13,8 +19,15 @@ import dev.chrisbanes.haze.rememberHazeState
 import co.camilo.transmicrone.ui.common.FloatingEdgeBand
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.layout.layout
+import kotlin.math.roundToInt
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import androidx.compose.runtime.saveable.rememberSaveable
 import kotlinx.coroutines.delay
 import androidx.compose.foundation.horizontalScroll
@@ -125,6 +138,27 @@ fun HomeScreen(
         val collapseEnabled = rememberDockCollapseEnabled() && !compactHeight
         var dockCollapsed by remember(current.board.boardId, collapseEnabled) { mutableStateOf(false) }
         val currentList = listStates.getValue(current.board.boardId)
+        val titleCollapse = remember { TitleCollapse() }
+        val titleSpatialSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+        val titleDecay = rememberSplineBasedDecay<Float>()
+        LaunchedEffect(current.board.boardId, collapseEnabled) {
+            if (!collapseEnabled) titleCollapse.offset = 0f
+            else if (!currentList.canScrollBackward) {
+                titleCollapse.expansion = currentCoroutineContext()[Job]
+                try {
+                    animate(titleCollapse.offset, 0f, animationSpec = titleSpatialSpec) { value, _ ->
+                        titleCollapse.offset = value.coerceIn(0f, titleCollapse.height)
+                    }
+                } finally { titleCollapse.expansion = null }
+            } else titleCollapse.offset = titleCollapse.height
+        }
+        val headerBoard by remember(collapseEnabled) { derivedStateOf {
+            collapseEnabled && titleCollapse.height > 0f && titleCollapse.offset / titleCollapse.height > .6f
+        } }
+        val headerEdge by remember(compactHeight, collapseEnabled, currentList) { derivedStateOf {
+            !compactHeight && collapseEnabled && titleCollapse.height > 0f &&
+                titleCollapse.offset / titleCollapse.height >= .7f && currentList.canScrollBackward
+        } }
         val dockExpanded = !collapseEnabled || !dockCollapsed || scrolling || !currentList.canScrollBackward || !currentList.canScrollForward
         val dockThreshold = with(density) { 10.dp.toPx() }
         var swipeHintDismissed by swipeHintDismissal
@@ -163,12 +197,13 @@ fun HomeScreen(
             MaterialTheme.motionScheme.defaultSpatialSpec(), label = "addPadding")
         FloatingScaffold(
             backdrop = backdrop,
-            topEdgeVisible = { false },
+            topEdgeVisible = { headerEdge },
             bottomEdgeBlur = !compactHeight,
             bottomEdgeVisible = { currentList.canScrollForward },
             bottomEdgeHeight = dockHeight + safeInsets.asPaddingValues().calculateBottomPadding() + 16.dp,
             snackbarHost = { FloatingSnackbarHost(snackbarHostState) },
-            topBar = { FloatingHomeHeader(onSearch, onSettings, compactHeight, onAdd) { onEdit(current.board.boardId) } },
+            topBar = { FloatingHomeHeader(onSearch, onSettings, compactHeight, onAdd, { onEdit(current.board.boardId) },
+                if (headerBoard) current.board.displayName else null, visibleIndex, displayedBoards.size) { choosingBoard = true } },
             floatingActionButtonPosition = FabPosition.Center,
             floatingActionButton = {
                 if (!compactHeight) FloatingControlSurface {
@@ -194,12 +229,22 @@ fun HomeScreen(
                 }
             },
         ) { insets ->
-            Column(Modifier.fillMaxSize().padding(insets)) {
-                if (!compactHeight) BoardTitleSelector(displayedBoards.map { it.board.displayName }, pager, showSwipeHint) { choosingBoard = true }
+            val contentTop = { if (compactHeight) 0 else with(density) { insets.calculateTopPadding().roundToPx() } +
+                (titleCollapse.height - titleCollapse.offset).roundToInt().coerceAtLeast(0) }
+            val contentInsets = if (compactHeight) insets else PaddingValues(
+                start = insets.calculateStartPadding(androidx.compose.ui.platform.LocalLayoutDirection.current),
+                end = insets.calculateEndPadding(androidx.compose.ui.platform.LocalLayoutDirection.current),
+                bottom = insets.calculateBottomPadding(),
+            )
+            Box(Modifier.fillMaxSize().padding(contentInsets)) {
+                if (!compactHeight) Box(Modifier.zIndex(1f).padding(top = insets.calculateTopPadding()).collapsingTitle(titleCollapse)) {
+                    BoardTitleSelector(displayedBoards.map { it.board.displayName }, pager, showSwipeHint,
+                        collapseFraction = { titleCollapse.fraction }, collapseOffset = { titleCollapse.offset }) { choosingBoard = true }
+                }
                 // Prepare neighbors before a tap starts moving the pager.
                 HorizontalPager(
                     state = pager, beyondViewportPageCount = 1, key = { pagerBoards.value.getOrNull(it)?.board?.boardId ?: it },
-                    modifier = Modifier.weight(1f).testTag("board-pager"),
+                    modifier = Modifier.fillMaxSize().testTag("board-pager"),
                 ) { page ->
                     val view = pagerBoards.value.getOrNull(page) ?: return@HorizontalPager
                     val listState = listStates[view.board.boardId] ?: return@HorizontalPager
@@ -251,6 +296,22 @@ fun HomeScreen(
                             }
                         }
                     }
+                    val titleScroll = remember(listState, visibleIndex, collapseEnabled) {
+                        object : NestedScrollConnection {
+                            private val active get() = page == visibleIndex && collapseEnabled
+                            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset =
+                                if (active && available.y < 0f && (listState.canScrollForward || !titleCollapse.expanded))
+                                    Offset(0f, titleCollapse.consume(available.y)) else Offset.Zero
+                            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset =
+                                if (active && available.y > 0f) Offset(0f, titleCollapse.consume(available.y)) else Offset.Zero
+                            override suspend fun onPreFling(available: Velocity): Velocity =
+                                if (active && available.y < 0f && !titleCollapse.collapsed && (listState.canScrollForward || !titleCollapse.expanded))
+                                    Velocity(0f, titleCollapse.fling(available.y, titleDecay)) else Velocity.Zero
+                            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity =
+                                if (active && available.y > 0f && !titleCollapse.expanded)
+                                    Velocity(0f, titleCollapse.fling(available.y, titleDecay)) else Velocity.Zero
+                        }
+                    }
                     Box(
                         modifier = Modifier.fillMaxSize().nestedScroll(dockScroll)
                             .pointerInput(listState) {
@@ -258,7 +319,7 @@ fun HomeScreen(
                                     awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                                     // Latch for the whole gesture: reaching the top while scrolling
                                     // must not turn the remainder of that drag into a refresh.
-                                    pullStartedAtTop = !listState.canScrollBackward
+                                    pullStartedAtTop = !listState.canScrollBackward && (compactHeight || titleCollapse.expanded)
                                     do {
                                         val event = awaitPointerEvent(PointerEventPass.Initial)
                                     } while (event.changes.any { it.pressed })
@@ -300,14 +361,24 @@ fun HomeScreen(
                             label = "refreshFade",
                         )
                         Box(Modifier.fillMaxSize().clipToBounds()) {
-                            Box(Modifier.fillMaxSize().clipToBounds()) {
+                            Box(Modifier.fillMaxSize().clipToBounds().drawWithContent {
+                                // Keep the expanded title clear; the full list is exposed once it exits.
+                                clipRect(top = if (compactHeight || titleCollapse.collapsed) 0f else contentTop().toFloat()) {
+                                    this@drawWithContent.drawContent()
+                                }
+                            }) {
                                 ArrivalList(
                                     view.arrivals, empty,
-                                    Modifier.fillMaxSize().testTag("arrival-viewport")
+                                    (if (compactHeight) Modifier.fillMaxSize().testTag("arrival-viewport")
+                                        else Modifier.arrivalsViewport(contentTop))
                                         .offset { IntOffset(0, gap.roundToPx()) }
-                                        .hazeSource(arrivalsBackdrop),
+                                        .hazeSource(arrivalsBackdrop)
+                                        .nestedScroll(titleScroll),
                                     state = listState,
                                     header = {
+                                        if (!compactHeight) Spacer(Modifier.fillMaxWidth().layout { _, constraints ->
+                                            layout(constraints.maxWidth, contentTop()) {}
+                                        })
                                         // Compact headers hold add/edit instead of the brand, so sample data is marked here.
                                         if (compactHeight && BuildConfig.DEBUG && BuildConfig.MOCK_FEED) Text(stringResource(R.string.sample_data),
                                             Modifier.padding(horizontal = 4.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
@@ -320,21 +391,21 @@ fun HomeScreen(
                                     active = page == visibleIndex && !scrolling,
                                     initialLoading = view.cache == null && view.freshness == Freshness.Loading,
                                 )
-                                if (hasScrolled && page == visibleIndex) FloatingEdgeBand(
+                                if (hasScrolled && page == visibleIndex && !headerEdge) FloatingEdgeBand(
                                     arrivalsBackdrop, true, fade, 28.dp,
-                                    Modifier.align(Alignment.TopCenter).offset { IntOffset(0, gap.roundToPx()) },
+                                    Modifier.align(Alignment.TopCenter).offset { IntOffset(0, contentTop() + gap.roundToPx()) },
                                     "arrival-edge-top",
                                 )
                             }
                             // The list slides inside its viewport, so a pull that starts in the
                             // revealed gap still has to reach the existing pull handler.
                             if (gap > 0.dp) Box(
-                                Modifier.align(Alignment.TopCenter).fillMaxWidth().height(gap)
+                                Modifier.align(Alignment.TopCenter).offset { IntOffset(0, contentTop()) }.fillMaxWidth().height(gap)
                                     .scrollable(rememberScrollableState { 0f }, Orientation.Vertical),
                             )
                             if (gap > 0.dp) RefreshCapsule(
                                 showRequest || !trackPull, { pullState.distanceFraction.coerceIn(0f, 1f) },
-                                gap, capsuleFade, Modifier.align(Alignment.TopCenter),
+                                gap, capsuleFade, Modifier.align(Alignment.TopCenter).offset { IntOffset(0, contentTop()) },
                             )
                         }
                     }
@@ -417,14 +488,23 @@ fun EmptyHome(onAdd: () -> Unit, snackbarHostState: SnackbarHostState = remember
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun FloatingHomeHeader(
     onSearch: () -> Unit, onSettings: () -> Unit,
     compact: Boolean = false, onAdd: () -> Unit = {}, onEdit: () -> Unit = {},
+    boardName: String? = null, page: Int = 0, count: Int = 1, onChoose: () -> Unit = {},
 ) {
+    val chooseLabel = stringResource(R.string.choose_board)
+    val pageLabel = stringResource(R.string.board_page_description, page + 1, count)
+    val label = boardName?.let { it + if (count > 1) stringResource(R.string.board_header_page, page + 1, count) else "" }
+        ?: stringResource(R.string.app_name)
     // Wrap at large font scales rather than shrink touch targets.
+    BoxWithConstraints(Modifier.floatingHeaderPadding()) {
+    val capsuleWidth = if (LocalDensity.current.fontScale > 1.3f) maxWidth
+        else (maxWidth - FloatingHeaderHeight * 2 - 12.dp).coerceAtLeast(48.dp)
     FlowRow(
-        Modifier.floatingHeaderPadding(),
+        Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -437,10 +517,16 @@ private fun FloatingHomeHeader(
                     Icon(Icons.Default.Edit, stringResource(R.string.edit_board))
                 }
             }
-        } else FloatingControlSurface(Modifier.navQuickEnterExit()) {
+        } else FloatingControlSurface(Modifier.navQuickEnterExit()
+            .then(if (boardName != null) Modifier.widthIn(max = capsuleWidth) else Modifier)
+            .then(if (boardName != null) Modifier.clickable(onClickLabel = chooseLabel, onClick = onChoose)
+                .semantics { contentDescription = "$chooseLabel, $boardName, $pageLabel" } else Modifier)
+            .testTag("home-title-capsule")) {
             Column(Modifier.heightIn(min = FloatingHeaderHeight).padding(horizontal = 18.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.Center) {
-                Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleMedium)
+                Crossfade(label, animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(), label = "homeHeaderTitle") { text ->
+                    Text(text, style = MaterialTheme.typography.titleMedium, maxLines = if (boardName != null) 1 else Int.MAX_VALUE, overflow = TextOverflow.Ellipsis)
+                }
                 if (BuildConfig.DEBUG && BuildConfig.MOCK_FEED) {
                     Text(stringResource(R.string.sample_data), style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary)
@@ -459,6 +545,7 @@ private fun FloatingHomeHeader(
                 }
             }
         }
+    }
     }
 }
 
