@@ -124,7 +124,7 @@ class GlassControlsTest {
         compose.runOnIdle { assertEquals(SnackbarResult.ActionPerformed, result) }
     }
 
-    @Test fun homeDockContractsOnScrollAndExpandsOnReturnAndPageChange() {
+    @Test fun homeDockContractsOnScrollAndExpandsOnReturnAndPageChange() = withAnimations {
         var adds = 0
         val page = mutableIntStateOf(0)
         val board = Board("1", "estacion:0", PlaceKind.ESTACION, "TM0", "Estación 0", null, emptyList())
@@ -165,30 +165,36 @@ class GlassControlsTest {
         compose.onNodeWithText("Agregar tablero").assertIsDisplayed()
     }
 
-    @Test fun homeDockStaysExpandedWhenSystemAnimationsAreDisabled() {
-        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
-        fun shell(command: String): String = automation.executeShellCommand(command).use { descriptor ->
+    private fun shell(command: String): String = InstrumentationRegistry.getInstrumentation().uiAutomation
+        .executeShellCommand(command).use { descriptor ->
             android.os.ParcelFileDescriptor.AutoCloseInputStream(descriptor).bufferedReader().use { it.readText().trim() }
         }
+
+    // CI emulators run with animations disabled, which keeps the dock expanded by design.
+    private fun withAnimations(block: () -> Unit) {
         val original = shell("settings get global animator_duration_scale")
         try {
             shell("settings put global animator_duration_scale 1")
-            val board = Board("1", "estacion:0", PlaceKind.ESTACION, "TM0", "Estación 0", null, emptyList())
-            val arrivals = List(40) { i -> Arrival("E48", "CAD $i", i, i, "Entre 2 y 4 min", "200 mts", Occupancy.UNKNOWN, null) }
-            compose.setContent { TransmicroneTheme {
-                HomeScreen(listOf(BoardView(board, arrivals)), 0, {}, {}, {}, {})
-            } }
-            val list = compose.onNodeWithTag("arrival-viewport")
-            list.performTouchInput { swipeUp(durationMillis = 600) }
-            compose.onNodeWithText("Agregar tablero").assertDoesNotExist()
-            shell("settings put global animator_duration_scale 0")
-            compose.waitUntil { compose.onAllNodesWithText("Agregar tablero").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithText("Agregar tablero").assertIsDisplayed()
-            list.performTouchInput { swipeUp(durationMillis = 600) }
-            compose.onNodeWithText("Agregar tablero").assertIsDisplayed()
+            block()
         } finally {
             shell(if (original == "null") "settings delete global animator_duration_scale" else "settings put global animator_duration_scale $original")
         }
+    }
+
+    @Test fun homeDockStaysExpandedWhenSystemAnimationsAreDisabled() = withAnimations {
+        val board = Board("1", "estacion:0", PlaceKind.ESTACION, "TM0", "Estación 0", null, emptyList())
+        val arrivals = List(40) { i -> Arrival("E48", "CAD $i", i, i, "Entre 2 y 4 min", "200 mts", Occupancy.UNKNOWN, null) }
+        compose.setContent { TransmicroneTheme {
+            HomeScreen(listOf(BoardView(board, arrivals)), 0, {}, {}, {}, {})
+        } }
+        val list = compose.onNodeWithTag("arrival-viewport")
+        list.performTouchInput { swipeUp(durationMillis = 600) }
+        compose.onNodeWithText("Agregar tablero").assertDoesNotExist()
+        shell("settings put global animator_duration_scale 0")
+        compose.waitUntil { compose.onAllNodesWithText("Agregar tablero").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Agregar tablero").assertIsDisplayed()
+        list.performTouchInput { swipeUp(durationMillis = 600) }
+        compose.onNodeWithText("Agregar tablero").assertIsDisplayed()
     }
 
     @Test fun snackbarClearsSavePanel() {
