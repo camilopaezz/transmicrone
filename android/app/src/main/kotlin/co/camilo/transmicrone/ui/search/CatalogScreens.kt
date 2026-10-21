@@ -21,6 +21,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
@@ -31,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import co.camilo.transmicrone.R
 import co.camilo.transmicrone.domain.*
 import co.camilo.transmicrone.ui.board.ServicioBadge
+import co.camilo.transmicrone.ui.board.parseColor
+import co.camilo.transmicrone.ui.common.ServiceChipSurface
 import co.camilo.transmicrone.ui.RouteState
 import co.camilo.transmicrone.ui.ServiceLookupState
 import co.camilo.transmicrone.ui.ServiceDestinationList
@@ -40,6 +43,7 @@ import co.camilo.transmicrone.ui.ServiceDestinationList
 fun CatalogSearchScreen(
     query: String, results: CatalogResults, searching: Boolean, failed: Boolean,
     onQuery: (String) -> Unit, onDetails: (CatalogEntry) -> Unit, onBack: () -> Unit,
+    boards: List<Board> = emptyList(),
 ) {
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
@@ -53,7 +57,35 @@ fun CatalogSearchScreen(
             state = list, contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = insets.calculateTopPadding() + 12.dp, bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
             when {
-                query.isBlank() -> item { Message(stringResource(R.string.catalog_search_example)) }
+                query.isBlank() -> {
+                    // Saved boards are the likeliest searches, so offer them before any typing.
+                    val services = boards.flatMap { it.servicios }.distinctBy { it.painted }
+                    val places = boards.distinctBy { it.placeId }
+                    if (services.isNotEmpty()) item {
+                        SectionTitle(stringResource(R.string.catalog_your_services))
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            services.forEach { servicio ->
+                                Box(Modifier.heightIn(min = 48.dp).clip(CircleShape).clickable { onQuery(servicio.painted) },
+                                    contentAlignment = Alignment.Center) {
+                                    ServiceChipSurface(parseColor(servicio.color) ?: MaterialTheme.colorScheme.primary) {
+                                        Text(servicio.painted, Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                                            style = MaterialTheme.typography.labelLarge)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (places.isNotEmpty()) item {
+                        SectionTitle(stringResource(R.string.catalog_your_places))
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            places.forEach { board ->
+                                SuggestionChip(onClick = { onQuery(board.displayName) }, label = { Text(board.displayName) },
+                                    shape = CircleShape)
+                            }
+                        }
+                    }
+                    item { Message(stringResource(R.string.catalog_search_example)) }
+                }
                 searching -> item {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)

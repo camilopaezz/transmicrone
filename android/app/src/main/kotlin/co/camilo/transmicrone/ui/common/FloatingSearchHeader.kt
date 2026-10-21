@@ -19,6 +19,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import co.camilo.transmicrone.R
 
@@ -46,7 +47,7 @@ internal fun FloatingSearchHeader(
                     value = query, onValueChange = onQuery,
                     modifier = Modifier.fillMaxWidth().focusRequester(focusRequester).semantics { contentDescription = hint },
                     textStyle = MaterialTheme.typography.titleMedium,
-                    placeholder = { Text(hint, style = MaterialTheme.typography.titleMedium) },
+                    placeholder = { Text(hint, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     leadingIcon = { Icon(Icons.Default.Search, null) },
                     trailingIcon = if (query.isNotEmpty()) ({
                         IconButton(onClick = { onQuery("") }) {

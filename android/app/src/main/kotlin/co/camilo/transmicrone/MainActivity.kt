@@ -143,6 +143,7 @@ class MainActivity : ComponentActivity() {
                             query = state.catalogQuery, results = state.catalogResults,
                             searching = state.catalogSearching, failed = state.catalogSearchFailed,
                             onQuery = vm::searchCatalog, onDetails = vm::openDetails, onBack = vm::backSetup,
+                            boards = state.boards.map { it.board },
                         )
                         Screen.DETAILS -> state.details.lastOrNull()?.let { entry ->
                             CatalogDetailsScreen(entry, onBack = vm::backSetup,
