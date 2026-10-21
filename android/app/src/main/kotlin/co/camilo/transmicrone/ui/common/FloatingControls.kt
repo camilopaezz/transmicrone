@@ -5,8 +5,6 @@ import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.BorderStroke
@@ -109,17 +107,14 @@ internal fun FloatingEdgeBand(backdrop: HazeState, top: Boolean, alpha: Float, h
     ) else arrayOf(
         0f to Color.Transparent, .65f to surface.copy(alpha = .6f * alpha), 1f to surface.copy(alpha = alpha),
     ))
-    val heightPx = with(LocalDensity.current) { height.toPx() }
     val effect = if (Build.VERSION.SDK_INT >= 31) Modifier.hazeEffect(backdrop, HazeStyle(
         backgroundColor = surface, tint = HazeTint(Color.Transparent), blurRadius = 20.dp, noiseFactor = 0f,
     )) {
         this.alpha = alpha
+        // Fade a uniform blur with a mask; progressive blur shaders crash software-rendered GPUs (CI emulators).
         // Keep edge-clamped samples beneath the stronger scrim; the inner half stays sharp.
-        progressive = HazeProgressive.verticalGradient(
-            easing = if (top) LinearOutSlowInEasing else FastOutLinearInEasing,
-            startY = if (top) 0f else heightPx * .5f, endY = if (top) heightPx * .5f else heightPx,
-            startIntensity = if (top) 1f else 0f, endIntensity = if (top) 0f else 1f,
-        )
+        mask = Brush.verticalGradient(*if (top) arrayOf(0f to Color.Black, .5f to Color.Transparent)
+            else arrayOf(.5f to Color.Transparent, 1f to Color.Black))
     } else Modifier
     Box(modifier.fillMaxWidth().height(height).clip(RectangleShape)
         .testTag(tag).then(effect).background(gradient))
