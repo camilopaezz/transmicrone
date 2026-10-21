@@ -1,5 +1,7 @@
 package co.camilo.transmicrone.ui
 
+import co.camilo.transmicrone.domain.*
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -7,20 +9,8 @@ import co.camilo.transmicrone.BuildConfig
 import co.camilo.transmicrone.data.ArrivalsRepository
 import co.camilo.transmicrone.data.catalog.CatalogRepository
 import co.camilo.transmicrone.data.catalog.RouteRepository
-import co.camilo.transmicrone.domain.ServiceRoute
 import co.camilo.transmicrone.data.local.BoardRepository
 import co.camilo.transmicrone.di.AppContainer
-import co.camilo.transmicrone.domain.Board
-import co.camilo.transmicrone.domain.CachedArrivals
-import co.camilo.transmicrone.domain.Clock
-import co.camilo.transmicrone.domain.FailureKind
-import co.camilo.transmicrone.domain.FetchResult
-import co.camilo.transmicrone.domain.Place
-import co.camilo.transmicrone.domain.Paradero
-import co.camilo.transmicrone.domain.SelectedServicio
-import co.camilo.transmicrone.domain.CatalogEntry
-import co.camilo.transmicrone.domain.CatalogResults
-import co.camilo.transmicrone.domain.ServicioOption
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -51,6 +41,7 @@ data class BoardView(
     val arrivals: List<co.camilo.transmicrone.domain.Arrival> = emptyList(),
     val freshness: Freshness = Freshness.Idle,
     val cache: CachedArrivals? = null,
+    val services: List<ServiceArrivals> = emptyList(),
 )
 
 sealed class Freshness {
@@ -135,9 +126,9 @@ class AppViewModel(
     }
     // Search hides the chosen place, but its selection remains a draft until another place is chosen.
     private var setupDraftPlaceId: String? = null
-    private var fetchGeneration: Long = 0
+    @Volatile private var fetchGeneration: Long = 0
     private var lastPersistedId: String? = null
-    private var pendingManualRefresh = false
+    @Volatile private var pendingManualRefresh = false
     private val boardMutation = Mutex()
     private var boardDeletion: BoardDeletion? = null
 
@@ -558,8 +549,10 @@ class AppViewModel(
         lastPersistedId = snap.lastBoardId
         val current = _state.value
         val views = snap.boards.map { board ->
-            current.boards.find { it.board.boardId == board.boardId }?.copy(board = board)
-                ?: BoardView(board = board, cache = arrivals.cached(board)).withCache()
+            val previous = current.boards.find { it.board.boardId == board.boardId }
+            if (previous != null && previous.board.queryScope() == board.queryScope() && previous.board.servicios == board.servicios) {
+                previous.copy(board = board)
+            } else BoardView(board = board, cache = arrivals.cached(board)).withCache()
         }
         val idx = snap.lastBoardId?.let { id ->
             views.indexOfFirst { it.board.boardId == id }.takeIf { it >= 0 }
@@ -583,6 +576,7 @@ class AppViewModel(
     }
 
     private fun stopPolling() {
+        _state.update { it.copy(boards = it.boards.map(::revertCancelledRefresh)) }
         pendingManualRefresh = false
         fetchGeneration++
         loop?.cancel()
@@ -621,40 +615,32 @@ class AppViewModel(
         val boardId = view.board.boardId
         pendingManualRefresh = false
         val gen = ++fetchGeneration
+        _state.update { ui -> ui.copy(boards = ui.boards.map {
+            if (it.board.boardId != boardId) revertCancelledRefresh(it) else it
+        }) }
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch(io) {
-            val cached = arrivals.cached(view.board)
-            _state.update { ui ->
-                ui.copy(
-                    boards = ui.boards.map { bv ->
-                        if (bv.board.boardId != boardId) bv
-                        else bv.copy(
-                            cache = cached ?: bv.cache,
-                            arrivals = (cached ?: bv.cache)?.arrivals ?: bv.arrivals,
-                            freshness = when {
-                                cached != null -> Freshness.UpdatingCached(cached.fetchedAt, quiet)
-                                bv.cache != null -> Freshness.UpdatingCached(bv.cache.fetchedAt, quiet)
-                                else -> Freshness.Loading
-                            },
-                        )
-                    },
-                )
-            }
+            var first = true
             try {
-                val result = arrivals.refresh(view.board)
-                if (gen != fetchGeneration || !isActive) return@launch
-                val live = _state.value
-                if (!live.started || live.screen != Screen.HOME) return@launch
-                _state.update { ui ->
-                    ui.copy(
-                        boards = ui.boards.map { bv ->
-                            if (bv.board.boardId != boardId) bv else bv.applyResult(result)
-                        },
-                    )
+                arrivals.refreshUpdates(view.board).collect { snapshot ->
+                    if (gen != fetchGeneration || !isActive) return@collect
+                    val live = _state.value
+                    if (!live.started || live.screen != Screen.HOME) return@collect
+                    _state.update { ui ->
+                        if (gen != fetchGeneration || !isActive || !ui.started || ui.screen != Screen.HOME ||
+                            ui.boards.getOrNull(ui.pageIndex)?.board != view.board) return@update ui
+                        ui.copy(boards = ui.boards.map { bv ->
+                            if (bv.board.boardId != boardId) bv else bv.applySnapshot(snapshot,
+                                quiet = if (first) quiet && !pendingManualRefresh
+                                    else (bv.freshness as? Freshness.UpdatingCached)?.quiet ?: quiet)
+                        })
+                    }
+                    first = false
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 if (gen == fetchGeneration) {
                     _state.update { ui ->
+                        if (gen != fetchGeneration) return@update ui
                         ui.copy(
                             boards = ui.boards.map { bv ->
                                 if (bv.board.boardId != boardId) bv
@@ -696,6 +682,11 @@ class AppViewModel(
 }
 
 private fun revertCancelledRefresh(bv: BoardView): BoardView {
+    if (bv.services.any { it.status == ServiceStatus.Pending }) {
+        return bv.applySnapshot(BoardArrivals(bv.services.map {
+            if (it.status == ServiceStatus.Pending) it.copy(status = it.cached.restoredStatus()) else it
+        }, bv.board.queryScope()))
+    }
     if (bv.freshness !is Freshness.UpdatingCached && bv.freshness !is Freshness.Loading) return bv
     val cached = bv.cache
     return if (cached != null) {
@@ -710,33 +701,26 @@ private fun BoardView.withCache(): BoardView {
     return copy(
         arrivals = cached.arrivals,
         freshness = Freshness.Cached(cached.fetchedAt),
+        services = board.servicios.map { service ->
+            val entry = cached.services.find { it.key == service.serviceKey() }
+            ServiceArrivals(service, entry, entry.restoredStatus())
+        },
     )
 }
 
-private fun BoardView.applyResult(result: FetchResult): BoardView = when (result) {
-    is FetchResult.Success -> copy(
-        arrivals = result.arrivals,
-        cache = CachedArrivals(result.arrivals, result.fetchedAt),
-        freshness = Freshness.Updated(result.fetchedAt),
-    )
-    is FetchResult.Empty -> copy(
-        arrivals = emptyList(),
-        cache = CachedArrivals(emptyList(), result.fetchedAt),
-        freshness = Freshness.Empty(result.fetchedAt),
-    )
-    is FetchResult.Unsupported -> copy(freshness = Freshness.Unsupported)
-    is FetchResult.Failure -> {
-        val cached = result.cached
-        if (cached != null) {
-            copy(
-                arrivals = cached.arrivals,
-                cache = cached,
-                freshness = Freshness.FailedCached(cached.fetchedAt, result.kind),
-            )
-        } else {
-            copy(freshness = Freshness.Failed(result.kind))
-        }
+private fun BoardView.applySnapshot(snapshot: BoardArrivals, quiet: Boolean = false): BoardView {
+    val cached = snapshot.cache()
+    val failure = snapshot.services.mapNotNull { it.status as? ServiceStatus.Failed }.firstOrNull()
+    val freshness = when {
+        snapshot.pending -> cached?.let { Freshness.UpdatingCached(it.fetchedAt, quiet) } ?: Freshness.Loading
+        failure != null -> cached?.let { Freshness.FailedCached(it.fetchedAt, failure.kind) } ?: Freshness.Failed(failure.kind)
+        snapshot.services.isNotEmpty() && snapshot.services.all { it.status == ServiceStatus.Unsupported } -> Freshness.Unsupported
+        snapshot.services.any { it.status in setOf(ServiceStatus.Idle, ServiceStatus.Cached,
+            ServiceStatus.CachedEmpty, ServiceStatus.Unsupported) } -> cached?.let { Freshness.Cached(it.fetchedAt) } ?: Freshness.Idle
+        snapshot.arrivals.isEmpty() -> Freshness.Empty(cached?.fetchedAt ?: Instant.EPOCH)
+        else -> Freshness.Updated(cached!!.fetchedAt)
     }
+    return copy(arrivals = snapshot.arrivals, cache = cached, freshness = freshness, services = snapshot.services)
 }
 
 fun co.camilo.transmicrone.domain.ServicioOption.key(): String = "$painted\u0001$destino"

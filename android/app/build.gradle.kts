@@ -42,6 +42,11 @@ require(localSigning.isEmpty() || signingConfigured) { "Incomplete release signi
 
 val feedBaseUrl = feedSetting("BASE_URL", "TRANSMICRONE_BASE_URL", feedField("BASE_URL"))
 val feedAppId = feedSetting("APPID", "TRANSMICRONE_APP_ID", "unconfigured")
+val prNumber = providers.gradleProperty("prNumber").orNull
+require(prNumber == null || prNumber.matches(Regex("[1-9][0-9]*"))) {
+    "prNumber must be a positive pull request number"
+}
+val prLabel = prNumber ?: "local"
 
 android {
     namespace = "co.camilo.transmicrone"
@@ -54,6 +59,8 @@ android {
         targetSdk = 35
         versionCode = 3
         versionName = "0.1.0-alpha.2"
+        // Also inherited by the test APK, which cannot reference the app's strings.
+        resValue("string", "launcher_name", "TransMinuto")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "FEED_BASE_URL", "\"$feedBaseUrl\"")
         buildConfigField("String", "FEED_APPID", "\"$feedAppId\"")
@@ -64,6 +71,13 @@ android {
     }
 
     signingConfigs {
+        // Public test key, never use this identity for production releases.
+        create("prPreview") {
+            storeFile = rootDir.resolve("keystores/pr-preview.jks")
+            storePassword = "android"
+            keyAlias = "pr-preview"
+            keyPassword = "android"
+        }
         if (signingConfigured) create("permanentRelease") {
             storeFile = rootDir.resolve(localSigning.getProperty("STORE_FILE"))
             storePassword = localSigning.getProperty("STORE_PASSWORD")
@@ -94,6 +108,15 @@ android {
             isDebuggable = false
             matchingFallbacks += "release"
         }
+        create("pr") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".pr${prNumber.orEmpty()}"
+            versionNameSuffix = "-pr.$prLabel"
+            resValue("string", "launcher_name", "TransMinuto PR ${prNumber?.let { "#$it" } ?: "local"}")
+            signingConfig = signingConfigs.getByName("prPreview")
+            isDebuggable = false
+            matchingFallbacks += "release"
+        }
     }
 
     compileOptions {
@@ -119,6 +142,14 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+}
+
+tasks.matching { it.name == "prePrBuild" }.configureEach {
+    doFirst {
+        require(feedAppId.isNotBlank() && feedAppId !in setOf("unconfigured", "ci-not-configured")) {
+            "PR APKs require a configured live feed app ID. See docs/feed.md."
         }
     }
 }

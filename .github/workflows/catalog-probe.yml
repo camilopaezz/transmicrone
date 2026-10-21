@@ -1,0 +1,55 @@
+name: Catalog source probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [t3/catalog-over-the-air-updates]
+    paths:
+      - .github/workflows/catalog-probe.yml
+      - tools/probe_catalog_sources.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Probe official catalog sources from hosted runner
+        run: python3 tools/probe_catalog_sources.py --out "$RUNNER_TEMP/catalog-probe/report.json"
+      - name: Write summary
+        if: always()
+        env:
+          REPORT: ${{ runner.temp }}/catalog-probe/report.json
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          report = Path(os.environ['REPORT'])
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('## Catalog source access\n\n')
+              if not report.exists():
+                  summary.write('Probe did not finish. See the job logs.\n')
+              else:
+                  data = json.loads(report.read_text())
+                  summary.write(data['scope'] + '\n\n')
+                  for result in data['results']:
+                      status = 'PASS' if result['ok'] else 'FAIL'
+                      summary.write(f"- {status} {result['name']} ({result['seconds']}s)\n")
+                      if not result['ok']:
+                          summary.write(f"  Error: {result['error']}\n")
+          PY
+      - name: Upload probe report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: catalog-source-probe
+          path: ${{ runner.temp }}/catalog-probe/
+          if-no-files-found: warn
+          retention-days: 30

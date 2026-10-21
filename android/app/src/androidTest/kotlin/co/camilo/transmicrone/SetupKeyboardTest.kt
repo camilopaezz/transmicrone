@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
@@ -38,7 +39,11 @@ class SetupKeyboardTest {
                     isEditing = true, editingBoardName = "León XIII")
             }
         }
-        compose.onNodeWithText("leon xii").performClick()
+        compose.waitUntil(5_000) { compose.activity.hasWindowFocus() }
+        // Invoke the field's click without touch coordinates that can move
+        // while the automatically requested keyboard resizes the layout.
+        compose.onNodeWithText("leon xii").performSemanticsAction(SemanticsActions.OnClick) { it() }
+        compose.onNodeWithText("leon xii").assertIsFocused()
         compose.waitUntil(5_000) {
             ViewCompat.getRootWindowInsets(compose.activity.window.decorView)
                 ?.isVisible(WindowInsetsCompat.Type.ime()) == true

@@ -1,0 +1,76 @@
+name: Daily catalog publication
+
+on:
+  schedule:
+    - cron: '37 10 * * *' # 05:37 America/Bogota, after the observed GTFS publication time.
+  workflow_dispatch:
+    inputs:
+      build_only:
+        description: Collect and build without R2 publication
+        type: boolean
+        default: false
+  push:
+    branches: [t3/catalog-over-the-air-updates]
+    paths:
+      - .github/workflows/catalog-daily.yml
+      - tools/catalog_daily.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-daily
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID }}
+      R2_BUCKET: ${{ vars.R2_BUCKET }}
+      R2_PUBLIC_URL: ${{ vars.R2_PUBLIC_URL }}
+      R2_PREFIX: catalog
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install R2 client
+        run: python3 -m pip install 'boto3==1.43.115'
+      - name: Check Python tools
+        run: |
+          python3 -m compileall -q tools
+          python3 -m unittest discover -s tests -q
+      - name: Collect, build, validate, and publish
+        env:
+          BUILD_ONLY: ${{ inputs.build_only || (github.event_name == 'push' && vars.CATALOG_R2_READY != 'true') }}
+        run: |
+          if [ "$BUILD_ONLY" = true ]; then
+            python3 -u tools/catalog_daily.py --out "$RUNNER_TEMP/catalog-daily" --build-only
+          else
+            python3 -u tools/catalog_daily.py --out "$RUNNER_TEMP/catalog-daily"
+          fi
+      - name: Select complete archive or partial response directory
+        id: evidence
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/catalog-daily/responses.tar.gz" ]; then
+            echo "responses_path=$RUNNER_TEMP/catalog-daily/responses.tar.gz" >> "$GITHUB_OUTPUT"
+          else
+            echo "responses_path=$RUNNER_TEMP/catalog-daily/responses" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Retain evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: catalog-daily-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/catalog-daily/report.json
+            ${{ runner.temp }}/catalog-daily/changes.json
+            ${{ runner.temp }}/catalog-daily/catalog.json
+            ${{ runner.temp }}/catalog-daily/catalog.json.gz
+            ${{ runner.temp }}/catalog-daily/source-catalog.json.gz
+            ${{ steps.evidence.outputs.responses_path }}
+          if-no-files-found: warn
+          retention-days: 30
+          compression-level: 0

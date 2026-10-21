@@ -1,0 +1,879 @@
+{
+  "run": "https://github.com/camilopaezz/transmicrone/actions/runs/39133571125",
+  "plan": {
+    "targets": [
+      "2026-10-18T13:54:01.780286+00:00",
+      "2026-10-18T14:00:00+00:00",
+      "2026-10-18T15:00:00+00:00",
+      "2026-10-18T16:00:00+00:00",
+      "2026-10-18T17:00:00+00:00"
+    ],
+    "deadline": "2026-10-18T12:00:00-05:00"
+  },
+  "samples": [
+    {
+      "sample": "sample-01",
+      "checked_at": "2026-10-18T13:54:07.914247+00:00",
+      "ok": true,
+      "verified_response_bodies": 11,
+      "changes_from_first": [],
+      "checks": [
+        {
+          "name": "gtfs",
+          "ok": true,
+          "details": {
+            "url": "https://storage.googleapis.com/gtfs-estaticos/GTFS_20261018.zip",
+            "bytes": 185617644,
+            "sha256": "a6eb71b50dce1f31fe7f1a6368d4ff6041358a4bdf55f70be9d65a6d9f169c53",
+            "metadata": {
+              "name": "GTFS_20261018.zip",
+              "last_modified": "Sun, 18 Oct 2026 09:19:10 GMT",
+              "content_length": "185617644",
+              "tried": [
+                {
+                  "name": "GTFS_20261018.zip",
+                  "ok": true
+                }
+              ]
+            },
+            "files": {
+              "agency.txt": "first row valid",
+              "routes.txt": "first row valid",
+              "stops.txt": "first row valid",
+              "trips.txt": "first row valid",
+              "stop_times.txt": "first row valid",
+              "feed_info.txt": {
+                "feed_publisher_name": "Transmilenio S.A.",
+                "feed_start_date": "20260101",
+                "feed_version": "1",
+                "feed_end_date": "20261231",
+                "feed_lang": "es",
+                "feed_publisher_url": "https://www.transmilenio.gov.co/",
+                "feed_contact_email": "radicacion@transmilenio.gov.co"
+              }
+            }
+          },
+          "seconds": 2.13
+        },
+        {
+          "name": "gis-estaciones",
+          "ok": true,
+          "details": {
+            "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Troncal/consulta_estaciones_troncales/FeatureServer/0",
+            "rows": 152,
+            "sha256": "4ababeef3280d67ad6762d1ca05d04a995d04cacc2ece5fee88a2136912d9fc7"
+          },
+          "seconds": 0.22
+        },
+        {
+          "name": "gis-paraderos",
+          "ok": true,
+          "details": {
+            "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Zonal/consulta_paraderos_zonales/FeatureServer/0",
+            "rows": 7610,
+            "sha256": "3216aebc6f750528accbbe7aadad790cfb74aae958d6285e25175d0de50a2ed7"
+          },
+          "seconds": 1.48
+        },
+        {
+          "name": "gis-servicios",
+          "ok": true,
+          "details": {
+            "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/ConsultaSubgerenciaPlanificacionSITP/Consulta_Planificacion_SITP/FeatureServer/15",
+            "rows": 693,
+            "sha256": "c23ce218ed02db0c63456764b08e6760dd4ffbefa62f6d3f581e8f83777dfa45"
+          },
+          "seconds": 0.3
+        },
+        {
+          "name": "catalog-search",
+          "ok": true,
+          "details": {
+            "rows": 1247,
+            "hours": 1247,
+            "sha256": "6ebc639f1efb11e06efb5b32f7f317017ec0d74c5c77b2c054cf9905ab2452b9"
+          },
+          "seconds": 0.32
+        },
+        {
+          "name": "catalog-detail-1",
+          "ok": true,
+          "details": {
+            "catalog_id": "1",
+            "code": "17-3",
+            "stops": 24,
+            "sha256": "fa98fc2cbf2fd680c7705156b8a90771b09da91537bd94d23799f62ca9af28d1"
+          },
+          "seconds": 0.26
+        },
+        {
+          "name": "catalog-detail-10",
+          "ok": true,
+          "details": {
+            "catalog_id": "10",
+            "code": "D237",
+            "stops": 61,
+            "sha256": "98a6121e04204114e985804d4d023542a1cdf9fe34c2df6076d61085cd553ac6"
+          },
+          "seconds": 0.31
+        },
+        {
+          "name": "catalog-detail-1003",
+          "ok": true,
+          "details": {
+            "catalog_id": "1003",
+            "code": "K627",
+            "stops": 60,
+            "sha256": "9fa3e4a95b9ac89f3da02f96c07b9cb8508304c8ddac269e06c25ead73bce988"
+          },
+          "seconds": 0.3
+        }
+      ]
+    },
+    {
+      "sample": "sample-02",
+      "checked_at": "2026-10-18T14:00:07.010474+00:00",
+      "ok": true,
+      "verified_response_bodies": 11,
+      "changes_from_first": [],
+      "checks": [
+        {
+          "name": "gtfs",
+          "ok": true,
+          "details": {
+            "url": "https://storage.googleapis.com/gtfs-estaticos/GTFS_20261018.zip",
+            "bytes": 185617644,
+            "sha256": "a6eb71b50dce1f31fe7f1a6368d4ff6041358a4bdf55f70be9d65a6d9f169c53",
+            "metadata": {
+              "name": "GTFS_20261018.zip",
+              "last_modified": "Sun, 18 Oct 2026 09:19:10 GMT",
+              "content_length": "185617644",
+              "tried": [
+                {
+                  "name": "GTFS_20261018.zip",
+                  "ok": true
+                }
+              ]
+            },
+            "files": {
+              "agency.txt": "first row valid",
+              "routes.txt": "first row valid",
+              "stops.txt": "first row valid",
+              "trips.txt": "first row valid",
+              "stop_times.txt": "first row valid",
+              "feed_info.txt": {
+                "feed_publisher_name": "Transmilenio S.A.",
+                "feed_start_date": "20260101",
+                "feed_version": "1",
+                "feed_end_date": "20261231",
+                "feed_lang": "es",
+                "feed_publisher_url": "https://www.transmilenio.gov.co/",
+                "feed_contact_email": "radicacion@transmilenio.gov.co"
+              }
+            }
+          },
+          "seconds": 2.8
+        },
+        {
+          "name": "gis-estaciones",
+          "ok": true,
+          "details": {
+            "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Troncal/consulta_estaciones_troncales/FeatureServer/0",
+            "rows": 152,
+            "sha256": "4ababeef3280d67ad6762d1ca05d04a995d04cacc2ece5fee88a2136912d9fc7"
+          },
+          "seconds": 0.22
+        },
+        {
+          "name": "gis-paraderos",
+          "ok": true,
+          "details": {
+            "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Zonal/consulta_paraderos_zonales/FeatureServer/0",
+            "rows": 7610,
+            "sha256": "3216aebc6f750528accbbe7aadad790cfb74aae958d6285e25175d0de50a2ed7"
+          },
+          "seconds": 1.66
+        },
+        {
+          "name": "gis-servicios",
+          "ok": true,
+          "details": {
+            "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/ConsultaSubgerenciaPlanificacionSITP/Consulta_Planificacion_SITP/FeatureServer/15",
+            "rows": 693,
+            "sha256": "c23ce218ed02db0c63456764b08e6760dd4ffbefa62f6d3f581e8f83777dfa45"
+          },
+          "seconds": 0.38
+        },
+        {
+          "name": "catalog-search",
+          "ok": true,
+          "details": {
+            "rows": 1247,
+            "hours": 1247,
+            "sha256": "6ebc639f1efb11e06efb5b32f7f317017ec0d74c5c77b2c054cf9905ab2452b9"
+          },
+          "seconds": 0.35
+        },
+        {
+          "name": "catalog-detail-1",
+          "ok": true,
+          "details": {
+            "catalog_id": "1",
+            "code": "17-3",
+            "stops": 24,
+            "sha256": "fa98fc2cbf2fd680c7705156b8a90771b09da91537bd94d23799f62ca9af28d1"
+          },
+          "seconds": 0.28
+        },
+        {
+          "name": "catalog-detail-10",
+          "ok": true,
+          "details": {
+            "catalog_id": "10",
+            "code": "D237",
+            "stops": 61,
+            "sha256": "98a6121e04204114e985804d4d023542a1cdf9fe34c2df6076d61085cd553ac6"
+          },
+          "seconds": 0.31
+        },
+        {
+          "name": "catalog-detail-1003",
+          "ok": true,
+          "details": {
+            "catalog_id": "1003",
+            "code": "K627",
+            "stops": 60,
+            "sha256": "9fa3e4a95b9ac89f3da02f96c07b9cb8508304c8ddac269e06c25ead73bce988"
+          },
+          "seconds": 0.32
+        }
+      ]
+    },
+    {
+      "sample": "sample-03",
+      "checked_at": "2026-10-18T15:00:09.317683+00:00",
+      "ok": true,
+      "verified_response_bodies": 11,
+      "changes_from_first": [],
+      "checks": [
+        {
+          "name": "gtfs",
+          "ok": true,
+          "details": {
+            "url": "https://storage.googleapis.com/gtfs-estaticos/GTFS_20261018.zip",
+            "bytes": 185617644,
+            "sha256": "a6eb71b50dce1f31fe7f1a6368d4ff6041358a4bdf55f70be9d65a6d9f169c53",
+            "metadata": {
+              "name": "GTFS_20261018.zip",
+              "last_modified": "Sun, 18 Oct 2026 09:19:10 GMT",
+              "content_length": "185617644",
+              "tried": [
+                {
+                  "name": "GTFS_20261018.zip",
+                  "ok": true
+                }
+              ]
+            },
+            "files": {
+              "agency.txt": "first row valid",
+              "routes.txt": "first row valid",
+              "stops.txt": "first row valid",
+              "trips.txt": "first row valid",
+              "stop_times.txt": "first row valid",
+              "feed_info.txt": {
+                "feed_publisher_name": "Transmilenio S.A.",
+                "feed_start_date": "20260101",
+                "feed_version": "1",
+                "feed_end_date": "20261231",
+                "feed_lang": "es",
+                "feed_publisher_url": "https://www.transmilenio.gov.co/",
+                "feed_contact_email": "radicacion@transmilenio.gov.co"
+              }
+            }
+          },
+          "seconds": 1.93
+        },
+        {
+          "name": "gis-estaciones",
+          "ok": true,
+          "details": {
+            "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Troncal/consulta_estaciones_troncales/FeatureServer/0",
+            "rows": 152,
+            "sha256": "4ababeef3280d67ad6762d1ca05d04a995d04cacc2ece5fee88a2136912d9fc7"
+          },
+          "seconds": 0.26
+        },
+        {
+          "name": "gis-paraderos",
+          "ok": true,
+          "details": {
+            "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Zonal/consulta_paraderos_zonales/FeatureServer/0",
+            "rows": 7610,
+            "sha256": "3216aebc6f750528accbbe7aadad790cfb74aae958d6285e25175d0de50a2ed7"
+          },
+          "seconds": 4.58
+        },
+        {
+          "name": "gis-servicios",
+          "ok": true,
+          "details": {
+            "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/ConsultaSubgerenciaPlanificacionSITP/Consulta_Planificacion_SITP/FeatureServer/15",
+            "rows": 693,
+            "sha256": "c23ce218ed02db0c63456764b08e6760dd4ffbefa62f6d3f581e8f83777dfa45"
+          },
+          "seconds": 0.58
+        },
+        {
+          "name": "catalog-search",
+          "ok": true,
+          "details": {
+            "rows": 1247,
+            "hours": 1247,
+            "sha256": "6ebc639f1efb11e06efb5b32f7f317017ec0d74c5c77b2c054cf9905ab2452b9"
+          },
+          "seconds": 0.32
+        },
+        {
+          "name": "catalog-detail-1",
+          "ok": true,
+          "details": {
+            "catalog_id": "1",
+            "code": "17-3",
+            "stops": 24,
+            "sha256": "fa98fc2cbf2fd680c7705156b8a90771b09da91537bd94d23799f62ca9af28d1"
+          },
+          "seconds": 0.3
+        },
+        {
+          "name": "catalog-detail-10",
+          "ok": true,
+          "details": {
+            "catalog_id": "10",
+            "code": "D237",
+            "stops": 61,
+            "sha256": "98a6121e04204114e985804d4d023542a1cdf9fe34c2df6076d61085cd553ac6"
+          },
+          "seconds": 0.34
+        },
+        {
+          "name": "catalog-detail-1003",
+          "ok": true,
+          "details": {
+            "catalog_id": "1003",
+            "code": "K627",
+            "stops": 60,
+            "sha256": "9fa3e4a95b9ac89f3da02f96c07b9cb8508304c8ddac269e06c25ead73bce988"
+          },
+          "seconds": 0.31
+        }
+      ]
+    },
+    {
+      "sample": "sample-04",
+      "checked_at": "2026-10-18T16:00:06.678332+00:00",
+      "ok": true,
+      "verified_response_bodies": 11,
+      "changes_from_first": [],
+      "checks": [
+        {
+          "name": "gtfs",
+          "ok": true,
+          "details": {
+            "url": "https://storage.googleapis.com/gtfs-estaticos/GTFS_20261018.zip",
+            "bytes": 185617644,
+            "sha256": "a6eb71b50dce1f31fe7f1a6368d4ff6041358a4bdf55f70be9d65a6d9f169c53",
+            "metadata": {
+              "name": "GTFS_20261018.zip",
+              "last_modified": "Sun, 18 Oct 2026 09:19:10 GMT",
+              "content_length": "185617644",
+              "tried": [
+                {
+                  "name": "GTFS_20261018.zip",
+                  "ok": true
+                }
+              ]
+            },
+            "files": {
+              "agency.txt": "first row valid",
+              "routes.txt": "first row valid",
+              "stops.txt": "first row valid",
+              "trips.txt": "first row valid",
+              "stop_times.txt": "first row valid",
+              "feed_info.txt": {
+                "feed_publisher_name": "Transmilenio S.A.",
+                "feed_start_date": "20260101",
+                "feed_version": "1",
+                "feed_end_date": "20261231",
+                "feed_lang": "es",
+                "feed_publisher_url": "https://www.transmilenio.gov.co/",
+                "feed_contact_email": "radicacion@transmilenio.gov.co"
+              }
+            }
+          },
+          "seconds": 2.72
+        },
+        {
+          "name": "gis-estaciones",
+          "ok": true,
+          "details": {
+            "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Troncal/consulta_estaciones_troncales/FeatureServer/0",
+            "rows": 152,
+            "sha256": "4ababeef3280d67ad6762d1ca05d04a995d04cacc2ece5fee88a2136912d9fc7"
+          },
+          "seconds": 0.24
+        },
+        {
+          "name": "gis-paraderos",
+          "ok": true,
+          "details": {
+            "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Zonal/consulta_paraderos_zonales/FeatureServer/0",
+            "rows": 7610,
+            "sha256": "3216aebc6f750528accbbe7aadad790cfb74aae958d6285e25175d0de50a2ed7"
+          },
+          "seconds": 1.46
+        },
+        {
+          "name": "gis-servicios",
+          "ok": true,
+          "details": {
+            "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/ConsultaSubgerenciaPlanificacionSITP/Consulta_Planificacion_SITP/FeatureServer/15",
+            "rows": 693,
+            "sha256": "c23ce218ed02db0c63456764b08e6760dd4ffbefa62f6d3f581e8f83777dfa45"
+          },
+          "seconds": 0.35
+        },
+        {
+          "name": "catalog-search",
+          "ok": true,
+          "details": {
+            "rows": 1247,
+            "hours": 1247,
+            "sha256": "6ebc639f1efb11e06efb5b32f7f317017ec0d74c5c77b2c054cf9905ab2452b9"
+          },
+          "seconds": 0.32
+        },
+        {
+          "name": "catalog-detail-1",
+          "ok": true,
+          "details": {
+            "catalog_id": "1",
+            "code": "17-3",
+            "stops": 24,
+            "sha256": "fa98fc2cbf2fd680c7705156b8a90771b09da91537bd94d23799f62ca9af28d1"
+          },
+          "seconds": 0.29
+        },
+        {
+          "name": "catalog-detail-10",
+          "ok": true,
+          "details": {
+            "catalog_id": "10",
+            "code": "D237",
+            "stops": 61,
+            "sha256": "98a6121e04204114e985804d4d023542a1cdf9fe34c2df6076d61085cd553ac6"
+          },
+          "seconds": 0.32
+        },
+        {
+          "name": "catalog-detail-1003",
+          "ok": true,
+          "details": {
+            "catalog_id": "1003",
+            "code": "K627",
+            "stops": 60,
+            "sha256": "9fa3e4a95b9ac89f3da02f96c07b9cb8508304c8ddac269e06c25ead73bce988"
+          },
+          "seconds": 0.29
+        }
+      ]
+    },
+    {
+      "sample": "sample-05",
+      "checked_at": "2026-10-18T17:00:06.960376+00:00",
+      "ok": true,
+      "verified_response_bodies": 11,
+      "changes_from_first": [],
+      "checks": [
+        {
+          "name": "gtfs",
+          "ok": true,
+          "details": {
+            "url": "https://storage.googleapis.com/gtfs-estaticos/GTFS_20261018.zip",
+            "bytes": 185617644,
+            "sha256": "a6eb71b50dce1f31fe7f1a6368d4ff6041358a4bdf55f70be9d65a6d9f169c53",
+            "metadata": {
+              "name": "GTFS_20261018.zip",
+              "last_modified": "Sun, 18 Oct 2026 09:19:10 GMT",
+              "content_length": "185617644",
+              "tried": [
+                {
+                  "name": "GTFS_20261018.zip",
+                  "ok": true
+                }
+              ]
+            },
+            "files": {
+              "agency.txt": "first row valid",
+              "routes.txt": "first row valid",
+              "stops.txt": "first row valid",
+              "trips.txt": "first row valid",
+              "stop_times.txt": "first row valid",
+              "feed_info.txt": {
+                "feed_publisher_name": "Transmilenio S.A.",
+                "feed_start_date": "20260101",
+                "feed_version": "1",
+                "feed_end_date": "20261231",
+                "feed_lang": "es",
+                "feed_publisher_url": "https://www.transmilenio.gov.co/",
+                "feed_contact_email": "radicacion@transmilenio.gov.co"
+              }
+            }
+          },
+          "seconds": 2.94
+        },
+        {
+          "name": "gis-estaciones",
+          "ok": true,
+          "details": {
+            "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Troncal/consulta_estaciones_troncales/FeatureServer/0",
+            "rows": 152,
+            "sha256": "4ababeef3280d67ad6762d1ca05d04a995d04cacc2ece5fee88a2136912d9fc7"
+          },
+          "seconds": 0.21
+        },
+        {
+          "name": "gis-paraderos",
+          "ok": true,
+          "details": {
+            "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Zonal/consulta_paraderos_zonales/FeatureServer/0",
+            "rows": 7610,
+            "sha256": "3216aebc6f750528accbbe7aadad790cfb74aae958d6285e25175d0de50a2ed7"
+          },
+          "seconds": 1.51
+        },
+        {
+          "name": "gis-servicios",
+          "ok": true,
+          "details": {
+            "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/ConsultaSubgerenciaPlanificacionSITP/Consulta_Planificacion_SITP/FeatureServer/15",
+            "rows": 693,
+            "sha256": "c23ce218ed02db0c63456764b08e6760dd4ffbefa62f6d3f581e8f83777dfa45"
+          },
+          "seconds": 0.35
+        },
+        {
+          "name": "catalog-search",
+          "ok": true,
+          "details": {
+            "rows": 1247,
+            "hours": 1247,
+            "sha256": "6ebc639f1efb11e06efb5b32f7f317017ec0d74c5c77b2c054cf9905ab2452b9"
+          },
+          "seconds": 0.33
+        },
+        {
+          "name": "catalog-detail-1",
+          "ok": true,
+          "details": {
+            "catalog_id": "1",
+            "code": "17-3",
+            "stops": 24,
+            "sha256": "fa98fc2cbf2fd680c7705156b8a90771b09da91537bd94d23799f62ca9af28d1"
+          },
+          "seconds": 0.27
+        },
+        {
+          "name": "catalog-detail-10",
+          "ok": true,
+          "details": {
+            "catalog_id": "10",
+            "code": "D237",
+            "stops": 61,
+            "sha256": "98a6121e04204114e985804d4d023542a1cdf9fe34c2df6076d61085cd553ac6"
+          },
+          "seconds": 0.3
+        },
+        {
+          "name": "catalog-detail-1003",
+          "ok": true,
+          "details": {
+            "catalog_id": "1003",
+            "code": "K627",
+            "stops": 60,
+            "sha256": "9fa3e4a95b9ac89f3da02f96c07b9cb8508304c8ddac269e06c25ead73bce988"
+          },
+          "seconds": 0.37
+        }
+      ]
+    }
+  ],
+  "comparisons": [
+    {
+      "sample": "sample-02",
+      "url": "https://storage.googleapis.com/gtfs-estaticos/GTFS_20261018.zip",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-02",
+      "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Troncal/consulta_estaciones_troncales/FeatureServer/0/query?where=1%3D1&outFields=%2A&returnGeometry=false&outSR=4326&f=json&resultRecordCount=2000&resultOffset=0",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-02",
+      "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Zonal/consulta_paraderos_zonales/FeatureServer/0/query?where=1%3D1&outFields=%2A&returnGeometry=false&outSR=4326&f=json&resultRecordCount=2000&resultOffset=0",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-02",
+      "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Zonal/consulta_paraderos_zonales/FeatureServer/0/query?where=1%3D1&outFields=%2A&returnGeometry=false&outSR=4326&f=json&resultRecordCount=2000&resultOffset=2000",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-02",
+      "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Zonal/consulta_paraderos_zonales/FeatureServer/0/query?where=1%3D1&outFields=%2A&returnGeometry=false&outSR=4326&f=json&resultRecordCount=2000&resultOffset=4000",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-02",
+      "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Zonal/consulta_paraderos_zonales/FeatureServer/0/query?where=1%3D1&outFields=%2A&returnGeometry=false&outSR=4326&f=json&resultRecordCount=2000&resultOffset=6000",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-02",
+      "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/ConsultaSubgerenciaPlanificacionSITP/Consulta_Planificacion_SITP/FeatureServer/15/query?where=1%3D1&outFields=%2A&returnGeometry=false&outSR=4326&f=json&resultRecordCount=2000&resultOffset=0",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-02",
+      "url": "https://api.buscador-rutas.transmilenio.gov.co/loader.php?lServicio=Rutas&lTipo=api&lFuncion=searchRutaByTipo&tipo_ruta=TIPORUTA&search=",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-02",
+      "url": "https://api.buscador-rutas.transmilenio.gov.co/loader.php?lServicio=Rutas&lTipo=api&lFuncion=infoRuta&idRuta=1&nombre=Modelia&codigo=17-3",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-02",
+      "url": "https://api.buscador-rutas.transmilenio.gov.co/loader.php?lServicio=Rutas&lTipo=api&lFuncion=infoRuta&idRuta=10&nombre=Engativa%CC%81+Centro&codigo=D237",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-02",
+      "url": "https://api.buscador-rutas.transmilenio.gov.co/loader.php?lServicio=Rutas&lTipo=api&lFuncion=infoRuta&idRuta=1003&nombre=Salitre&codigo=K627",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-03",
+      "url": "https://storage.googleapis.com/gtfs-estaticos/GTFS_20261018.zip",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-03",
+      "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Troncal/consulta_estaciones_troncales/FeatureServer/0/query?where=1%3D1&outFields=%2A&returnGeometry=false&outSR=4326&f=json&resultRecordCount=2000&resultOffset=0",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-03",
+      "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Zonal/consulta_paraderos_zonales/FeatureServer/0/query?where=1%3D1&outFields=%2A&returnGeometry=false&outSR=4326&f=json&resultRecordCount=2000&resultOffset=0",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-03",
+      "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Zonal/consulta_paraderos_zonales/FeatureServer/0/query?where=1%3D1&outFields=%2A&returnGeometry=false&outSR=4326&f=json&resultRecordCount=2000&resultOffset=2000",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-03",
+      "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Zonal/consulta_paraderos_zonales/FeatureServer/0/query?where=1%3D1&outFields=%2A&returnGeometry=false&outSR=4326&f=json&resultRecordCount=2000&resultOffset=4000",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-03",
+      "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Zonal/consulta_paraderos_zonales/FeatureServer/0/query?where=1%3D1&outFields=%2A&returnGeometry=false&outSR=4326&f=json&resultRecordCount=2000&resultOffset=6000",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-03",
+      "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/ConsultaSubgerenciaPlanificacionSITP/Consulta_Planificacion_SITP/FeatureServer/15/query?where=1%3D1&outFields=%2A&returnGeometry=false&outSR=4326&f=json&resultRecordCount=2000&resultOffset=0",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-03",
+      "url": "https://api.buscador-rutas.transmilenio.gov.co/loader.php?lServicio=Rutas&lTipo=api&lFuncion=searchRutaByTipo&tipo_ruta=TIPORUTA&search=",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-03",
+      "url": "https://api.buscador-rutas.transmilenio.gov.co/loader.php?lServicio=Rutas&lTipo=api&lFuncion=infoRuta&idRuta=1&nombre=Modelia&codigo=17-3",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-03",
+      "url": "https://api.buscador-rutas.transmilenio.gov.co/loader.php?lServicio=Rutas&lTipo=api&lFuncion=infoRuta&idRuta=10&nombre=Engativa%CC%81+Centro&codigo=D237",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-03",
+      "url": "https://api.buscador-rutas.transmilenio.gov.co/loader.php?lServicio=Rutas&lTipo=api&lFuncion=infoRuta&idRuta=1003&nombre=Salitre&codigo=K627",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-04",
+      "url": "https://storage.googleapis.com/gtfs-estaticos/GTFS_20261018.zip",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-04",
+      "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Troncal/consulta_estaciones_troncales/FeatureServer/0/query?where=1%3D1&outFields=%2A&returnGeometry=false&outSR=4326&f=json&resultRecordCount=2000&resultOffset=0",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-04",
+      "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Zonal/consulta_paraderos_zonales/FeatureServer/0/query?where=1%3D1&outFields=%2A&returnGeometry=false&outSR=4326&f=json&resultRecordCount=2000&resultOffset=0",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-04",
+      "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Zonal/consulta_paraderos_zonales/FeatureServer/0/query?where=1%3D1&outFields=%2A&returnGeometry=false&outSR=4326&f=json&resultRecordCount=2000&resultOffset=2000",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-04",
+      "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Zonal/consulta_paraderos_zonales/FeatureServer/0/query?where=1%3D1&outFields=%2A&returnGeometry=false&outSR=4326&f=json&resultRecordCount=2000&resultOffset=4000",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-04",
+      "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Zonal/consulta_paraderos_zonales/FeatureServer/0/query?where=1%3D1&outFields=%2A&returnGeometry=false&outSR=4326&f=json&resultRecordCount=2000&resultOffset=6000",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-04",
+      "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/ConsultaSubgerenciaPlanificacionSITP/Consulta_Planificacion_SITP/FeatureServer/15/query?where=1%3D1&outFields=%2A&returnGeometry=false&outSR=4326&f=json&resultRecordCount=2000&resultOffset=0",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-04",
+      "url": "https://api.buscador-rutas.transmilenio.gov.co/loader.php?lServicio=Rutas&lTipo=api&lFuncion=searchRutaByTipo&tipo_ruta=TIPORUTA&search=",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-04",
+      "url": "https://api.buscador-rutas.transmilenio.gov.co/loader.php?lServicio=Rutas&lTipo=api&lFuncion=infoRuta&idRuta=1&nombre=Modelia&codigo=17-3",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-04",
+      "url": "https://api.buscador-rutas.transmilenio.gov.co/loader.php?lServicio=Rutas&lTipo=api&lFuncion=infoRuta&idRuta=10&nombre=Engativa%CC%81+Centro&codigo=D237",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-04",
+      "url": "https://api.buscador-rutas.transmilenio.gov.co/loader.php?lServicio=Rutas&lTipo=api&lFuncion=infoRuta&idRuta=1003&nombre=Salitre&codigo=K627",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-05",
+      "url": "https://storage.googleapis.com/gtfs-estaticos/GTFS_20261018.zip",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-05",
+      "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Troncal/consulta_estaciones_troncales/FeatureServer/0/query?where=1%3D1&outFields=%2A&returnGeometry=false&outSR=4326&f=json&resultRecordCount=2000&resultOffset=0",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-05",
+      "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Zonal/consulta_paraderos_zonales/FeatureServer/0/query?where=1%3D1&outFields=%2A&returnGeometry=false&outSR=4326&f=json&resultRecordCount=2000&resultOffset=0",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-05",
+      "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Zonal/consulta_paraderos_zonales/FeatureServer/0/query?where=1%3D1&outFields=%2A&returnGeometry=false&outSR=4326&f=json&resultRecordCount=2000&resultOffset=2000",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-05",
+      "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Zonal/consulta_paraderos_zonales/FeatureServer/0/query?where=1%3D1&outFields=%2A&returnGeometry=false&outSR=4326&f=json&resultRecordCount=2000&resultOffset=4000",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-05",
+      "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/Zonal/consulta_paraderos_zonales/FeatureServer/0/query?where=1%3D1&outFields=%2A&returnGeometry=false&outSR=4326&f=json&resultRecordCount=2000&resultOffset=6000",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-05",
+      "url": "https://gis.transmilenio.gov.co/arcgis/rest/services/ConsultaSubgerenciaPlanificacionSITP/Consulta_Planificacion_SITP/FeatureServer/15/query?where=1%3D1&outFields=%2A&returnGeometry=false&outSR=4326&f=json&resultRecordCount=2000&resultOffset=0",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-05",
+      "url": "https://api.buscador-rutas.transmilenio.gov.co/loader.php?lServicio=Rutas&lTipo=api&lFuncion=searchRutaByTipo&tipo_ruta=TIPORUTA&search=",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-05",
+      "url": "https://api.buscador-rutas.transmilenio.gov.co/loader.php?lServicio=Rutas&lTipo=api&lFuncion=infoRuta&idRuta=1&nombre=Modelia&codigo=17-3",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-05",
+      "url": "https://api.buscador-rutas.transmilenio.gov.co/loader.php?lServicio=Rutas&lTipo=api&lFuncion=infoRuta&idRuta=10&nombre=Engativa%CC%81+Centro&codigo=D237",
+      "byte_identical": true,
+      "parsed_identical": true
+    },
+    {
+      "sample": "sample-05",
+      "url": "https://api.buscador-rutas.transmilenio.gov.co/loader.php?lServicio=Rutas&lTipo=api&lFuncion=infoRuta&idRuta=1003&nombre=Salitre&codigo=K627",
+      "byte_identical": true,
+      "parsed_identical": true
+    }
+  ],
+  "verified_bodies": 55,
+  "all_response_bodies_identical": true,
+  "all_parsed_data_identical": true
+}

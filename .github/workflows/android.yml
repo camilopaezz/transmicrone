@@ -17,8 +17,18 @@ env:
   TRANSMICRONE_APP_ID: ci-not-configured
 
 jobs:
+  approval:
+    name: PR author approval
+    runs-on: ubuntu-24.04
+    environment:
+      name: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login != 'camilopaezz' && 'pr-maintainer-approval' || 'owner-ci' }}
+    steps:
+      - name: Continue after maintainer approval
+        run: echo 'PR author approval passed'
+
   build:
     name: Unit tests, lint, and APK
+    needs: approval
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     defaults:
@@ -26,7 +36,7 @@ jobs:
         working-directory: android
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: '21'
@@ -45,15 +55,51 @@ jobs:
       - name: Test, lint, and build
         run: ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
       - name: Upload debug APK
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: transmicrone-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
+      - name: Build live PR APK
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          TRANSMICRONE_APP_ID: ${{ secrets.TRANSMICRONE_APP_ID }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: ./gradlew --no-daemon :app:testPrUnitTest :app:lintPr :app:assemblePr -PmockFeed=false -PprNumber="$PR_NUMBER"
+      - name: Verify PR APK
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+          config = Path('app/build/generated/source/buildConfig/pr/co/camilo/transmicrone/BuildConfig.java').read_text()
+          number = os.environ['PR_NUMBER']
+          assert f'APPLICATION_ID = "co.camilo.transmicrone.pr{number}"' in config
+          assert f'-pr.{number}"' in config
+          assert 'MOCK_FEED = false' in config
+          assert 'DEBUG = false' in config
+          app_id = re.search(r'FEED_APPID = "([^"]+)"', config).group(1)
+          assert app_id.strip() and app_id not in ['unconfigured', 'ci-not-configured']
+          PY
+          "$ANDROID_HOME/build-tools/36.1.0/apksigner" verify app/build/outputs/apk/pr/app-pr.apk
+          mkdir -p ../dist
+          cp app/build/outputs/apk/pr/app-pr.apk "../dist/transminuto-pr-${PR_NUMBER}.apk"
+          cd ../dist
+          sha256sum *.apk > SHA256SUMS.txt
+      - name: Upload live PR APK
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: transminuto-pr-${{ github.event.pull_request.number }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
       - name: Upload build reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: build-reports
           path: android/app/build/reports/
@@ -61,6 +107,7 @@ jobs:
 
   emulator:
     name: Android 15 instrumented tests
+    needs: approval
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:
@@ -68,7 +115,7 @@ jobs:
         working-directory: android
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: '21'
@@ -95,7 +142,7 @@ jobs:
           script: ./gradlew --no-daemon :app:connectedDebugAndroidTest
       - name: Upload device-test reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: device-test-reports
           path: android/app/build/reports/androidTests/

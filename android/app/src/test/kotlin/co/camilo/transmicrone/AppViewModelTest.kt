@@ -10,7 +10,10 @@ import co.camilo.transmicrone.data.local.BoardSnapshot
 import co.camilo.transmicrone.data.local.FileArrivalsCache
 import co.camilo.transmicrone.data.local.saving
 import co.camilo.transmicrone.data.local.restoringDeleted
+import co.camilo.transmicrone.domain.*
 import co.camilo.transmicrone.domain.Arrival
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.CompletableDeferred
 import co.camilo.transmicrone.domain.Board
 import co.camilo.transmicrone.domain.CachedArrivals
 import co.camilo.transmicrone.domain.Clock
@@ -489,6 +492,96 @@ class AppViewModelTest {
         assertTrue(after.freshness is Freshness.Updated)
         assertFalse(after.freshness is Freshness.FailedCached)
         assertEquals("S43", after.arrivals.single().painted)
+    }
+
+    @Test
+    fun progressiveBoardShowsFastServiceWhileSlowServiceRetainsCacheAndFails() = vmTest {
+        val board = ricaurteBoard().copy(servicios = leonBoard().servicios + ricaurteBoard().servicios)
+        val response = CompletableDeferred<FetchResult>()
+        val cacheDir = File(System.getProperty("java.io.tmpdir"), "tm-progress-${System.nanoTime()}")
+        val cache = FileArrivalsCache(cacheDir, json)
+        val old = clock.now().minusSeconds(60)
+        cache.write(board.boardId, CachedArrivals(listOf(arrival("S43", "old")), old))
+        val feed = object : FeedClient {
+            override suspend fun fetchBoard(queryParadero: String): FetchResult = error("Must stream services")
+            override fun updates(board: Board) = flow {
+                emit(ServiceFetchResult(board.servicios[0].serviceKey(),
+                    FetchResult.Success(listOf(arrival("E48", "fast")), clock.now())))
+                emit(ServiceFetchResult(board.servicios[1].serviceKey(), response.await()))
+            }
+        }
+        val vm = viewModel(feed, MemoryBoards(listOf(board)), cache)
+        runCurrent()
+        vm.setStarted(true)
+        runCurrent()
+        val partial = vm.state.value.boards.single()
+        assertEquals(setOf("fast", "old"), partial.arrivals.map { it.etaPhrase }.toSet())
+        assertTrue(partial.freshness is Freshness.UpdatingCached)
+        assertEquals(ServiceStatus.Updated, partial.services[0].status)
+        assertEquals(ServiceStatus.Pending, partial.services[1].status)
+        response.complete(FetchResult.Failure(FailureKind.TIMEOUT, null))
+        runCurrent()
+        val completed = vm.state.value.boards.single()
+        assertEquals(ServiceStatus.Updated, completed.services[0].status)
+        assertEquals(ServiceStatus.Failed(FailureKind.TIMEOUT), completed.services[1].status)
+        assertEquals(old, completed.services[1].cached!!.fetchedAt)
+        assertEquals(setOf("fast", "old"), completed.arrivals.map { it.etaPhrase }.toSet())
+    }
+
+    @Test
+    fun stoppingProgressiveRefreshKeepsCompletedServiceAndResetsPendingStatus() = vmTest {
+        val board = ricaurteBoard().copy(servicios = leonBoard().servicios + ricaurteBoard().servicios)
+        val response = CompletableDeferred<FetchResult>()
+        val feed = object : FeedClient {
+            override suspend fun fetchBoard(queryParadero: String): FetchResult = error("Must stream services")
+            override fun updates(board: Board) = flow {
+                emit(ServiceFetchResult(board.servicios[0].serviceKey(),
+                    FetchResult.Success(listOf(arrival("E48", "completed")), clock.now())))
+                emit(ServiceFetchResult(board.servicios[1].serviceKey(), response.await()))
+            }
+        }
+        val vm = viewModel(feed, MemoryBoards(listOf(board)))
+        runCurrent()
+        vm.setStarted(true)
+        runCurrent()
+        assertEquals(ServiceStatus.Pending, vm.state.value.boards.single().services[1].status)
+        vm.setStarted(false)
+        runCurrent()
+        val stopped = vm.state.value.boards.single()
+        assertEquals(ServiceStatus.Updated, stopped.services[0].status)
+        assertEquals(ServiceStatus.Idle, stopped.services[1].status)
+        response.complete(FetchResult.Success(listOf(arrival("S43", "late")), clock.now()))
+        runCurrent()
+        assertEquals(listOf("completed"), vm.state.value.boards.single().arrivals.map { it.etaPhrase })
+    }
+
+    @Test
+    fun cancellingAndReloadingRetainsEmptyOutcomesAndOriginalTimes() = vmTest {
+        val board = ricaurteBoard().copy(servicios = leonBoard().servicios + ricaurteBoard().servicios)
+        val cache = FileArrivalsCache(File(System.getProperty("java.io.tmpdir"), "tm-empty-restore-${System.nanoTime()}"), json)
+        val old = clock.now().minusSeconds(60)
+        cache.write(board.boardId, CachedArrivals(emptyList(), old))
+        val response = CompletableDeferred<FetchResult>()
+        val feed = object : FeedClient {
+            override suspend fun fetchBoard(queryParadero: String): FetchResult = error("Must stream services")
+            override fun updates(board: Board) = flow {
+                emit(ServiceFetchResult(board.servicios[0].serviceKey(), FetchResult.Empty(clock.now())))
+                emit(ServiceFetchResult(board.servicios[1].serviceKey(), response.await()))
+            }
+        }
+        val vm = viewModel(feed, MemoryBoards(listOf(board)), cache)
+        runCurrent()
+        vm.setStarted(true)
+        runCurrent()
+        vm.setStarted(false)
+        runCurrent()
+        assertEquals(ServiceStatus.Empty, vm.state.value.boards.single().services[0].status)
+        assertEquals(ServiceStatus.CachedEmpty, vm.state.value.boards.single().services[1].status)
+        val restored = viewModel(ScriptedFeed(), MemoryBoards(listOf(board)), cache)
+        runCurrent()
+        assertEquals(listOf(ServiceStatus.CachedEmpty, ServiceStatus.CachedEmpty),
+            restored.state.value.boards.single().services.map { it.status })
+        assertEquals(listOf(clock.now(), old), restored.state.value.boards.single().services.map { it.cached!!.fetchedAt })
     }
 
     @Test

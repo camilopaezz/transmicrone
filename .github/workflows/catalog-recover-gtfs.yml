@@ -1,0 +1,52 @@
+name: Recover overnight GTFS snapshots
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [t3/catalog-over-the-air-updates]
+    paths: [.github/workflows/catalog-recover-gtfs.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Recover and verify against overnight checksums
+        env:
+          RECOVERY_DIR: ${{ runner.temp }}/gtfs-recovery
+        run: |
+          python3 -u - <<'PY'
+          import hashlib, json, os, urllib.request
+          from pathlib import Path
+          root = Path(os.environ['RECOVERY_DIR'])
+          root.mkdir(parents=True, exist_ok=True)
+          results = []
+          for name, expected in [
+              ('GTFS_20261017.zip', '0c89107be08a915b031fe37e767f52796f01a8eb02b57e324fc2d71491bd34e4'),
+              ('GTFS_20261018.zip', 'a6eb71b50dce1f31fe7f1a6368d4ff6041358a4bdf55f70be9d65a6d9f169c53'),
+          ]:
+              url = 'https://storage.googleapis.com/gtfs-estaticos/' + name
+              with urllib.request.urlopen(url, timeout=180) as response:
+                  raw = response.read()
+              digest = hashlib.sha256(raw).hexdigest()
+              (root / name).write_bytes(raw)
+              result = dict(name=name, url=url, sha256=digest, expected_sha256=expected,
+                            matches_overnight=digest == expected, bytes=len(raw))
+              results.append(result)
+              (root / 'recovery.json').write_text(json.dumps(results, indent=2) + '\n')
+              print(json.dumps(result), flush=True)
+          if not all(result['matches_overnight'] for result in results):
+              raise SystemExit('At least one archive no longer matches the overnight bytes')
+          PY
+      - name: Retain recovered snapshots
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: recovered-overnight-gtfs
+          path: ${{ runner.temp }}/gtfs-recovery/
+          if-no-files-found: warn
+          compression-level: 0
+          retention-days: 30
