@@ -125,8 +125,8 @@ class FakeR2:
 
 
 class PublicationTests(unittest.TestCase):
-    def run_daily(self, store):
-        value = candidate()
+    def run_daily(self, store, value=None):
+        value = candidate() if value is None else value
 
         def build():
             output = Path(sys.argv[sys.argv.index('--out') + 1])
@@ -186,6 +186,53 @@ class PublicationTests(unittest.TestCase):
         current = json.loads(store.objects['current.json'])
         self.assertEqual(current['version'], original['version'])
         self.assertGreaterEqual(current['checked_at'], original['checked_at'])
+
+    def test_valid_removal_hold_succeeds_without_changing_published_manifest(self):
+        store = FakeR2()
+        self.assertEqual(self.run_daily(store)[0], 0)
+        previous = store.objects['current.json']
+        value = candidate()
+        value['places'][0]['place_id'] = 'replacement'
+        value['serving'][0]['place_id'] = 'replacement'
+        result, report = self.run_daily(store, value)
+        self.assertTrue(report['valid'])
+        self.assertFalse(report['promotable'])
+        self.assertTrue(report['holds'])
+        self.assertEqual(report['publication'], 'held')
+        self.assertEqual(store.objects['current.json'], previous)
+        saved = json.loads(store.objects['latest-observation.json'])
+        self.assertEqual(saved['publication'], 'held')
+        self.assertEqual(saved['holds'], report['holds'])
+        self.assertEqual(result, 0, 'A fully saved, valid observation is successful even when promotion is held')
+
+    def test_invalid_candidate_still_fails_without_changing_published_manifest(self):
+        store = FakeR2()
+        self.assertEqual(self.run_daily(store)[0], 0)
+        previous = store.objects['current.json']
+        value = candidate()
+        value['sources'][-1].update(ok=0, fail=1)
+        result, report = self.run_daily(store, value)
+        self.assertEqual(result, 1)
+        self.assertFalse(report['valid'])
+        self.assertEqual(report['publication'], 'invalid')
+        self.assertEqual(store.objects['current.json'], previous)
+
+    def test_evidence_failure_during_hold_still_fails(self):
+        for failure in ('archive_fails', 'report_fails'):
+            with self.subTest(failure=failure):
+                store = FakeR2()
+                self.assertEqual(self.run_daily(store)[0], 0)
+                previous = store.objects['current.json']
+                setattr(store, failure, True)
+                value = candidate()
+                value['places'][0]['place_id'] = 'replacement'
+                value['serving'][0]['place_id'] = 'replacement'
+                result, report = self.run_daily(store, value)
+                self.assertEqual(result, 1)
+                self.assertTrue(report['valid'])
+                self.assertFalse(report['promotable'])
+                self.assertIn('publication_error', report)
+                self.assertEqual(store.objects['current.json'], previous)
 
 
 class ArchiveTests(unittest.TestCase):

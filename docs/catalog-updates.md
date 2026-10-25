@@ -188,7 +188,11 @@ bootstraps from a complete fresh build and records a comparison with the bundled
 catalog. These checks are initial conservative rules to evaluate over daily runs.
 
 Held candidates retain their evidence and candidate manifests but do not replace
-`current.json`. A nonzero job result makes the hold or failure visible in Actions.
+`current.json`. A valid, fully archived hold completes successfully and emits a
+`Catalog publication held` notice in Actions. The report and summary retain the
+hold reasons. Invalid data, collection errors, verification errors, and evidence
+or publication upload failures still fail the job. Success means that the daily
+observation completed, not necessarily that a new catalog was promoted.
 Archive creation writes a temporary file and only renames it after a successful
 close. A partial archive cannot hide the intact loose response files from the
 artifact fallback. Both the response archive and assessment report must reach
@@ -199,3 +203,26 @@ R2 objects currently have no automatic deletion policy. GitHub artifacts also
 include loose response files so a timeout before archiving does not discard them.
 
 Android downloads and saved-board reconciliation remain separate future work.
+
+## October 24 hold alert investigation
+
+The [October 24 run](https://github.com/camilopaezz/transmicrone/actions/runs/40100984277)
+fetched all 1,244 catalog variants successfully, with no source or validation
+errors. It retained the October 23 published catalog because 2 place identities,
+6 route identities, and 205 serving links needed a second complete daily
+observation before removal. All candidate files and response evidence were saved
+in R2 under version `20261024T140612Z-40100984277-1`.
+
+The [October 22 run](https://github.com/camilopaezz/transmicrone/actions/runs/39805797138)
+was likewise a valid observation held for 126 serving-link removals. The
+[October 23 run](https://github.com/camilopaezz/transmicrone/actions/runs/39978029836)
+subsequently published successfully. These alerts did not indicate a broken R2
+upload or a continuous catalog outage. The script had conflated a valid hold
+with a failed daily observation by returning exit code 1 for both.
+
+The regression test exercises the complete publication flow with a valid
+candidate requiring removal confirmation. It verifies exit code 0, retained
+candidate evidence and hold reasons, and an unchanged published manifest.
+Additional tests ensure invalid data and evidence-upload failures during a hold
+continue to return failure. Publication eligibility remains separate from the
+observation's process exit status.
