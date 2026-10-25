@@ -261,12 +261,13 @@ def main():
             for obj in (artifact, report['candidate_manifest']):
                 verify_public(obj)
             unchanged = previous_manifest and previous_manifest['content_sha256'] == report['content_sha256']
-            report['publication'] = 'unchanged' if unchanged else 'held'
+            report['publication'] = 'invalid' if not assessment['valid'] else ('unchanged' if unchanged else 'held')
             # Archive evidence before promoting the pointer, even when validation holds it.
             report['manifest'] = manifest
         else:
             report['publication'] = 'build-only'
-        code = 0 if assessment['promotable'] else 1
+        # A valid observation can succeed while removal confirmation prevents promotion.
+        code = 0 if assessment['valid'] else 1
     except Exception as error:
         report['error'] = str(error)
         traceback.print_exc()
@@ -277,16 +278,17 @@ def main():
             if store:
                 if (out / 'responses.tar.gz').exists():
                     store.archive(f'observations/{version}/responses.tar.gz', out / 'responses.tar.gz')
-                if code == 0 and report.get('publication') != 'unchanged':
+                promote = code == 0 and report.get('promotable', False)
+                if promote and report.get('publication') != 'unchanged':
                     report['publication'] = 'ready'
                 # Persist the assessment and change evidence before changing the published pointer.
                 store.put(f'observations/{version}/report.json', encode(report))
                 store.put('latest-observation.json', encode(report), mutable=True)
-                if code == 0 and report.get('publication') != 'unchanged':
+                if promote and report.get('publication') != 'unchanged':
                     current = store.put('current.json', encode(report['manifest']), mutable=True)
                     report['publication'] = 'published'
                     verify_public(current)
-                elif code == 0:
+                elif promote:
                     refreshed = {**previous_manifest, 'checked_at': now.isoformat(), 'last_checked_run_url': report['run_url']}
                     current = store.put('current.json', encode(refreshed), mutable=True)
                     verify_public(current)
@@ -303,6 +305,8 @@ def main():
         (out / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
         summary = f"Catalog {version}: {report.get('publication', 'failed')}\n\n" + json.dumps({key: report.get(key) for key in ('counts', 'errors', 'holds', 'error', 'publication_error')}, ensure_ascii=False, indent=2)
         print(summary, flush=True)
+        if code == 0 and report.get('valid') and not report.get('promotable'):
+            print('::notice title=Catalog publication held::Valid candidate and evidence saved; current catalog retained pending removal confirmation.', flush=True)
         if os.environ.get('GITHUB_STEP_SUMMARY'):
             with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as stream:
                 stream.write('## Daily catalog\n\n```\n' + summary + '\n```\n')
