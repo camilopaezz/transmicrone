@@ -23,6 +23,7 @@ import co.camilo.transmicrone.domain.*
 import co.camilo.transmicrone.ui.UiState
 import co.camilo.transmicrone.ui.common.ScreenTransition
 import co.camilo.transmicrone.ui.BoardView
+import co.camilo.transmicrone.ui.Freshness
 import co.camilo.transmicrone.ui.RouteState
 import co.camilo.transmicrone.ui.common.FloatingScaffold
 import co.camilo.transmicrone.ui.common.FloatingSnackbarHost
@@ -72,6 +73,27 @@ class GlassControlsTest {
         compose.onNodeWithTag("arrival-edge-top").assertDoesNotExist()
         compose.onNodeWithTag("arrival-viewport").performScrollToIndex(40)
         compose.onNodeWithTag("scroll-edge-bottom").assertDoesNotExist()
+    }
+
+    @Test fun refreshKeepsScrolledBlurAndArrivalsInPlace() {
+        val freshness = mutableStateOf<Freshness>(Freshness.Updated(java.time.Instant.now()))
+        val board = Board("1", "estacion:0", PlaceKind.ESTACION, "TM0", "León XIII", null, emptyList())
+        val arrivals = List(40) { i -> Arrival("E48", "CAD $i", i, i, "Entre 2 y 4 min", "200 mts", Occupancy.UNKNOWN, null) }
+        compose.setContent { TransmicroneTheme(darkTheme = true, dynamicColor = false) {
+            HomeScreen(listOf(BoardView(board, arrivals, freshness.value)), 0, {}, {}, {}, {})
+        } }
+        compose.onNodeWithTag("arrival-viewport").performScrollToIndex(18)
+        val edge = compose.onNodeWithTag("arrival-edge-top").getUnclippedBoundsInRoot()
+        val arrival = compose.onNodeWithTag("arrival-viewport").getUnclippedBoundsInRoot()
+        compose.runOnIdle { freshness.value = Freshness.UpdatingCached(java.time.Instant.now()) }
+        compose.onNodeWithTag("refresh-capsule").assertIsDisplayed()
+        assertEquals("Blur stays at the viewport edge during requests", edge,
+            compose.onNodeWithTag("arrival-edge-top").getUnclippedBoundsInRoot())
+        assertEquals("Requests leave scrolled cards beneath the blur", arrival,
+            compose.onNodeWithTag("arrival-viewport").getUnclippedBoundsInRoot())
+        compose.runOnIdle { freshness.value = Freshness.Updated(java.time.Instant.now()) }
+        compose.onNodeWithTag("refresh-capsule").assertDoesNotExist()
+        assertEquals(edge, compose.onNodeWithTag("arrival-edge-top").getUnclippedBoundsInRoot())
     }
 
     @Test fun homeScrollEdgesDark() = homeEdges(true, "glass-step3b-scrolled.png")
