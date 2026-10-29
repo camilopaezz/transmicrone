@@ -375,6 +375,9 @@ fun HomeScreen(
                             if (trackPull || showRequest) snap() else MaterialTheme.motionScheme.fastEffectsSpec(),
                             label = "refreshFade",
                         )
+                        // Scrolled arrivals must keep feeding the fixed top blur during a request.
+                        // Reveal space only at the top; elsewhere the capsule floats over the list.
+                        val listGap = if (hasScrolled) 0.dp else gap
                         Box(Modifier.fillMaxSize().clipToBounds()) {
                             Box(Modifier.fillMaxSize().clipToBounds().drawWithContent {
                                 // Keep the expanded title clear; the full list is exposed once it exits.
@@ -386,7 +389,7 @@ fun HomeScreen(
                                     view.arrivals, empty,
                                     (if (!collapseEnabled) Modifier.fillMaxSize().testTag("arrival-viewport")
                                         else Modifier.arrivalsViewport(contentTop))
-                                        .offset { IntOffset(0, gap.roundToPx()) }
+                                        .offset { IntOffset(0, listGap.roundToPx()) }
                                         .hazeSource(arrivalsBackdrop)
                                         .nestedScroll(titleScroll),
                                     state = listState,
@@ -400,22 +403,22 @@ fun HomeScreen(
                                         if (compactHeight) BoardTitleSelector(displayedBoards.map { it.board.displayName }, pager, showSwipeHint) { choosingBoard = true }
                                         StationHeader(view)
                                     },
-                                    // The refresh gap pushes the list down, so the end needs the same extra room.
-                                    bottomContentPadding = (if (compactHeight) 24.dp else dockHeight + 48.dp) + gap,
+                                    // The revealed gap needs matching room at the end of the list.
+                                    bottomContentPadding = (if (compactHeight) 24.dp else dockHeight + 48.dp) + listGap,
                                     colorForArrival = { arrival -> routeColor(view, arrival.painted, arrival.routeId) },
                                     active = page == visibleIndex && !scrolling,
                                     initialLoading = view.cache == null && view.freshness == Freshness.Loading,
                                 )
                                 if (hasScrolled && page == visibleIndex && !headerEdge) FloatingEdgeBand(
                                     arrivalsBackdrop, true, fade, 28.dp,
-                                    Modifier.align(Alignment.TopCenter).offset { IntOffset(0, contentTop() + gap.roundToPx()) },
+                                    Modifier.align(Alignment.TopCenter).offset { IntOffset(0, contentTop()) },
                                     "arrival-edge-top",
                                 )
                             }
                             // The list slides inside its viewport, so a pull that starts in the
                             // revealed gap still has to reach the existing pull handler.
-                            if (gap > 0.dp) Box(
-                                Modifier.align(Alignment.TopCenter).offset { IntOffset(0, contentTop()) }.fillMaxWidth().height(gap)
+                            if (listGap > 0.dp) Box(
+                                Modifier.align(Alignment.TopCenter).offset { IntOffset(0, contentTop()) }.fillMaxWidth().height(listGap)
                                     .scrollable(rememberScrollableState { 0f }, Orientation.Vertical),
                             )
                             if (gap > 0.dp) RefreshCapsule(
