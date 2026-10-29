@@ -28,6 +28,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import co.camilo.transmicrone.R
 import co.camilo.transmicrone.domain.*
+import co.camilo.transmicrone.ui.destinationDisplay
 import co.camilo.transmicrone.ui.ServiceDestinationList
 import co.camilo.transmicrone.ui.board.ServicioBadge
 
@@ -55,7 +56,7 @@ internal fun ServiceDetailsHeader(
         }
         if (route != null) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(destinations[selectedIndex], style = MaterialTheme.typography.headlineSmallEmphasized)
+                Text(destinationDisplay(destinations[selectedIndex]), style = MaterialTheme.typography.headlineSmallEmphasized)
                 val from = stringResource(R.string.route_from)
                 Text(buildAnnotatedString {
                     append("$from ")
@@ -71,7 +72,7 @@ internal fun ServiceDetailsHeader(
                     Text(stringResource(R.string.service_hours_unavailable), style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else hours.forEach { schedule ->
-                    if (hours.size > 1) Text("${schedule.painted} · ${schedule.destino}", style = MaterialTheme.typography.titleSmall)
+                    if (hours.size > 1) Text("${schedule.painted} · ${destinationDisplay(schedule.destino)}", style = MaterialTheme.typography.titleSmall)
                     val groups = schedule.windows.groupBy { it.dayGroup }.entries.toList()
                     val columns = if (LocalDensity.current.fontScale >= 1.3f) 1 else 2
                     groups.chunked(columns).forEach { row ->
@@ -122,8 +123,8 @@ internal fun ServiceRouteSelector(
             rows.forEach { indices ->
                 EqualHeightRow(columns = 2, gap = 4.dp) { probe ->
                     indices.forEach { index ->
-                        val destination = destinations[index]
-                        val duplicate = destinations.count { it == destination } > 1
+                        val destination = destinationDisplay(destinations[index])
+                        val duplicate = destinations.count { destinationDisplay(it) == destination } > 1
                         val label = if (duplicate) stringResource(R.string.route_variant_destination, destination, index + 1)
                             else stringResource(R.string.route_direction, destination)
                         val isSelected = index == checkedIndex

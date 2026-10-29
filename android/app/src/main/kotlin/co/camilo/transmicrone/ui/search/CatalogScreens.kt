@@ -29,6 +29,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import co.camilo.transmicrone.ui.destinationDisplay
 import co.camilo.transmicrone.R
 import co.camilo.transmicrone.domain.*
 import co.camilo.transmicrone.ui.board.ServicioBadge
@@ -256,7 +257,7 @@ private fun ServiceRow(option: ServicioOption, onClick: () -> Unit) {
                 if (destinations.size <= 1) {
                     Text(stringResource(R.string.destination_prefix), style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(destinations.firstOrNull().orEmpty(), style = MaterialTheme.typography.titleMedium)
+                    Text(destinationDisplay(destinations.firstOrNull().orEmpty()), style = MaterialTheme.typography.titleMedium)
                 } else {
                     ServiceDestinationList(option.destino, R.string.destination_prefix, MaterialTheme.typography.titleMedium)
                 }

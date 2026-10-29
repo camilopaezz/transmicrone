@@ -19,12 +19,12 @@ fun destinationOptions(value: String): List<String> = value.split("||")
 fun ServiceDestinationList(value: String, @StringRes label: Int, singleStyle: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.bodyLarge) {
     val destinations = destinationOptions(value)
     if (destinations.size <= 1) {
-        Text(destinations.firstOrNull().orEmpty(), style = singleStyle)
+        Text(destinationDisplay(destinations.firstOrNull().orEmpty()), style = singleStyle)
     } else {
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             destinations.forEach { destination ->
                 Text(
-                    "${stringResource(label)} $destination",
+                    "${stringResource(label)} ${destinationDisplay(destination)}",
                     style = singleStyle,
                 )
             }

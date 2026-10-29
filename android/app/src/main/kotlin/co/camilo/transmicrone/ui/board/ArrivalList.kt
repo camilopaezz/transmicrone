@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import co.camilo.transmicrone.ui.common.ServiceChipSurface
+import co.camilo.transmicrone.ui.destinationDisplay
 import co.camilo.transmicrone.R
 import co.camilo.transmicrone.domain.Arrival
 import co.camilo.transmicrone.domain.Occupancy
@@ -108,7 +109,7 @@ fun ArrivalRow(arrival: Arrival, now: Instant = Instant.now(), routeColor: Strin
     val occupancy = occupancyLabel(arrival.occupancy)
     val display = arrivalDisplay(arrival)
     val phrase = display.phrase.ifBlank { stringResource(R.string.unknown_arrival_time) }
-    val destination = arrival.destino.ifBlank { stringResource(R.string.unknown_destination) }
+    val destination = destinationDisplay(arrival.destino).ifBlank { stringResource(R.string.unknown_destination) }
     val vehicle = arrival.identity == ArrivalIdentity.VEHICLE
     val estimate = stringResource(if (vehicle) R.string.vehicle_estimate_label else R.string.estimate_label)
     val age = arrival.sourceReportedAt?.let { Duration.between(it, now).seconds.coerceAtLeast(0) }
