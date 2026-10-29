@@ -64,7 +64,16 @@ def clean(value):
 
 def records(catalog: dict, section: str) -> dict:
     key = SECTIONS[section]
-    return {str(row[key]) if key else f"{row['place_id']}:{row['route_id']}": clean(row)
+    def canonical(row):
+        value = clean(row)
+        fields = {'places': ('platforms', 'served_route_ids', 'served_painted'),
+                  'servicios': ('catalog_ids_sharing_painted',),
+                  'service_hours': ('windows',)}
+        for field in fields.get(section, ()):
+            if field in value:
+                value[field] = sorted(value[field], key=encode)
+        return value
+    return {str(row[key]) if key else f"{row['place_id']}:{row['route_id']}": canonical(row)
             for row in catalog.get(section, [])}
 
 
@@ -224,8 +233,10 @@ def main():
         else:
             report['baseline'] = previous_manifest['version']
         capture = ResponseCapture(out / 'responses', retries=2)
+        identity_baseline = out / 'identity-baseline.json'
+        identity_baseline.write_bytes(encode(baseline))
         argv = ['build_catalog.py', '--out', str(out / 'catalog.json'), '--test-out', str(out / 'test-case.json'),
-                '--work-dir', str(out / 'gtfs'), '--sleep', '0.2']
+                '--work-dir', str(out / 'gtfs'), '--sleep', '0.2', '--identity-baseline', str(identity_baseline)]
         try:
             with patch.object(sys, 'argv', argv), patch.object(build_catalog, 'http_json', capture.http_json), patch.object(build_catalog, 'http_bytes', capture.http_bytes):
                 build_exit = build_catalog.main()
@@ -241,6 +252,7 @@ def main():
         report.update(assessment)
         report['counts'] = candidate['counts']
         report['source_failures'] = candidate['failures']
+        report['source_warnings'] = candidate.get('warnings', [])
         payload = {section: records(candidate, section) for section in SECTIONS}
         report['content_sha256'] = sha(encode(payload))
         packed = gzip.compress(encode(pack(candidate)), mtime=0)
@@ -260,7 +272,10 @@ def main():
             # Public read-back exercises the same path a future app will use.
             for obj in (artifact, report['candidate_manifest']):
                 verify_public(obj)
-            unchanged = previous_manifest and previous_manifest['content_sha256'] == report['content_sha256']
+            # Recompute using today's canonical comparison so an older digest format
+            # cannot force publication when only irrelevant ordering changed.
+            baseline_payload = {section: records(baseline, section) for section in SECTIONS}
+            unchanged = previous_manifest and sha(encode(baseline_payload)) == report['content_sha256']
             report['publication'] = 'invalid' if not assessment['valid'] else ('unchanged' if unchanged else 'held')
             # Archive evidence before promoting the pointer, even when validation holds it.
             report['manifest'] = manifest
@@ -303,7 +318,7 @@ def main():
             traceback.print_exc()
         report['finished_at'] = datetime.now(timezone.utc).isoformat()
         (out / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
-        summary = f"Catalog {version}: {report.get('publication', 'failed')}\n\n" + json.dumps({key: report.get(key) for key in ('counts', 'errors', 'holds', 'error', 'publication_error')}, ensure_ascii=False, indent=2)
+        summary = f"Catalog {version}: {report.get('publication', 'failed')}\n\n" + json.dumps({key: report.get(key) for key in ('counts', 'errors', 'holds', 'source_warnings', 'error', 'publication_error')}, ensure_ascii=False, indent=2)
         print(summary, flush=True)
         if code == 0 and report.get('valid') and not report.get('promotable'):
             print('::notice title=Catalog publication held::Valid candidate and evidence saved; current catalog retained pending removal confirmation.', flush=True)
