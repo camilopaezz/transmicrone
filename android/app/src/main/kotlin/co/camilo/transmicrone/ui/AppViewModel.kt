@@ -42,6 +42,7 @@ data class BoardView(
     val freshness: Freshness = Freshness.Idle,
     val cache: CachedArrivals? = null,
     val services: List<ServiceArrivals> = emptyList(),
+    val unresolvedFailures: Map<ServiceKey, FailureKind> = emptyMap(),
 )
 
 sealed class Freshness {
@@ -684,7 +685,8 @@ class AppViewModel(
 private fun revertCancelledRefresh(bv: BoardView): BoardView {
     if (bv.services.any { it.status == ServiceStatus.Pending }) {
         return bv.applySnapshot(BoardArrivals(bv.services.map {
-            if (it.status == ServiceStatus.Pending) it.copy(status = it.cached.restoredStatus()) else it
+            if (it.status == ServiceStatus.Pending) it.copy(status =
+                bv.unresolvedFailures[it.selection.serviceKey()]?.let { kind -> ServiceStatus.Failed(kind) } ?: it.cached.restoredStatus()) else it
         }, bv.board.queryScope()))
     }
     if (bv.freshness !is Freshness.UpdatingCached && bv.freshness !is Freshness.Loading) return bv
@@ -710,6 +712,17 @@ private fun BoardView.withCache(): BoardView {
 
 private fun BoardView.applySnapshot(snapshot: BoardArrivals, quiet: Boolean = false): BoardView {
     val cached = snapshot.cache()
+    // Pending requests and cancellation cannot resolve an earlier failed response.
+    // Track each selection independently so successful siblings clear only their own error.
+    val unresolved = snapshot.services.mapNotNull { service ->
+        val key = service.selection.serviceKey()
+        val kind = when (val status = service.status) {
+            is ServiceStatus.Failed -> status.kind.takeIf { !snapshot.pending || key in unresolvedFailures }
+            ServiceStatus.Pending -> unresolvedFailures[key]
+            else -> null
+        }
+        kind?.let { key to it }
+    }.toMap()
     val failure = snapshot.services.mapNotNull { it.status as? ServiceStatus.Failed }.firstOrNull()
     val freshness = when {
         snapshot.pending -> cached?.let { Freshness.UpdatingCached(it.fetchedAt, quiet) } ?: Freshness.Loading
@@ -720,7 +733,8 @@ private fun BoardView.applySnapshot(snapshot: BoardArrivals, quiet: Boolean = fa
         snapshot.arrivals.isEmpty() -> Freshness.Empty(cached?.fetchedAt ?: Instant.EPOCH)
         else -> Freshness.Updated(cached!!.fetchedAt)
     }
-    return copy(arrivals = snapshot.arrivals, cache = cached, freshness = freshness, services = snapshot.services)
+    return copy(arrivals = snapshot.arrivals, cache = cached, freshness = freshness,
+        services = snapshot.services, unresolvedFailures = unresolved)
 }
 
 fun co.camilo.transmicrone.domain.ServicioOption.key(): String = "$painted\u0001$destino"

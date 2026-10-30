@@ -44,6 +44,7 @@ fun ArrivalList(
     colorForArrival: (Arrival) -> String? = { it.colorRuta },
     active: Boolean = true,
     initialLoading: Boolean = false,
+    failureNotice: (@Composable () -> Unit)? = null,
 ) {
     val now by produceState(Instant.now(), active) {
         if (!active) return@produceState
@@ -57,6 +58,7 @@ fun ArrivalList(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         header?.let { item(key = "station-header", contentType = "header") { it() } }
+        failureNotice?.let { item(key = "request-failure", contentType = "failure") { it() } }
         if (arrivals.isEmpty() && initialLoading) {
             item(key = "loading-message") {
                 Text(emptyMessage, style = MaterialTheme.typography.bodySmall,
@@ -66,7 +68,7 @@ fun ArrivalList(
             items(3, key = { "loading-skeleton-$it" }, contentType = { "skeleton" }) {
                 ArrivalSkeleton(active)
             }
-        } else if (arrivals.isEmpty()) item {
+        } else if (arrivals.isEmpty() && failureNotice == null) item {
             Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Icon(Icons.Default.DirectionsBus, null, Modifier.size(32.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
