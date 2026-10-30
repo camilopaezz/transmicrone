@@ -27,12 +27,16 @@ import co.camilo.transmicrone.domain.CatalogResults
 import co.camilo.transmicrone.domain.Place
 import co.camilo.transmicrone.domain.PlaceKind
 import co.camilo.transmicrone.domain.ServicioOption
+import co.camilo.transmicrone.domain.RouteStop
+import co.camilo.transmicrone.domain.ServiceRoute
+import co.camilo.transmicrone.ui.RouteState
 import co.camilo.transmicrone.ui.BoardView
 import co.camilo.transmicrone.ui.Screen
 import co.camilo.transmicrone.ui.UiState
 import co.camilo.transmicrone.ui.common.ScreenTransition
 import co.camilo.transmicrone.ui.home.HomeScreen
 import co.camilo.transmicrone.ui.search.CatalogSearchScreen
+import co.camilo.transmicrone.ui.search.CatalogDetailsScreen
 import co.camilo.transmicrone.ui.theme.TransmicroneTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -49,6 +53,87 @@ class ScreenTransitionUiTest {
     @Test
     fun reopeningSearchDuringExitStillPreservesScrollAfterDetails() =
         assertSearchScrollRestored(rapidReopen = true)
+
+    @Test
+    fun serviceToPlaceAndBackRestoresEachDetailsScrollPosition() =
+        assertDetailsScrollRestored(startWithService = true)
+
+    @Test
+    fun placeToServiceAndBackRestoresEachDetailsScrollPosition() =
+        assertDetailsScrollRestored(startWithService = false)
+
+    @Test
+    fun reopeningPlaceDuringExitStillPreservesItsScrollAfterServiceDetails() =
+        assertDetailsScrollRestored(startWithService = true, rapidReopenChild = true)
+
+    @Test
+    fun restoringNestedDetailsKeepsEachParentScrollPosition() =
+        assertDetailsScrollRestored(startWithService = false, restoreWhileNested = true)
+
+    private fun assertDetailsScrollRestored(
+        startWithService: Boolean, rapidReopenChild: Boolean = false, restoreWhileNested: Boolean = false,
+    ) {
+        val restoration = StateRestorationTester(compose)
+        val options = (0..60).map { ServicioOption("S$it", "Destino $it", listOf(it), null) }
+        val places = (0..60).map {
+            Place("place:$it", PlaceKind.PARADERO, "Paradero $it", "paradero $it", null, "$it", options)
+        }
+        val services = options.map { CatalogEntry.Service(it, places) }
+        val route = RouteState.Loaded(listOf(ServiceRoute("route", places.map {
+            RouteStop(it.queryParadero, it.name, place = it)
+        })))
+        val root: CatalogEntry = if (startWithService) services.first() else CatalogEntry.Location(places.first())
+        val state = mutableStateOf(UiState(screen = Screen.DETAILS, details = listOf(root)))
+        fun push(entry: CatalogEntry) { state.value = state.value.copy(details = state.value.details + entry) }
+        restoration.setContent {
+            TransmicroneTheme {
+                ScreenTransition(state.value) { displayed ->
+                    CatalogDetailsScreen(displayed.details.last(),
+                        onBack = { state.value = state.value.copy(details = state.value.details.dropLast(1)) },
+                        onPlace = { push(CatalogEntry.Location(it)) },
+                        onService = { option -> push(services.single { it.option == option }) },
+                        onAdd = {}, routeState = route)
+                }
+            }
+        }
+        fun scrollValue() = compose.onNode(hasScrollAction()).fetchSemanticsNode()
+            .config[SemanticsProperties.VerticalScrollAxisRange].value()
+        val rootRow = if (startWithService) "Paradero 21" else "S21"
+        val childRow = if (startWithService) "S31" else "Paradero 31"
+        compose.onNode(hasScrollAction()).performScrollToIndex(22)
+            .performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 37f) }
+        val rootScroll = scrollValue()
+        val rootBounds = compose.onNodeWithText(rootRow).fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithText(rootRow).performClick()
+        compose.onNode(hasScrollAction()).performScrollToIndex(32)
+            .performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 19f) }
+        val childScroll = scrollValue()
+        val childBounds = compose.onNodeWithText(childRow).fetchSemanticsNode().boundsInRoot
+        if (rapidReopenChild) {
+            val childHistory = state.value.details
+            compose.mainClock.autoAdvance = false
+            compose.runOnIdle { state.value = state.value.copy(details = childHistory.dropLast(1)) }
+            compose.mainClock.advanceTimeBy(64)
+            compose.runOnIdle { state.value = state.value.copy(details = childHistory) }
+            compose.mainClock.advanceTimeBy(400)
+            compose.mainClock.autoAdvance = true
+            compose.waitForIdle()
+            assertEquals(childScroll, scrollValue(), 0.000001f)
+        }
+        compose.onNodeWithText(childRow).performClick()
+        assertEquals(0f, scrollValue(), 0.000001f)
+        if (restoreWhileNested) restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithContentDescription("Atrás").performClick()
+        assertEquals(childScroll, scrollValue(), 0.000001f)
+        assertEquals(childBounds, compose.onNodeWithText(childRow).fetchSemanticsNode().boundsInRoot)
+        compose.onNodeWithContentDescription("Atrás").performClick()
+        assertEquals(rootScroll, scrollValue(), 0.000001f)
+        assertEquals(rootBounds, compose.onNodeWithText(rootRow).fetchSemanticsNode().boundsInRoot)
+        // A popped child starts fresh when opened again after the transition settles.
+        compose.waitForIdle()
+        compose.onNodeWithText(rootRow).performClick()
+        assertEquals(0f, scrollValue(), 0.000001f)
+    }
 
     @Test
     fun restoredHomeDiscardsPreviousProcessSearchFocusState() {

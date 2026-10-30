@@ -6,6 +6,7 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.updateTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -20,7 +21,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
@@ -35,6 +36,8 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import co.camilo.transmicrone.ui.Screen
 import co.camilo.transmicrone.ui.UiState
+import co.camilo.transmicrone.ui.key
+import co.camilo.transmicrone.domain.CatalogEntry
 
 // Search views request keyboard focus once their entrance has finished.
 val LocalScreenEntered = compositionLocalOf { true }
@@ -42,9 +45,34 @@ val LocalScreenEntered = compositionLocalOf { true }
 // Only navigation changes animate. Queries, arrivals and loading states keep the same content.
 private fun UiState.destinationKey(): List<Any?> = when (screen) {
     Screen.SEARCH -> listOf(screen, catalogSearchSession)
-    Screen.DETAILS -> listOf(screen, details)
+    Screen.DETAILS -> listOf(screen, catalogSearchSession, details)
     Screen.SETUP -> listOf(screen, editingBoardId, setupPlace?.placeId)
     else -> listOf(screen)
+}
+
+// Every stack prefix owns its UI state, including repeated visits to the same service or place.
+private fun UiState.catalogStateKeys(): List<String> {
+    if (screen !in listOf(Screen.SEARCH, Screen.DETAILS, Screen.SETUP)) return emptyList()
+    if (screen == Screen.SETUP && details.isEmpty()) return emptyList()
+    return buildList {
+        var path = "catalog:$catalogSearchSession"
+        add("$path/search")
+        if (screen != Screen.SEARCH) details.forEach { entry ->
+            val id = when (entry) {
+                is CatalogEntry.Location -> "place:${entry.place.placeId}"
+                is CatalogEntry.Service -> "service:${entry.option.key()}"
+            }
+            // Length prefixes keep destinations containing separators from colliding.
+            path += "/${id.length}:$id"
+            add(path)
+        }
+    }
+}
+
+private fun UiState.catalogStateKey(): String? = when {
+    screen == Screen.SEARCH -> catalogStateKeys().first()
+    screen == Screen.DETAILS && details.isNotEmpty() -> catalogStateKeys().last()
+    else -> null
 }
 
 private fun UiState.navigationDepth(): Int = when (screen) {
@@ -57,19 +85,23 @@ private fun UiState.navigationDepth(): Int = when (screen) {
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun ScreenTransition(state: UiState, content: @Composable (UiState) -> Unit) {
-    val searchState = rememberSaveableStateHolder()
-    // The holder survives process death even when the new ViewModel restarts at session zero.
-    var retainedSearchSession by rememberSaveable { mutableLongStateOf(state.catalogSearchSession) }
-    LaunchedEffect(state.screen, state.catalogSearchSession) {
-        if (state.screen == Screen.HOME) searchState.removeState(retainedSearchSession)
-        else retainedSearchSession = state.catalogSearchSession
+    val catalogState = rememberSaveableStateHolder()
+    // Keep the saved keys with the holder so a new process starting at home clears old sessions.
+    var retainedKeys by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    val activeKeys = state.catalogStateKeys()
+    val navigation = updateTransition(state, label = "screenNavigation")
+    val settled = !navigation.isRunning && navigation.currentState.destinationKey() == state.destinationKey()
+    LaunchedEffect(activeKeys, settled) {
+        val knownKeys = (retainedKeys + activeKeys).distinct()
+        // An exiting provider can still be reused if navigation reverses during its animation.
+        if (settled) knownKeys.filterNot { it in activeKeys }.forEach(catalogState::removeState)
+        retainedKeys = if (settled) activeKeys else knownKeys
     }
     val distance = with(LocalDensity.current) { 24.dp.roundToPx() }
     val layoutSign = if (LocalLayoutDirection.current == LayoutDirection.Rtl) -1 else 1
     SharedTransitionLayout(Modifier.fillMaxSize()) {
         val sharedScope = this
-        AnimatedContent(
-            targetState = state,
+        navigation.AnimatedContent(
             contentKey = { it.destinationKey() },
             modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).clipToBounds(),
             transitionSpec = {
@@ -79,7 +111,6 @@ fun ScreenTransition(state: UiState, content: @Composable (UiState) -> Unit) {
                     .togetherWith(fadeOut(tween(120)) + slideOutHorizontally(tween(120, easing = FastOutSlowInEasing)) { -offset })
                     .using(null)
             },
-            label = "screenNavigation",
         ) { displayedState ->
             val visibilityScope = this
             val current = displayedState.destinationKey() == state.destinationKey()
@@ -100,10 +131,9 @@ fun ScreenTransition(state: UiState, content: @Composable (UiState) -> Unit) {
                         transition.targetState == EnterExitState.Visible &&
                         !sharedScope.isTransitionActive),
                 ) {
-                    // Details temporarily replace search in the composition. Keep its list and
-                    // focus state until the user leaves the search flow for home.
-                    if (displayedState.screen == Screen.SEARCH) {
-                        searchState.SaveableStateProvider(displayedState.catalogSearchSession) { content(displayedState) }
+                    val savedKey = displayedState.catalogStateKey()
+                    if (savedKey != null) {
+                        catalogState.SaveableStateProvider(savedKey) { content(displayedState) }
                     } else {
                         content(displayedState)
                     }
