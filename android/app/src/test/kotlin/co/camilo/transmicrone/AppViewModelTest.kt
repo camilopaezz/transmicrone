@@ -28,6 +28,7 @@ import co.camilo.transmicrone.domain.TextNorm
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
+import co.camilo.transmicrone.ui.arrivalFailure
 import co.camilo.transmicrone.ui.AppViewModel
 import co.camilo.transmicrone.ui.Freshness
 import co.camilo.transmicrone.ui.Screen
@@ -773,6 +774,36 @@ class AppViewModelTest {
         advanceTimeBy(5_000)
         runCurrent()
         assertTrue(vm.state.value.catalogReady)
+    }
+
+    @Test
+    fun unresolvedFailureSurvivesRetryCancellationAndResumeUntilSuccess() = vmTest {
+        val feed = ScriptedFeed()
+        feed.enqueue(0, FetchResult.Success(listOf(arrival("E48", "old")), clock.now()))
+        feed.enqueue(0, FetchResult.Failure(FailureKind.TIMEOUT, null))
+        feed.enqueue(10_000, FetchResult.Empty(clock.now()))
+        feed.enqueue(10_000, FetchResult.Empty(clock.now()))
+        val vm = viewModel(feed, MemoryBoards(listOf(leonBoard())))
+        runCurrent()
+        vm.setStarted(true)
+        runCurrent()
+        vm.manualRefresh()
+        runCurrent()
+        assertEquals(FailureKind.TIMEOUT, vm.state.value.boards.single().arrivalFailure()!!.kind)
+        vm.manualRefresh()
+        runCurrent()
+        vm.setStarted(false)
+        runCurrent()
+        assertEquals("Cancellation must retain an unresolved failure", FailureKind.TIMEOUT,
+            vm.state.value.boards.single().arrivalFailure()?.kind)
+        vm.setStarted(true)
+        runCurrent()
+        assertEquals("Resuming must retain the failure during the next request", FailureKind.TIMEOUT,
+            vm.state.value.boards.single().arrivalFailure()?.kind)
+        advanceTimeBy(10_000)
+        runCurrent()
+        assertNull(vm.state.value.boards.single().arrivalFailure())
+        assertTrue(vm.state.value.boards.single().freshness is Freshness.Empty)
     }
 
     @Test

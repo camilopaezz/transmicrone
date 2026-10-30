@@ -143,4 +143,20 @@
     <string name="board_custom_name">Nombre del tablero (opcional)</string>
     <string name="board_custom_name_hint">Déjalo vacío para usar «%1$s».</string>
     <string name="board_header_page">" · %1$d/%2$d"</string>
+    <string name="arrivals_failure_previous">Las llegadas anteriores siguen visibles y pueden haber cambiado.</string>
+    <string name="request_failure_transport">No pudimos conectar con el servicio de llegadas. Revisa tu conexión a internet y vuelve a intentar.</string>
+    <string name="request_failure_timeout">El servicio de llegadas tardó demasiado en responder. Vuelve a intentar.</string>
+    <string name="request_failure_unauthorized">El servicio de llegadas no permitió el acceso. Si el problema continúa, comprueba si hay una actualización de la app.</string>
+    <string name="request_failure_rejected">El servidor no aceptó la consulta de llegadas. Puedes volver a intentar más tarde.</string>
+    <string name="request_failure_malformed">El servicio devolvió una respuesta que no pudimos leer. Vuelve a intentar en unos momentos.</string>
+    <string name="request_failure_generic">No pudimos completar la consulta de llegadas. Vuelve a intentar.</string>
+    <string name="catalog_failure_help">Vuelve a intentar para cargar los datos del catálogo.</string>
+    <string name="request_failure_details">Ver detalles del error</string>
+    <string name="close_details">Cerrar</string>
+    <string name="arrivals_partial_failure_short">Actualización incompleta</string>
+    <string name="arrivals_cache_age">Guardados %1$s</string>
+    <string name="arrivals_failed_services">Servicios sin actualizar</string>
+    <string name="arrivals_last_success">Última consulta correcta: %1$s</string>
+    <string name="arrivals_never_fetched">Sin consulta correcta anterior</string>
+    <string name="arrivals_service_fetch_times">Última consulta correcta por servicio</string>
 </resources>

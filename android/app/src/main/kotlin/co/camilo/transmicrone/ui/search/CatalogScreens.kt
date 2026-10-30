@@ -5,6 +5,7 @@ import co.camilo.transmicrone.ui.common.FloatingScaffold
 import co.camilo.transmicrone.ui.common.FloatingSearchHeader
 import co.camilo.transmicrone.ui.common.FloatingScreenHeader
 import co.camilo.transmicrone.ui.common.FloatingActionPanel
+import co.camilo.transmicrone.ui.common.RequestFailureNotice
 import co.camilo.transmicrone.ui.common.LocalScreenEntered
 
 import androidx.compose.foundation.layout.*
@@ -94,8 +95,11 @@ fun CatalogSearchScreen(
                     }
                 }
                 failed -> item {
-                    Message(stringResource(R.string.catalog_search_failed))
-                    TextButton(onClick = { onQuery(query) }) { Text(stringResource(R.string.retry_refresh)) }
+                    RequestFailureNotice(
+                        title = stringResource(R.string.catalog_search_failed),
+                        message = stringResource(R.string.catalog_failure_help),
+                        onRetry = { onQuery(query) },
+                    )
                 }
                 results.services.isEmpty() && results.places.isEmpty() -> item { Message(stringResource(R.string.catalog_no_results)) }
                 else -> {
@@ -177,8 +181,11 @@ fun CatalogDetailsScreen(
                 serviceLookup?.let { lookup ->
                     item {
                         if (lookup.failed) {
-                            Message(stringResource(R.string.service_lookup_failed, lookup.option.painted))
-                            TextButton(onClick = onRetryService) { Text(stringResource(R.string.retry_refresh)) }
+                            RequestFailureNotice(
+                                title = stringResource(R.string.service_lookup_failed, lookup.option.painted),
+                                message = stringResource(R.string.catalog_failure_help),
+                                onRetry = onRetryService,
+                            )
                         } else {
                             Message(stringResource(R.string.service_lookup_loading, lookup.option.painted))
                         }
@@ -199,8 +206,11 @@ fun CatalogDetailsScreen(
                             }
                         }
                         RouteState.Failed, RouteState.Unavailable -> item {
-                            Message(stringResource(if (routeState == RouteState.Failed) R.string.route_failed else R.string.route_unavailable))
-                            TextButton(onClick = onRetryRoute) { Text(stringResource(R.string.retry_refresh)) }
+                            if (routeState == RouteState.Failed) RequestFailureNotice(
+                                title = stringResource(R.string.route_failed),
+                                message = stringResource(R.string.catalog_failure_help),
+                                onRetry = onRetryRoute,
+                            ) else Message(stringResource(R.string.route_unavailable))
                         }
                         is RouteState.Loaded -> {
                             if (route != null) {

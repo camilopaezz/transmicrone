@@ -72,7 +72,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import co.camilo.transmicrone.R
 import co.camilo.transmicrone.BuildConfig
+import co.camilo.transmicrone.ui.ArrivalFailure
 import co.camilo.transmicrone.ui.BoardView
+import co.camilo.transmicrone.ui.arrivalFailure
 import co.camilo.transmicrone.ui.Freshness
 import co.camilo.transmicrone.ui.board.ArrivalList
 import co.camilo.transmicrone.ui.board.parseColor
@@ -273,7 +275,13 @@ fun HomeScreen(
                         Freshness.Unsupported -> stringResource(R.string.freshness_unsupported)
                         is Freshness.Empty, is Freshness.Updated -> stringResource(R.string.arrivals_empty)
                     }
+                    val currentFailure = view.arrivalFailure()
                     val refreshing = view.freshness == Freshness.Loading || view.freshness is Freshness.UpdatingCached
+                    var lastFailure by remember(view.board) { mutableStateOf<ArrivalFailure?>(currentFailure) }
+                    SideEffect { if (!refreshing) lastFailure = currentFailure }
+                    // Per-service outcomes are authoritative, including recovery while siblings are pending.
+                    val failure = currentFailure ?: lastFailure.takeIf { refreshing && view.services.isEmpty() }
+                    val retrying = refreshing && failure != null
                     val quietRefresh = (view.freshness as? Freshness.UpdatingCached)?.quiet == true
                     val pullState = rememberPullToRefreshState()
                     // The edge reads only this list, never the enclosing scaffold source or its own output.
@@ -352,8 +360,8 @@ fun HomeScreen(
                     ) {
                         // Request feedback owns the gap until the fetch completes.
                         // A new drag must not replace it with gesture-distance progress.
-                        val showRequest = refreshing && !quietRefresh && page == visibleIndex
-                        val pulling = (!refreshing || quietRefresh) && pullStartedAtTop && pullState.distanceFraction > 0f
+                        val showRequest = refreshing && !quietRefresh && !retrying && page == visibleIndex
+                        val pulling = !retrying && (!refreshing || quietRefresh) && pullStartedAtTop && pullState.distanceFraction > 0f
                         val trackPull = pulling && !showRequest
                         val pullFraction = pullState.distanceFraction.coerceIn(0f, 1f)
                         val revealed = 48.dp + 12.dp * 2
@@ -407,7 +415,15 @@ fun HomeScreen(
                                     bottomContentPadding = (if (compactHeight) 24.dp else dockHeight + 48.dp) + listGap,
                                     colorForArrival = { arrival -> routeColor(view, arrival.painted, arrival.routeId) },
                                     active = page == visibleIndex && !scrolling,
-                                    initialLoading = view.cache == null && view.freshness == Freshness.Loading,
+                                    initialLoading = view.cache == null && view.freshness == Freshness.Loading && !retrying,
+                                    failureNotice = failure?.let { problem ->
+                                        @Composable {
+                                            ArrivalFailureNotice(
+                                                problem, view, retrying,
+                                                onRefresh.takeIf { page == visibleIndex && !scrolling },
+                                            )
+                                        }
+                                    },
                                 )
                                 if (hasScrolled && page == visibleIndex && !headerEdge) FloatingEdgeBand(
                                     arrivalsBackdrop, true, fade, 28.dp,
@@ -421,7 +437,7 @@ fun HomeScreen(
                                 Modifier.align(Alignment.TopCenter).offset { IntOffset(0, contentTop()) }.fillMaxWidth().height(listGap)
                                     .scrollable(rememberScrollableState { 0f }, Orientation.Vertical),
                             )
-                            if (gap > 0.dp) RefreshCapsule(
+                            if (gap > 0.dp && (showRequest || trackPull)) RefreshCapsule(
                                 showRequest || !trackPull, { pullState.distanceFraction.coerceIn(0f, 1f) },
                                 gap, capsuleFade, Modifier.align(Alignment.TopCenter).offset { IntOffset(0, contentTop()) },
                             )
