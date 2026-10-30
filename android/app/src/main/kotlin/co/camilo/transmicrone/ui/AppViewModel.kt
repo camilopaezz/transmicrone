@@ -89,6 +89,7 @@ data class UiState(
     val setupSaveFailed: Boolean = false,
     val pendingDeletion: DeletedBoard? = null,
     val catalogQuery: String = "",
+    val catalogSearchSession: Long = 0,
     val catalogResults: CatalogResults = CatalogResults(),
     val catalogSearching: Boolean = false,
     val catalogSearchFailed: Boolean = false,
@@ -266,7 +267,8 @@ class AppViewModel(
 
     fun openSearch() {
         cancelServiceLookup()
-        _state.update { it.copy(screen = Screen.SEARCH, details = emptyList()) }
+        _state.update { it.copy(screen = Screen.SEARCH, details = emptyList(),
+            catalogSearchSession = it.catalogSearchSession + 1) }
         stopPolling()
         searchCatalog(_state.value.catalogQuery)
     }
