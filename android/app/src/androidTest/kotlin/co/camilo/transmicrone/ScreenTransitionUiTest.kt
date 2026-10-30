@@ -1,5 +1,6 @@
 package co.camilo.transmicrone
 
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.Text
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
@@ -13,11 +14,18 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import co.camilo.transmicrone.domain.Board
 import co.camilo.transmicrone.domain.CatalogEntry
 import co.camilo.transmicrone.domain.CatalogResults
 import co.camilo.transmicrone.domain.Place
 import co.camilo.transmicrone.domain.PlaceKind
+import co.camilo.transmicrone.domain.ServicioOption
 import co.camilo.transmicrone.ui.BoardView
 import co.camilo.transmicrone.ui.Screen
 import co.camilo.transmicrone.ui.UiState
@@ -32,6 +40,63 @@ import org.junit.Test
 
 class ScreenTransitionUiTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test
+    fun returningFromServicePreservesSearchScrollAndDoesNotRefocusSearch() =
+        assertSearchScrollRestored(rapidReopen = false)
+
+    @Test
+    fun reopeningSearchDuringExitStillPreservesScrollAfterDetails() =
+        assertSearchScrollRestored(rapidReopen = true)
+
+    private fun assertSearchScrollRestored(rapidReopen: Boolean) {
+        val services = (0..60).map {
+            CatalogEntry.Service(ServicioOption("S$it", "Destino $it", listOf(it), null), emptyList())
+        }
+        val state = mutableStateOf(UiState(screen = Screen.SEARCH, catalogQuery = "S",
+            catalogResults = CatalogResults(services = services)))
+        compose.setContent {
+            TransmicroneTheme {
+                ScreenTransition(state.value) { displayed ->
+                    when (displayed.screen) {
+                        Screen.SEARCH -> CatalogSearchScreen(displayed.catalogQuery, displayed.catalogResults,
+                            false, false, {}, { entry ->
+                                state.value = state.value.copy(screen = Screen.DETAILS, details = listOf(entry))
+                            }, {})
+                        else -> Text("Volver", androidx.compose.ui.Modifier.clickable {
+                            state.value = state.value.copy(screen = Screen.SEARCH, details = emptyList())
+                        })
+                    }
+                }
+            }
+        }
+        if (rapidReopen) {
+            compose.mainClock.autoAdvance = false
+            compose.runOnIdle { state.value = state.value.copy(screen = Screen.HOME) }
+            compose.mainClock.advanceTimeBy(64)
+            compose.runOnIdle {
+                state.value = state.value.copy(screen = Screen.SEARCH,
+                    catalogSearchSession = state.value.catalogSearchSession + 1)
+            }
+            compose.mainClock.advanceTimeBy(400)
+            compose.mainClock.autoAdvance = true
+            compose.waitForIdle()
+        }
+        compose.onNode(hasScrollAction()).performScrollToIndex(21)
+            .performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 37f) }
+        val scrollBefore = compose.onNode(hasScrollAction()).fetchSemanticsNode()
+            .config[SemanticsProperties.VerticalScrollAxisRange].value()
+        val rowBefore = compose.onNodeWithText("S21").fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithText("S21").performClick()
+        compose.onNodeWithText("Volver").assertIsDisplayed()
+        compose.onNodeWithText("Volver").performClick()
+        compose.waitForIdle()
+        val scrollAfter = compose.onNode(hasScrollAction()).fetchSemanticsNode()
+            .config[SemanticsProperties.VerticalScrollAxisRange].value()
+        assertEquals(scrollBefore, scrollAfter, 0.000001f)
+        assertEquals(rowBefore, compose.onNodeWithText("S21").fetchSemanticsNode().boundsInRoot)
+        compose.onNode(hasSetTextAction()).assertIsNotFocused()
+    }
 
     @Test
     fun backKeepsDepartingDetailsSnapshotUntilTransitionEnds() {
@@ -153,5 +218,8 @@ class ScreenTransitionUiTest {
         compose.onNodeWithContentDescription("Buscar").assertIsDisplayed()
         compose.onAllNodesWithContentDescription("Buscar").assertCountEquals(1)
         compose.onNode(hasSetTextAction()).assertDoesNotExist()
+        compose.onNodeWithContentDescription("Buscar").performClick()
+        compose.waitForIdle()
+        compose.onNode(hasSetTextAction()).assertIsFocused()
     }
 }

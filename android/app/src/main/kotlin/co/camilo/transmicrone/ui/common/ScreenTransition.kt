@@ -17,7 +17,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -35,6 +37,7 @@ val LocalScreenEntered = compositionLocalOf { true }
 
 // Only navigation changes animate. Queries, arrivals and loading states keep the same content.
 private fun UiState.destinationKey(): List<Any?> = when (screen) {
+    Screen.SEARCH -> listOf(screen, catalogSearchSession)
     Screen.DETAILS -> listOf(screen, details)
     Screen.SETUP -> listOf(screen, editingBoardId, setupPlace?.placeId)
     else -> listOf(screen)
@@ -50,6 +53,10 @@ private fun UiState.navigationDepth(): Int = when (screen) {
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun ScreenTransition(state: UiState, content: @Composable (UiState) -> Unit) {
+    val searchState = rememberSaveableStateHolder()
+    LaunchedEffect(state.screen, state.catalogSearchSession) {
+        if (state.screen == Screen.HOME) searchState.removeState(state.catalogSearchSession)
+    }
     val distance = with(LocalDensity.current) { 24.dp.roundToPx() }
     val layoutSign = if (LocalLayoutDirection.current == LayoutDirection.Rtl) -1 else 1
     SharedTransitionLayout(Modifier.fillMaxSize()) {
@@ -86,7 +93,13 @@ fun ScreenTransition(state: UiState, content: @Composable (UiState) -> Unit) {
                         transition.targetState == EnterExitState.Visible &&
                         !sharedScope.isTransitionActive),
                 ) {
-                    content(displayedState)
+                    // Details temporarily replace search in the composition. Keep its list and
+                    // focus state until the user leaves the search flow for home.
+                    if (displayedState.screen == Screen.SEARCH) {
+                        searchState.SaveableStateProvider(displayedState.catalogSearchSession) { content(displayedState) }
+                    } else {
+                        content(displayedState)
+                    }
                 }
             }
         }
