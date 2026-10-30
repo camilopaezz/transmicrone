@@ -279,7 +279,8 @@ fun HomeScreen(
                     val refreshing = view.freshness == Freshness.Loading || view.freshness is Freshness.UpdatingCached
                     var lastFailure by remember(view.board) { mutableStateOf<ArrivalFailure?>(currentFailure) }
                     SideEffect { if (!refreshing) lastFailure = currentFailure }
-                    val failure = currentFailure ?: lastFailure.takeIf { refreshing }
+                    // Per-service outcomes are authoritative, including recovery while siblings are pending.
+                    val failure = currentFailure ?: lastFailure.takeIf { refreshing && view.services.isEmpty() }
                     val retrying = refreshing && failure != null
                     val quietRefresh = (view.freshness as? Freshness.UpdatingCached)?.quiet == true
                     val pullState = rememberPullToRefreshState()
