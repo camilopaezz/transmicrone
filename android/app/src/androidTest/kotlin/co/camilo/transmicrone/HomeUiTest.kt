@@ -80,6 +80,41 @@ class HomeUiTest {
     }
 
     @Test
+    fun recoveredServiceClearsFailureWhileSiblingRemainsPending() {
+        val first = sampleBoard().servicios.single()
+        val second = SelectedServicio("S48", "Soacha", listOf(2))
+        val board = sampleBoard().copy(servicios = listOf(first, second))
+        val old = Instant.now().minusSeconds(240)
+        val previous = CachedService(first.serviceKey(), listOf(sampleArrival()), old)
+        val view = mutableStateOf(BoardView(
+            board, previous.arrivals, Freshness.FailedCached(old, FailureKind.TIMEOUT),
+            services = listOf(ServiceArrivals(first, previous, ServiceStatus.Failed(FailureKind.TIMEOUT)),
+                ServiceArrivals(second, null, ServiceStatus.Empty)),
+            unresolvedFailures = mapOf(first.serviceKey() to FailureKind.TIMEOUT),
+        ))
+        compose.setContent {
+            TransmicroneTheme { HomeScreen(listOf(view.value), 0, {}, {}, {}, {}) }
+        }
+        compose.onNodeWithTag("request-failure-notice").assertIsDisplayed()
+        compose.runOnIdle {
+            view.value = view.value.copy(freshness = Freshness.UpdatingCached(old), services = listOf(
+                ServiceArrivals(first, previous, ServiceStatus.Pending),
+                ServiceArrivals(second, null, ServiceStatus.Pending),
+            ))
+        }
+        compose.onNodeWithTag("retry-progress").assertIsDisplayed()
+        compose.runOnIdle {
+            val recovered = previous.copy(arrivals = listOf(sampleArrival().copy(etaPhrase = "Entre 5 y 7 min")), fetchedAt = Instant.now())
+            view.value = view.value.copy(arrivals = recovered.arrivals, services = listOf(
+                ServiceArrivals(first, recovered, ServiceStatus.Updated),
+                ServiceArrivals(second, null, ServiceStatus.Pending),
+            ), unresolvedFailures = emptyMap())
+        }
+        compose.onNodeWithTag("request-failure-notice").assertDoesNotExist()
+        compose.onNodeWithText("Entre 5 y 7 min", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
     fun retryFromDetailsKeepsCachedCardsAndNoticeInPlace() {
         val now = Instant.now().minusSeconds(240)
         val freshness = mutableStateOf<Freshness>(Freshness.FailedCached(now, FailureKind.TIMEOUT))
