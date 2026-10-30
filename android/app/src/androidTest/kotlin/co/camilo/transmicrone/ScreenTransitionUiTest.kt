@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.hasSetTextAction
@@ -48,6 +49,37 @@ class ScreenTransitionUiTest {
     @Test
     fun reopeningSearchDuringExitStillPreservesScrollAfterDetails() =
         assertSearchScrollRestored(rapidReopen = true)
+
+    @Test
+    fun restoredHomeDiscardsPreviousProcessSearchFocusState() {
+        val restoration = StateRestorationTester(compose)
+        val state = mutableStateOf(UiState(screen = Screen.SEARCH, catalogSearchSession = 1))
+        var resetNavigationOnDispose = false
+        restoration.setContent {
+            DisposableEffect(Unit) {
+                onDispose {
+                    // A new process creates a new ViewModel, whose navigation starts at home.
+                    if (resetNavigationOnDispose) state.value = UiState()
+                }
+            }
+            TransmicroneTheme {
+                ScreenTransition(state.value) { displayed ->
+                    if (displayed.screen == Screen.SEARCH) {
+                        CatalogSearchScreen("", CatalogResults(), false, false, {}, {}, {})
+                    } else Text(displayed.screen.name)
+                }
+            }
+        }
+        compose.onNode(hasSetTextAction()).performClick().assertIsFocused()
+        compose.runOnIdle { state.value = state.value.copy(screen = Screen.DETAILS) }
+        compose.onNodeWithText("DETAILS").assertIsDisplayed()
+        compose.runOnIdle { resetNavigationOnDispose = true }
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithText("HOME").assertIsDisplayed()
+        compose.runOnIdle { state.value = state.value.copy(screen = Screen.SEARCH, catalogSearchSession = 1) }
+        compose.waitForIdle()
+        compose.onNode(hasSetTextAction()).assertIsFocused()
+    }
 
     private fun assertSearchScrollRestored(rapidReopen: Boolean) {
         val services = (0..60).map {

@@ -19,6 +19,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -54,8 +58,11 @@ private fun UiState.navigationDepth(): Int = when (screen) {
 @Composable
 fun ScreenTransition(state: UiState, content: @Composable (UiState) -> Unit) {
     val searchState = rememberSaveableStateHolder()
+    // The holder survives process death even when the new ViewModel restarts at session zero.
+    var retainedSearchSession by rememberSaveable { mutableLongStateOf(state.catalogSearchSession) }
     LaunchedEffect(state.screen, state.catalogSearchSession) {
-        if (state.screen == Screen.HOME) searchState.removeState(state.catalogSearchSession)
+        if (state.screen == Screen.HOME) searchState.removeState(retainedSearchSession)
+        else retainedSearchSession = state.catalogSearchSession
     }
     val distance = with(LocalDensity.current) { 24.dp.roundToPx() }
     val layoutSign = if (LocalLayoutDirection.current == LayoutDirection.Rtl) -1 else 1
