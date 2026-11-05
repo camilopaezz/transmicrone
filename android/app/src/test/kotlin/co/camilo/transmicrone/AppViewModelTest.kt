@@ -111,6 +111,22 @@ class AppViewModelTest {
     }
 
     @Test
+    fun searchSessionSurvivesDetailsAndChangesWhenReopenedFromHome() = vmTest {
+        val vm = viewModel(ScriptedFeed(), MemoryBoards())
+        runCurrent()
+        vm.openSearch()
+        val session = vm.state.value.catalogSearchSession
+        vm.openDetails(CatalogEntry.Location(leonPlace()))
+        vm.backSetup()
+        assertEquals(Screen.SEARCH, vm.state.value.screen)
+        assertEquals(session, vm.state.value.catalogSearchSession)
+        vm.backSetup()
+        assertEquals(Screen.HOME, vm.state.value.screen)
+        vm.openSearch()
+        assertTrue(vm.state.value.catalogSearchSession > session)
+    }
+
+    @Test
     fun latestServiceTapWinsAndBackInvalidatesPendingLookup() = vmTest {
         val first = leonPlace().servicios.single()
         val second = first.copy(painted = "E42", destino = "7 de Agosto")

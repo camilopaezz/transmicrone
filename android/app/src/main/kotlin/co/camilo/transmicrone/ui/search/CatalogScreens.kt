@@ -19,6 +19,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,7 +49,13 @@ fun CatalogSearchScreen(
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     val screenEntered = LocalScreenEntered.current
-    LaunchedEffect(screenEntered) { if (screenEntered) focus.requestFocus() }
+    var requestedFocus by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(screenEntered) {
+        if (screenEntered && !requestedFocus) {
+            focus.requestFocus()
+            requestedFocus = true
+        }
+    }
     val list = rememberLazyListState()
     FloatingScaffold(topEdgeVisible = { list.canScrollBackward }, topBar = {
         FloatingSearchHeader(query, onQuery, stringResource(R.string.catalog_search_hint), focus, onBack, sharedKey = "search-capsule") { keyboard?.hide() }
