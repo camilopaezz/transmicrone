@@ -204,6 +204,40 @@ include loose response files so a timeout before archiving does not discard them
 
 Android downloads and saved-board reconciliation remain separate future work.
 
+## Catalog identity and ordering
+
+Daily builds pass the published source catalog to the builder as
+`--identity-baseline`. Existing station IDs are preserved by GTFS nodo even
+when their TM query mapping disappears or changes. New stations use
+`estacion-nodo:<nodo>` independently of their optional query key. The baseline
+supplies identities only; it does not substitute old route-detail responses.
+
+Platforms, route memberships, catalog-ID memberships, and top-level records
+have deterministic ordering. Comparison and content digests also canonicalize
+set-like fields in older catalogs, while preserving route-stop sequence.
+An older digest format alone does not trigger publication. GIS pagination
+requests object-ID order and rejects missing or repeated object IDs. GIS
+service joins prefer the painted direction within each route ID; conflicting
+matches leave optional GIS metadata unset and emit a warning rather than
+choosing a response row arbitrarily.
+
+On October 29, the full builder was replayed against the October 28 archived
+responses after verifying all 1,251 body checksums. Reversing unordered inputs
+previously changed 149 places and 476 services. After these fixes, it changes
+only six places associated with ambiguous cenefa-to-node joins, with no service
+metadata changes. The remaining 44 added and 72 removed serving links are all
+at those six cenefas. Excluding those places gives identical source records
+and packed catalogs; published station IDs remain intact. Ordered collection
+also passed against all three live GIS layers. The
+[verification record](experiments/2026-10-29/catalog-stability.json) retains the
+counts and source provenance.
+
+Cenefa ambiguity resolution is deferred to
+[issue #9](https://github.com/camilopaezz/transmicrone/issues/9). Builds retain
+the existing selection behavior and now report each ambiguity explicitly.
+Both GIS and cenefa warnings appear in the daily report and Actions summary.
+Warnings do not bypass validation or removal confirmation.
+
 ## October 24 hold alert investigation
 
 The [October 24 run](https://github.com/camilopaezz/transmicrone/actions/runs/40100984277)

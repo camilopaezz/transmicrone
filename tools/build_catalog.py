@@ -129,13 +129,21 @@ def read_csv(path: Path) -> list[dict]:
 
 
 def gis_query_all(layer: str, fields: str, page: int = 2000) -> list[dict]:
+    metadata = http_json(f"{layer}?f=json", timeout=60)
+    oid = metadata.get("objectIdField") or next(
+        (field["name"] for field in metadata.get("fields", [])
+         if field.get("type") == "esriFieldTypeOID"), None)
+    if not oid:
+        raise ValueError(f"GIS layer has no object ID field: {layer}")
     out: list[dict] = []
+    seen_ids = set()
     offset = 0
     while True:
         q = urllib.parse.urlencode(
             {
                 "where": "1=1",
-                "outFields": fields,
+                "outFields": ",".join(dict.fromkeys([*fields.split(","), oid])),
+                "orderByFields": f"{oid} ASC",
                 "returnGeometry": "false",
                 "outSR": "4326",
                 "f": "json",
@@ -150,16 +158,17 @@ def gis_query_all(layer: str, fields: str, page: int = 2000) -> list[dict]:
             raise SystemExit(f"GIS error {layer}: {data['error']}")
         feats = data.get("features") or []
         for feat in feats:
-            out.append(feat.get("attributes") or {})
-        if not feats or not data.get("exceededTransferLimit"):
-            if len(feats) < page:
-                break
-            # some servers omit exceededTransferLimit
-            if len(feats) < page:
-                break
+            attributes = feat.get("attributes") or {}
+            identity = attributes.get(oid)
+            if identity is None or identity in seen_ids:
+                raise ValueError(f"Missing or repeated GIS object ID in {layer}: {identity}")
+            seen_ids.add(identity)
+            out.append(attributes)
+        if not feats or (len(feats) < page and not data.get("exceededTransferLimit")):
+            break
         offset += len(feats)
         if offset > 200_000:
-            break
+            raise ValueError(f"GIS pagination limit exceeded: {layer}")
     return out
 
 
@@ -232,7 +241,7 @@ def service_operating_hours(rows: list[dict], fetched_at: str) -> list[dict]:
                 windows.append(value)
         if windows and row.get("id") and row.get("codigo") and row.get("nombre"):
             day_order = {day: index for index, day in enumerate(("L-V", "L-S", "L-D", "S", "D", "D-F"))}
-            windows.sort(key=lambda window: (day_order.get(window["day_group"], 99), window["day_group"], window["start_time"]))
+            windows.sort(key=lambda window: (day_order.get(window["day_group"], 99), window["day_group"], window["start_time"], window["end_time"]))
             result.append({
                 "catalog_id": str(row["id"]), "painted": str(row["codigo"]),
                 "destino": nfc(row["nombre"]), "fetched_at": fetched_at,
@@ -283,6 +292,22 @@ def agency_sistema(agency_id: str) -> str:
     return "TransMiZonal"
 
 
+def match_gis_service(candidates: list[dict], route_id: str, painted: str, warnings: list[dict]) -> dict:
+    """A repeated GIS route ID can describe multiple painted directions."""
+    matches = [row for row in candidates if row.get("cod_ruta") == painted]
+    choices = matches or candidates
+    signatures = {(row.get("cod_ruta"), row.get("cod_linea")) for row in choices}
+    if len(signatures) <= 1:
+        return choices[0] if choices else {}
+    warnings.append({
+        "source": "gis-service-ambiguity", "route_id": route_id, "painted": painted,
+        "candidates": sorted(
+            [{"cod_ruta": code, "cod_linea": line} for code, line in signatures],
+            key=lambda row: json.dumps(row, sort_keys=True)),
+    })
+    return {}
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--gtfs-dir", type=Path, help="existing extracted GTFS directory")
@@ -293,13 +318,23 @@ def main() -> int:
     p.add_argument("--out", type=Path, default=DATA / "catalog.json")
     p.add_argument("--test-out", type=Path, default=DATA / "test-case.json")
     p.add_argument("--work-dir", type=Path, default=Path("/tmp/transmicrone-gtfs"))
+    p.add_argument("--identity-baseline", type=Path, help="published source catalog whose station IDs must be preserved")
     args = p.parse_args()
 
     previous = json.loads(args.out.read_text(encoding="utf-8")) if args.out.exists() else {}
+    identity_baseline = json.loads(args.identity_baseline.read_text()) if args.identity_baseline else previous
+    station_ids = {}
+    for place in identity_baseline.get("places", []):
+        if place.get("kind") == "estacion" and place.get("nodo") is not None:
+            node = str(place["nodo"])
+            if node in station_ids and station_ids[node] != place["place_id"]:
+                raise ValueError(f"Ambiguous station identities in baseline for nodo {node}")
+            station_ids[node] = place["place_id"]
 
     DATA.mkdir(parents=True, exist_ok=True)
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     failures: list[dict] = []
+    warnings: list[dict] = []
     sources: list[dict] = []
 
     gtfs_dir = args.gtfs_dir
@@ -522,7 +557,7 @@ def main() -> int:
         tm_code = tm.get("tm_code")
         name = nfc(gis.get("nombre_estacion") or s.get("stop_name"))
         troncal = nfc(gis.get("troncal_estacion") or "")
-        place_id = f"estacion:{tm_code}" if tm_code else f"estacion-nodo:{nodo}"
+        place_id = station_ids.get(str(nodo), f"estacion-nodo:{nodo}")
         if place_id in seen_place:
             continue
         seen_place.add(place_id)
@@ -561,18 +596,24 @@ def main() -> int:
                 else float(s["stop_lon"]),
                 "wagon_count": gis.get("numero_vagones_estacion"),
                 "gis_numero_estacion": gis.get("numero_estacion"),
-                "platforms": plats,
-                "served_route_ids": sorted(route_ids, key=lambda x: -route_ids[x]),
+                "platforms": sorted(plats, key=lambda platform: platform["stop_id"]),
+                "served_route_ids": sorted(route_ids),
                 "query_paradero": tm_code,  # Bodega /paradero/buses body
             }
         )
 
     # Paraderos: GIS cenefa is the live query key; GTFS stop_id is nodo
     gtfs_by_cenefa: dict[str, dict] = {}
+    nodes_by_cenefa: dict[str, list[str]] = defaultdict(list)
     for s in stops:
         cen = cenefa_from_gtfs_code(s.get("stop_code") or "")
         if cen and s.get("location_type") == "0" and not (s.get("parent_station") or "").strip():
             gtfs_by_cenefa.setdefault(cen, s)
+            nodes_by_cenefa[cen].append(s["stop_id"])
+    for cen, nodes in sorted(nodes_by_cenefa.items()):
+        if len(nodes) > 1:
+            warnings.append({"source": "gtfs-cenefa-ambiguity", "cenefa": cen,
+                             "nodes": sorted(nodes), "issue": "https://github.com/camilopaezz/transmicrone/issues/9"})
 
     for g in paraderos_gis:
         cen = (g.get("cenefa") or "").strip()
@@ -607,7 +648,10 @@ def main() -> int:
     catalog_by_painted: dict[str, list[dict]] = defaultdict(list)
     for r in lista_rutas:
         catalog_by_painted[str(r.get("codigo"))].append(r)
-    gis_by_rid = {str(s.get("route_id")): s for s in servicios_gis if s.get("route_id") is not None}
+    gis_by_rid: dict[str, list[dict]] = defaultdict(list)
+    for row in servicios_gis:
+        if row.get("route_id") is not None:
+            gis_by_rid[str(row["route_id"])].append(row)
 
     servicios = []
     for r in routes:
@@ -626,7 +670,7 @@ def main() -> int:
                     catalog_id = str(c.get("id"))
                     catalog_color = c.get("color")
                     break
-        gis = gis_by_rid.get(str(rid)) or {}
+        gis = match_gis_service(gis_by_rid.get(str(rid), []), str(rid), painted, warnings)
         servicios.append(
             {
                 "route_id": int(rid) if str(rid).isdigit() else rid,
@@ -635,7 +679,7 @@ def main() -> int:
                 "agency_id": int(r["agency_id"]) if str(r["agency_id"]).isdigit() else r["agency_id"],
                 "nombre_sistema": agency_sistema(str(r["agency_id"])),
                 "catalog_id": catalog_id,
-                "catalog_ids_sharing_painted": [str(c.get("id")) for c in cat_matches],
+                "catalog_ids_sharing_painted": sorted({str(c.get("id")) for c in cat_matches}),
                 "gis_cod_ruta": gis.get("cod_ruta"),
                 "gis_cod_linea": gis.get("cod_linea"),
                 "gis_route_id": gis.get("route_id"),
@@ -662,7 +706,12 @@ def main() -> int:
             if pnt and pnt not in seen_p:
                 seen_p.add(pnt)
                 painted_set.append(pnt)
-        place["served_painted"] = painted_set
+        place["served_painted"] = sorted(painted_set)
+
+    places.sort(key=lambda row: row["place_id"])
+    servicios.sort(key=lambda row: str(row["route_id"]))
+    serving.sort(key=lambda row: (row["place_id"], str(row["route_id"])))
+    lista_rutas = sorted(lista_rutas, key=lambda row: str(row["id"]))
 
     def find_place(pred):
         return [x for x in places if pred(x)]
@@ -706,6 +755,7 @@ def main() -> int:
                            if str(row["id"]) in service_routes_by_id],
         "sources": sources,
         "failures": failures,
+        "warnings": sorted(warnings, key=lambda row: json.dumps(row, sort_keys=True)),
         "counts": {
             "places": len(places),
             "estaciones": sum(1 for x in places if x["kind"] == "estacion"),

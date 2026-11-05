@@ -1,0 +1,108 @@
+{
+  "source_run_url": "https://github.com/camilopaezz/transmicrone/actions/runs/40729512410",
+  "source_version": "20261028T164816Z-40729512410-1",
+  "verified_response_bodies": 1251,
+  "gtfs_stop_times_rows": 9374194,
+  "experiment": {
+    "inputs_reordered": [
+      "GTFS routes",
+      "GTFS stops",
+      "GTFS trips",
+      "GIS rows",
+      "catalog search rows"
+    ],
+    "inputs_preserving_order": [
+      "GTFS stop_times",
+      "route-detail stops"
+    ],
+    "network_during_replay": false,
+    "station_identity_baseline": "20261023T152455Z-39978029836-1"
+  },
+  "before": {
+    "places": {
+      "added": 0,
+      "removed": 0,
+      "changed": 149
+    },
+    "servicios": {
+      "added": 0,
+      "removed": 0,
+      "changed": 476
+    },
+    "service_hours": {
+      "added": 0,
+      "removed": 0,
+      "changed": 0
+    },
+    "service_routes": {
+      "added": 0,
+      "removed": 0,
+      "changed": 0
+    },
+    "serving": {
+      "added": 44,
+      "removed": 72,
+      "changed": 0
+    }
+  },
+  "after": {
+    "places": {
+      "added": 0,
+      "removed": 0,
+      "changed": 6
+    },
+    "servicios": {
+      "added": 0,
+      "removed": 0,
+      "changed": 0
+    },
+    "service_hours": {
+      "added": 0,
+      "removed": 0,
+      "changed": 0
+    },
+    "service_routes": {
+      "added": 0,
+      "removed": 0,
+      "changed": 0
+    },
+    "serving": {
+      "added": 44,
+      "removed": 72,
+      "changed": 0
+    }
+  },
+  "checks": {
+    "all_remaining_variation_is_at_deferred_cenefas": true,
+    "other_source_records_identical": true,
+    "packed_catalog_identical_after_excluding_deferred_cenefas": true,
+    "published_station_ids_preserved": true
+  },
+  "source_warnings": {
+    "gis-service-ambiguity": 7,
+    "gtfs-cenefa-ambiguity": 6
+  },
+  "deferred_issue": "https://github.com/camilopaezz/transmicrone/issues/9",
+  "deferred_cenefas": [
+    "179A12",
+    "195B03",
+    "227A00",
+    "257A12",
+    "380A05",
+    "383A06"
+  ],
+  "live_ordered_gis_checks": [
+    {
+      "layer": "https://gis.transmilenio.gov.co/arcgis/rest/services/Troncal/consulta_estaciones_troncales/FeatureServer/0",
+      "rows": 152
+    },
+    {
+      "layer": "https://gis.transmilenio.gov.co/arcgis/rest/services/Zonal/consulta_paraderos_zonales/FeatureServer/0",
+      "rows": 7610
+    },
+    {
+      "layer": "https://gis.transmilenio.gov.co/arcgis/rest/services/ConsultaSubgerenciaPlanificacionSITP/Consulta_Planificacion_SITP/FeatureServer/15",
+      "rows": 693
+    }
+  ]
+}

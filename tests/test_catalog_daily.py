@@ -130,6 +130,12 @@ class PublicationTests(unittest.TestCase):
 
         def build():
             output = Path(sys.argv[sys.argv.index('--out') + 1])
+            identity_baseline = Path(sys.argv[sys.argv.index('--identity-baseline') + 1])
+            identities = json.loads(identity_baseline.read_text())
+            if 'current.json' in store.objects:
+                current = json.loads(store.objects['current.json'])
+                expected = json.loads(daily.gzip.decompress(store.objects[current['source_catalog']['key']]))
+                self.assertEqual(identities, expected)
             output.write_text(json.dumps(value))
             return 0
 
@@ -186,6 +192,17 @@ class PublicationTests(unittest.TestCase):
         current = json.loads(store.objects['current.json'])
         self.assertEqual(current['version'], original['version'])
         self.assertGreaterEqual(current['checked_at'], original['checked_at'])
+
+    def test_unchanged_legacy_digest_does_not_force_publication_after_canonicalization(self):
+        store = FakeR2()
+        self.assertEqual(self.run_daily(store)[0], 0)
+        original = json.loads(store.objects['current.json'])
+        original['content_sha256'] = 'digest-from-previous-comparison-format'
+        store.objects['current.json'] = daily.encode(original)
+        result, report = self.run_daily(store)
+        self.assertEqual(result, 0)
+        self.assertEqual(report['publication'], 'unchanged')
+        self.assertEqual(json.loads(store.objects['current.json'])['version'], original['version'])
 
     def test_valid_removal_hold_succeeds_without_changing_published_manifest(self):
         store = FakeR2()
