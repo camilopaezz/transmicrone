@@ -27,7 +27,7 @@ class HomeImprovementsTest {
         listOf(SelectedServicio("E48", "CAD", listOf(13266))))
     private val arrival = Arrival("E48", "CAD", 13266, 62282, "Entre 2 y 4 min", "200 mts", Occupancy.UNKNOWN, null)
 
-    @Test fun homeOmitsRefreshStatusAndRetry() {
+    @Test fun failedHomeOffersCompactFeedbackAndRetry() {
         compose.setContent { TransmicroneTheme {
             HomeScreen(listOf(BoardView(board, listOf(arrival), Freshness.FailedCached(Instant.now().minusSeconds(180), FailureKind.TIMEOUT))),
                 0, {}, {}, {}, {})
@@ -35,7 +35,9 @@ class HomeImprovementsTest {
         compose.onAllNodesWithText("se agotó el tiempo", substring = true).assertCountEquals(0)
         compose.onAllNodesWithText("Mostrando datos anteriores", substring = true).assertCountEquals(0)
         compose.onAllNodesWithText("Actualizado", substring = true).assertCountEquals(0)
-        compose.onAllNodesWithText("Reintentar").assertCountEquals(0)
+        compose.onNodeWithText("No se pudo actualizar").assertIsDisplayed()
+        compose.onNodeWithText("Guardados hace", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Reintentar").assertHeightIsAtLeast(48.dp)
     }
 
     @Test fun singleBoardShowsOneTitleAndToolbarAdd() {
