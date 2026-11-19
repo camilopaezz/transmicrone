@@ -130,7 +130,7 @@ confirmation of removals. Fetch success alone must not approve publication.
 time, after the observed official GTFS publication window. GitHub schedules
 run from the default branch and can be delayed by runner availability. Manual
 dispatch supports a build-only run for diagnostics. Publication is independent
-of Android releases; the app continues using its bundled catalog.
+of Android releases.
 
 The daily job collects every catalog variant's route detail, all GIS pages,
 the route list and hours, and a fresh GTFS archive. It makes sequential requests
@@ -224,7 +224,25 @@ Workflow artifacts retain reports, the candidate, and full responses for 30 days
 R2 objects currently have no automatic deletion policy. GitHub artifacts also
 include loose response files so a timeout before archiving does not discard them.
 
-Android downloads and saved-board reconciliation remain separate future work.
+## Android downloads
+
+Android checks the public `catalog/current.json` once per app process on a
+background thread. Catalog search, operating hours, and route stops load offline
+from the newest usable local snapshot, either the packaged catalog or a previous
+download. The app uses the catalog's `generated_at` to compare versions.
+`checked_at` tracks publisher health, so an older check date does not prevent
+Android from using the last published catalog.
+
+The app accepts a supported manifest and an immutable catalog URL on the
+publisher's host. It checks the compressed size and SHA-256 and loads the
+candidate through the catalog parser before atomically replacing its private
+copy. A failed check or download leaves the previous copy available. The next
+cold start uses the downloaded data, keeping search results and board edits on
+one snapshot for the duration of the running process.
+
+Saved boards continue using their stored station or stop code and selected
+service IDs for arrivals. Downloading a new catalog does not rewrite those
+records. Automatic reconciliation of saved identifiers is a separate change.
 
 ## Freshness monitoring
 
