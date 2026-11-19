@@ -109,6 +109,17 @@ class RouteDetailRecoveryTests(unittest.TestCase):
         self.assertEqual(calls, 4)
         self.assertEqual([row['id'] for row, info, error in results], ['1', '2'])
 
+    def test_official_platform_without_name_keeps_its_code_and_address(self):
+        # Minimized from run 44429214474, variant 12354, nodo 74340.
+        info = {'recorrido': [{'id': '74340', 'codigo': 'Portal Tunal Alim Plat1',
+                               'nombre': '', 'direccion': 'Portal Tunal', 'parada': '1'}]}
+        results, calls = self.collect([info, info])
+        self.assertEqual(calls, 2)
+        self.assertTrue(all(error is None for row, response, error in results), results)
+        route = build_catalog.service_route(results[0][0], results[0][1], 'today')
+        self.assertEqual(route['stops'][0]['code'], 'Portal Tunal Alim Plat1')
+        self.assertEqual(route['stops'][0]['address'], 'Portal Tunal')
+
 
 class OperatingHoursTests(unittest.TestCase):
     def test_published_windows_survive_packing_with_source_identity_and_date(self):

@@ -245,9 +245,12 @@ def route_detail_results(rows: list[dict], pause: float, retries: int = 2, recov
                     stops = info_route_stops(info)
                     if not stops:
                         raise ValueError('No route stops returned')
-                    if any(not isinstance(stop.get(field), str) or not stop[field].strip()
-                           for stop in stops for field in ('codigo', 'nombre')):
-                        raise ValueError('Route stops require nonempty string codigo and nombre')
+                    if any(not isinstance(stop.get('codigo'), str) or not stop['codigo'].strip()
+                           or not isinstance(stop.get('nombre'), str) for stop in stops):
+                        # Official platform records can have an empty name; the
+                        # app displays their code instead. Missing/invalid fields
+                        # and blank identities still indicate malformed content.
+                        raise ValueError('Route stops require a nonempty string codigo and a string nombre')
                     # Conversion must also succeed before the content is accepted.
                     service_route(row, info, '')
                     error = None

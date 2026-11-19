@@ -145,8 +145,9 @@ once more. Each request still uses the transport retry policy. Successful varian
 are not fetched again. Every HTTP response remains captured, including rejected
 HTTP 200 bodies. An unresolved failure still invalidates the candidate; a retry
 never substitutes yesterday's details as a fresh response.
-Stop records must have nonempty string codes and names and pass route conversion
-before acceptance. Results are processed in original variant order after recovery,
+Stop records must have nonempty string codes, string names, and pass route
+conversion before acceptance. Official platform records can have blank names;
+the app displays their code instead. Results are processed in original variant order after recovery,
 so a transient failure cannot change which variant supplies station metadata.
 
 R2 configuration uses bucket `transminuto-catalog` and custom hostname
