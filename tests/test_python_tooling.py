@@ -66,6 +66,50 @@ class InfoRutaShapeTests(unittest.TestCase):
                 build_catalog.info_route_stops(info)
 
 
+class RouteDetailRecoveryTests(unittest.TestCase):
+    def collect(self, responses):
+        rows = [{'id': str(i), 'nombre': 'Destination', 'codigo': 'A1'} for i in (1, 2)]
+        with patch.object(build_catalog, 'catalog_info', side_effect=responses) as request, \
+             patch.object(build_catalog.time, 'sleep'), redirect_stderr(io.StringIO()):
+            results = list(build_catalog.route_detail_results(rows, pause=0, retries=1, recovery_delay=0))
+        return results, request.call_count
+
+    def test_malformed_content_is_retried_then_only_failed_routes_get_recovery_pass(self):
+        good = {'recorrido': [{'id': '1', 'codigo': 'A', 'nombre': 'Stop'}]}
+        results, calls = self.collect([{'recorrido': None}, good, {'recorrido': None},
+                                      {'recorrido': None}, good])
+        self.assertEqual(calls, 5)
+        self.assertEqual([row['id'] for row, info, error in results], ['1', '2'])
+        self.assertTrue(all(error is None for row, info, error in results))
+
+    def test_persistent_content_failure_is_reported_after_bounded_attempts(self):
+        good = {'recorrido': [{'id': '1', 'codigo': 'A', 'nombre': 'Stop'}]}
+        results, calls = self.collect([{'recorrido': []}, {'recorrido': []}, good, {'recorrido': []}])
+        self.assertEqual(calls, 4)
+        self.assertEqual(sum(error is not None for row, info, error in results), 1)
+
+    def test_invalid_json_is_retried_as_a_content_failure(self):
+        good = {'recorrido': [{'id': '1', 'codigo': 'A', 'nombre': 'Stop'}]}
+        results, calls = self.collect([json.JSONDecodeError('invalid', '', 0), good, good])
+        self.assertEqual(calls, 3)
+        self.assertTrue(all(error is None for row, info, error in results))
+
+    def test_malformed_stop_rows_and_conversion_failures_are_retried(self):
+        good = {'recorrido': [{'codigo': 'A', 'nombre': 'Stop'}]}
+        for stop in ({}, {'codigo': 'A', 'nombre': 123},
+                     {'codigo': 'A', 'nombre': 'Stop', 'direccion': 123}):
+            with self.subTest(stop=stop):
+                results, calls = self.collect([{'recorrido': [stop]}, good, good])
+                self.assertEqual(calls, 3)
+                self.assertTrue(all(error is None for row, info, error in results))
+
+    def test_recovered_route_keeps_original_order(self):
+        good = {'recorrido': [{'codigo': 'A', 'nombre': 'Stop'}]}
+        results, calls = self.collect([{'recorrido': None}, {'recorrido': None}, good, good])
+        self.assertEqual(calls, 4)
+        self.assertEqual([row['id'] for row, info, error in results], ['1', '2'])
+
+
 class OperatingHoursTests(unittest.TestCase):
     def test_published_windows_survive_packing_with_source_identity_and_date(self):
         rows = [{"id": "12444", "codigo": "E48", "nombre": "CA\u0301D", "horarios": {"data": [
@@ -145,6 +189,7 @@ class CatalogRebuildTests(unittest.TestCase):
                     patch.object(build_catalog, "gis_query_all", return_value=[]), \
                     patch.object(build_catalog, "catalog_search_all", return_value=rows), \
                     patch.object(build_catalog, "catalog_info", side_effect=response) as fetch, \
+                    patch.object(build_catalog.time, "sleep"), \
                     redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
                 status = build_catalog.main()
             catalog = json.loads(output.read_text())
@@ -188,7 +233,7 @@ class CatalogRebuildTests(unittest.TestCase):
                 self.assertEqual(routes["2"], old[1])
                 self.assertEqual(set(routes), {"1", "2"})
                 self.assertEqual(len(catalog["service_hours"]), 2)
-                self.assertEqual(calls, 2)
+                self.assertEqual(calls, 5 if empty else 3)
                 self.assertEqual(catalog["failures"][0]["source"], "infoRuta")
 
 

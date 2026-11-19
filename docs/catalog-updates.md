@@ -138,6 +138,17 @@ with a 0.2-second pause between details. Transient network failures and selected
 HTTP failures receive up to two retries, with every attempt retained. It builds
 in runner scratch space; the checked-in catalog and Android asset are untouched.
 
+Malformed JSON, unexpected route-detail shapes, and empty stop lists also receive
+up to two content retries, with one- and two-second backoff. After the first
+collection pass, the builder waits 30 seconds and requests only failed variants
+once more. Each request still uses the transport retry policy. Successful variants
+are not fetched again. Every HTTP response remains captured, including rejected
+HTTP 200 bodies. An unresolved failure still invalidates the candidate; a retry
+never substitutes yesterday's details as a fresh response.
+Stop records must have nonempty string codes and names and pass route conversion
+before acceptance. Results are processed in original variant order after recovery,
+so a transient failure cannot change which variant supplies station metadata.
+
 R2 configuration uses bucket `transminuto-catalog` and custom hostname
 `https://transminuto-catalog.cpzhmlb.uk`. The bucket-scoped credential has Object
 Read & Write permissions, with no administration access or access to other
@@ -170,6 +181,8 @@ authenticated read-back and public HTTPS checksum verification. Evidence upload
 must complete before `current.json` can advance. Public download verification
 also checks `current.json` after updating it. Workflow concurrency serializes
 publication runs. Previous version objects remain available for recovery.
+Before refreshing `checked_at` for an unchanged catalog, the publisher verifies
+the existing manifest's catalog download, since it retains that older artifact.
 
 Public verification sends `User-Agent: transminuto-catalog/1.0`. The first
 R2 publication checks found that this domain rejected Python's default
@@ -182,8 +195,17 @@ Publication fails closed on missing or failed sources, incomplete or stale route
 details, duplicate identities, broken place/route joins, expired GTFS validity,
 or a GTFS archive older than two days. A loss of more than 10% of any compared
 record section also blocks publication. Ordinary removals must appear in two
-complete observations on different Bogotá calendar days. A failed source run or
-multiple manual runs on one day cannot confirm a removal. First publication
+complete observations on different Bogotá calendar days. Each report now carries
+`removal_evidence`, keyed by section and record identity, with `first_seen`,
+`last_seen`, and an `observations` count. Dates use Bogotá calendar days. Invalid
+or aborted collection preserves the ledger without advancing it. Multiple runs
+on one day count once. A valid observation in which the record reappears clears
+its pending removal. Evidence is also pruned when a removal is no longer relative
+to the published baseline. Existing valid reports without a ledger supply the
+first observation during migration. If the prior report cannot be read, the job
+fails without overwriting `latest-observation.json` and its evidence.
+
+First publication
 bootstraps from a complete fresh build and records a comparison with the bundled
 catalog. These checks are initial conservative rules to evaluate over daily runs.
 
@@ -203,6 +225,40 @@ R2 objects currently have no automatic deletion policy. GitHub artifacts also
 include loose response files so a timeout before archiving does not discard them.
 
 Android downloads and saved-board reconciliation remain separate future work.
+
+## Freshness monitoring
+
+`catalog-health.yml` checks the public `current.json` and
+`latest-observation.json` three times daily, independently of collection, and
+supports manual dispatch. It needs no R2 credentials. As with daily collection,
+GitHub may delay scheduled starts; these are monitoring opportunities rather
+than an exact delivery guarantee. The schedule takes effect on the default branch.
+
+The health summary distinguishes the latest collection outcome from published
+catalog freshness. It reports age since `generated_at` and age since `checked_at`.
+An unchanged catalog that passed a complete daily check remains fresh through
+its refreshed `checked_at`; a held or invalid candidate does not refresh that
+timestamp. More than 48 hours without a successful verification of the published
+catalog fails the health workflow and emits an error annotation. Missing,
+unreadable, malformed, or future-dated timestamps also fail the check. The monitor
+downloads the referenced compact catalog and verifies its size and SHA-256;
+an unavailable or corrupt artifact fails even when manifest timestamps are fresh.
+Collection metadata is evaluated independently: an unavailable or malformed
+`latest-observation.json` is reported without masking a healthy published catalog.
+Workflow
+failure notifications follow the repository's existing GitHub Actions notification
+settings; this does not create issues or send messages through another service.
+
+Daily reports include `publication_health` and emit a warning when stale, without
+turning an otherwise valid archived hold into a failed collection. Operators can
+run the same read-only check locally:
+
+```sh
+python3 tools/catalog_health.py --max-age-hours 48
+```
+
+Unconfirmed removals still hold the entire candidate. Selective publication and
+deterministic resolution of ambiguous joins require separate changes.
 
 ## Catalog identity and ordering
 

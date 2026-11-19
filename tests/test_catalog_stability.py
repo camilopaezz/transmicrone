@@ -19,7 +19,7 @@ from pack_android_catalog import pack
 
 
 class CatalogStabilityTests(unittest.TestCase):
-    def build(self, reverse=False, baseline=None, tm_code='TM0001', gis=None):
+    def build(self, reverse=False, baseline=None, tm_code='TM0001', gis=None, recover_first=None):
         tables = {
             'feed_info': [],
             'routes': [{'route_id': str(i), 'route_short_name': 'A1',
@@ -55,13 +55,34 @@ class CatalogStabilityTests(unittest.TestCase):
                 return list(reversed(values)) if reverse else values
             stop = {'id': '10', 'codigo': tm_code or 'unmapped', 'nombre': 'Station',
                     'posicion': 0, 'parada': '1'}
+            attempts = 0
+
+            def details(catalog_id, *args):
+                nonlocal attempts
+                if recover_first and catalog_id == '201':
+                    attempts += 1
+                    if attempts <= 3:
+                        return {'recorrido': None}
+                row = dict(stop)
+                if recover_first is not None:
+                    row['direccion'] = f'Address from variant {catalog_id}'
+                return {'recorrido': [row]}
+
             with patch.object(sys, 'argv', argv), patch.object(builder, 'read_csv', side_effect=read), \
                  patch.object(builder, 'gis_query_all', side_effect=query), \
                  patch.object(builder, 'catalog_search_all', return_value=list(reversed(rows)) if reverse else rows), \
-                 patch.object(builder, 'catalog_info', return_value={'recorrido': [stop]}), \
+                 patch.object(builder, 'catalog_info', side_effect=details), \
+                 patch.object(builder.time, 'sleep'), \
                  redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
                 self.assertEqual(builder.main(), 0)
             return json.loads((work / 'catalog.json').read_text())
+
+    def test_recovery_order_does_not_change_station_metadata(self):
+        first = self.build(recover_first=False)
+        recovered = self.build(recover_first=True)
+        for section in daily.SECTIONS:
+            self.assertEqual(daily.records(first, section), daily.records(recovered, section))
+        self.assertEqual(daily.clean(pack(first)), daily.clean(pack(recovered)))
 
     def test_permuting_unique_source_rows_preserves_content_and_packed_catalog(self):
         first, second = self.build(), self.build(reverse=True)

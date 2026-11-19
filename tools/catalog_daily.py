@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import gzip
 import hashlib
 import json
@@ -18,6 +19,7 @@ from zoneinfo import ZoneInfo
 import build_catalog
 from pack_android_catalog import pack
 from probe_catalog_sources import ResponseCapture
+from catalog_health import publication_health
 
 SECTIONS = {
     "places": "place_id", "servicios": "route_id", "service_hours": "catalog_id",
@@ -90,6 +92,20 @@ def compare(before: dict, after: dict) -> dict:
     return result
 
 
+def prior_removal_evidence(observation: dict | None) -> dict:
+    """Carry evidence through failed runs and migrate the old one-day report."""
+    if not observation:
+        return {}
+    if 'removal_evidence' in observation:
+        return copy.deepcopy(observation['removal_evidence'])
+    if not observation.get('valid'):
+        return {}
+    day = datetime.fromisoformat(observation['started_at']).astimezone(ZoneInfo('America/Bogota')).date().isoformat()
+    return {section: {identity: {'first_seen': day, 'last_seen': day, 'observations': 1}
+                      for identity in change.get('removed', [])}
+            for section, change in observation.get('changes', {}).items()}
+
+
 def assess(catalog: dict, baseline: dict, build_exit: int, now: datetime, prior_observation: dict | None = None) -> dict:
     errors, holds = [], []
     if build_exit:
@@ -135,22 +151,34 @@ def assess(catalog: dict, baseline: dict, build_exit: int, now: datetime, prior_
         errors.append('Missing or invalid GTFS dates')
     changes = compare(baseline, catalog)
     for section, change in changes.items():
-        if baseline and change['removed']:
-            confirmed = set()
-            if prior_observation and prior_observation.get('valid'):
-                # Different Bogotá calendar days, not repeated manual runs of one snapshot.
-                prior_day = datetime.fromisoformat(prior_observation['started_at']).astimezone(ZoneInfo('America/Bogota')).date()
-                today = now.astimezone(ZoneInfo('America/Bogota')).date()
-                if prior_day < today:
-                    confirmed = set(prior_observation.get('changes', {}).get(section, {}).get('removed', []))
-            unconfirmed = set(change['removed']) - confirmed
-            if unconfirmed:
-                holds.append(f"{section}: {len(unconfirmed)} removed identities need a second complete daily observation")
         old_count = len(baseline.get(section, []))
         if old_count and len(catalog.get(section, [])) < old_count * 0.9:
             errors.append(f'{section}: more than 10% of records disappeared')
+    evidence = prior_removal_evidence(prior_observation)
+    if not errors:
+        # A valid reappearance clears evidence. Invalid collections neither count
+        # missing records nor clear previously observed absences.
+        today = now.astimezone(ZoneInfo('America/Bogota')).date().isoformat()
+        updated = {}
+        for section, change in changes.items():
+            updated[section] = {}
+            for identity in change['removed']:
+                previous = evidence.get(section, {}).get(identity)
+                if previous and previous['last_seen'] <= today:
+                    entry = dict(previous)
+                    if previous['last_seen'] < today:
+                        entry.update(last_seen=today, observations=previous['observations'] + 1)
+                else:
+                    entry = {'first_seen': today, 'last_seen': today, 'observations': 1}
+                updated[section][identity] = entry
+        evidence = updated
+    for section, change in changes.items():
+        unconfirmed = [identity for identity in change['removed']
+                       if evidence.get(section, {}).get(identity, {}).get('observations', 0) < 2]
+        if unconfirmed:
+            holds.append(f"{section}: {len(unconfirmed)} removed identities need a second complete daily observation")
     return {'valid': not errors, 'promotable': not errors and not holds,
-            'errors': errors, 'holds': holds, 'changes': changes}
+            'errors': errors, 'holds': holds, 'changes': changes, 'removal_evidence': evidence}
 
 
 class R2:
@@ -212,6 +240,8 @@ def main():
     now = datetime.now(timezone.utc)
     version = now.strftime('%Y%m%dT%H%M%SZ') + '-' + os.environ.get('GITHUB_RUN_ID', 'local') + '-' + os.environ.get('GITHUB_RUN_ATTEMPT', '1')
     store, previous_manifest, prior_observation, baseline = None, None, None, {}
+    published_manifest = None
+    observation_loaded = False
     report = {'version': version, 'started_at': now.isoformat(), 'mode': 'build-only' if args.build_only else 'r2',
               'run_url': f"https://github.com/{os.environ.get('GITHUB_REPOSITORY', 'camilopaezz/transmicrone')}/actions/runs/{os.environ.get('GITHUB_RUN_ID', '')}"}
     code = 1
@@ -220,8 +250,12 @@ def main():
             store = R2()
             previous = store.read('current.json')
             previous_manifest = json.loads(previous) if previous else None
+            published_manifest = previous_manifest
             observation = store.read('latest-observation.json')
             prior_observation = json.loads(observation) if observation else None
+            # Preserve the ledger even if collection aborts before assessment.
+            report['removal_evidence'] = prior_removal_evidence(prior_observation)
+            observation_loaded = True
             if previous_manifest:
                 raw = store.read(previous_manifest['source_catalog']['key'])
                 if raw is None or sha(raw) != previous_manifest['source_catalog']['sha256']:
@@ -296,29 +330,43 @@ def main():
                 promote = code == 0 and report.get('promotable', False)
                 if promote and report.get('publication') != 'unchanged':
                     report['publication'] = 'ready'
+                report['publication_health'] = publication_health(published_manifest, datetime.now(timezone.utc))
                 # Persist the assessment and change evidence before changing the published pointer.
                 store.put(f'observations/{version}/report.json', encode(report))
-                store.put('latest-observation.json', encode(report), mutable=True)
+                if observation_loaded:
+                    store.put('latest-observation.json', encode(report), mutable=True)
                 if promote and report.get('publication') != 'unchanged':
                     current = store.put('current.json', encode(report['manifest']), mutable=True)
                     report['publication'] = 'published'
                     verify_public(current)
+                    published_manifest = report['manifest']
                 elif promote:
+                    # The retained manifest points at the previous object, not
+                    # the newly built candidate that was verified above.
+                    verify_public(previous_manifest['catalog'])
                     refreshed = {**previous_manifest, 'checked_at': now.isoformat(), 'last_checked_run_url': report['run_url']}
                     current = store.put('current.json', encode(refreshed), mutable=True)
                     verify_public(current)
+                    published_manifest = refreshed
+                report['publication_health'] = publication_health(published_manifest, datetime.now(timezone.utc))
                 store.put(f'observations/{version}/publication.json', encode({
                     'publication': report.get('publication', 'failed'),
                     'finished_at': datetime.now(timezone.utc).isoformat(),
+                    'publication_health': report['publication_health'],
                 }))
-                store.put('latest-observation.json', encode(report), mutable=True)
+                if observation_loaded:
+                    store.put('latest-observation.json', encode(report), mutable=True)
         except Exception as error:
             report['publication_error'] = str(error)
             code = 1
             traceback.print_exc()
         report['finished_at'] = datetime.now(timezone.utc).isoformat()
+        if store:
+            report['publication_health'] = publication_health(published_manifest, datetime.now(timezone.utc))
+            if report['publication_health']['status'] != 'fresh':
+                print('::warning title=Catalog freshness::Published catalog has not been successfully verified within 48 hours, or its manifest is unavailable. See the report.', flush=True)
         (out / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
-        summary = f"Catalog {version}: {report.get('publication', 'failed')}\n\n" + json.dumps({key: report.get(key) for key in ('counts', 'errors', 'holds', 'source_warnings', 'error', 'publication_error')}, ensure_ascii=False, indent=2)
+        summary = f"Catalog {version}: {report.get('publication', 'failed')}\n\n" + json.dumps({key: report.get(key) for key in ('counts', 'errors', 'holds', 'publication_health', 'source_warnings', 'error', 'publication_error')}, ensure_ascii=False, indent=2)
         print(summary, flush=True)
         if code == 0 and report.get('valid') and not report.get('promotable'):
             print('::notice title=Catalog publication held::Valid candidate and evidence saved; current catalog retained pending removal confirmation.', flush=True)

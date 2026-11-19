@@ -221,6 +221,60 @@ def info_route_stops(info: object) -> list[dict]:
     return stops
 
 
+def route_detail_results(rows: list[dict], pause: float, retries: int = 2, recovery_delay: float = 30):
+    """Retry invalid content, then revisit failed variants once after collection.
+
+    The HTTP client handles transport retries. Every call still goes through
+    response capture in the daily publisher, including rejected HTTP 200 bodies.
+    Only final failures enter the catalog's completeness assessment.
+    """
+    pending = list(enumerate(rows))
+    results = {}
+    for recovery in (False, True):
+        failed = []
+        if recovery:
+            if not pending:
+                break
+            print(f"infoRuta recovery candidates={len(pending)}", file=sys.stderr)
+            time.sleep(recovery_delay)
+        for i, (index, row) in enumerate(pending, 1):
+            info, error = None, None
+            for attempt in range(1 if recovery else retries + 1):
+                try:
+                    info = catalog_info(str(row['id']), nfc(row['nombre']), str(row['codigo']))
+                    stops = info_route_stops(info)
+                    if not stops:
+                        raise ValueError('No route stops returned')
+                    if any(not isinstance(stop.get(field), str) or not stop[field].strip()
+                           for stop in stops for field in ('codigo', 'nombre')):
+                        raise ValueError('Route stops require nonempty string codigo and nombre')
+                    # Conversion must also succeed before the content is accepted.
+                    service_route(row, info, '')
+                    error = None
+                    break
+                except (ValueError, TypeError) as failure:
+                    error = str(failure)
+                    print(f"infoRuta {row['id']} rejected content: {error}", file=sys.stderr)
+                    if not recovery and attempt < retries:
+                        time.sleep(2 ** attempt)
+                except Exception as failure:
+                    error = str(failure)
+                    break
+            if error is None:
+                results[index] = row, info, None
+            elif recovery:
+                results[index] = row, None, error
+            else:
+                failed.append((index, row))
+            if i % 25 == 0:
+                print(f"  infoRuta {'recovery' if recovery else 'collection'} {i}/{len(pending)}", file=sys.stderr)
+            time.sleep(pause)
+        pending = failed
+    # First-match station metadata must not depend on which request needed retry.
+    for index in range(len(rows)):
+        yield results[index]
+
+
 def service_operating_hours(rows: list[dict], fetched_at: str) -> list[dict]:
     """Keep published hours in the catalog API's own direction/variant namespace."""
     result = []
@@ -471,9 +525,10 @@ def main() -> int:
         if args.info_limit:
             candidates = candidates[: args.info_limit]
         print(f"infoRuta candidates={len(candidates)}", file=sys.stderr)
-        for i, r in enumerate(candidates, 1):
+        for r, info, fetch_error in route_detail_results(candidates, args.sleep):
             try:
-                info = catalog_info(str(r.get("id")), nfc(r.get("nombre")), str(r.get("codigo")))
+                if fetch_error is not None:
+                    raise ValueError(fetch_error)
                 rec = info_route_stops(info)
                 if not rec:
                     raise ValueError("No route stops returned")
@@ -513,9 +568,6 @@ def main() -> int:
                         "error": str(e),
                     }
                 )
-            if i % 25 == 0:
-                print(f"  infoRuta {i}/{len(candidates)} tm_nodos={len(tm_by_nodo)}", file=sys.stderr)
-            time.sleep(args.sleep)
         sources.append(
             {
                 "kind": "catalog-infoRuta",

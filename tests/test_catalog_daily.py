@@ -8,7 +8,7 @@ import tempfile
 import unittest
 import urllib.request
 from contextlib import redirect_stdout, redirect_stderr
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -100,6 +100,70 @@ class AssessmentTests(unittest.TestCase):
                      'changes': {'places': {'removed': ['old-id']}}}
             self.assertFalse(daily.assess(value, baseline, 0, datetime.now(timezone.utc), prior)['promotable'])
 
+    def test_removal_evidence_survives_invalid_day_without_counting_it(self):
+        value = candidate()
+        baseline = copy.deepcopy(value)
+        baseline['places'][0]['place_id'] = 'old-id'
+        now = datetime.now(timezone.utc)
+        value['sources'][0]['name'] = (now - timedelta(days=2)).strftime('GTFS_%Y%m%d.zip')
+        first = daily.assess(value, baseline, 0, now - timedelta(days=2))
+        self.assertTrue(first['valid'], first)
+        first['started_at'] = (now - timedelta(days=2)).isoformat()
+        failed = daily.assess(value, baseline, 1, now - timedelta(days=1), first)
+        self.assertEqual(failed['removal_evidence'], first['removal_evidence'])
+        failed['started_at'] = (now - timedelta(days=1)).isoformat()
+        final = daily.assess(value, baseline, 0, now, failed)
+        self.assertTrue(final['promotable'], final)
+        self.assertEqual(final['removal_evidence']['places']['old-id']['observations'], 2)
+
+    def test_same_day_retries_do_not_add_removal_evidence(self):
+        value = candidate()
+        baseline = copy.deepcopy(value)
+        baseline['places'][0]['place_id'] = 'old-id'
+        now = datetime.now(timezone.utc)
+        first = daily.assess(value, baseline, 0, now)
+        first['started_at'] = now.isoformat()
+        again = daily.assess(value, baseline, 0, now, first)
+        self.assertFalse(again['promotable'])
+        self.assertEqual(again['removal_evidence'], first['removal_evidence'])
+
+    def test_reappearance_resets_pending_removal(self):
+        value = candidate()
+        baseline = copy.deepcopy(value)
+        baseline['places'][0]['place_id'] = 'old-id'
+        now = datetime.now(timezone.utc)
+        value['sources'][0]['name'] = (now - timedelta(days=2)).strftime('GTFS_%Y%m%d.zip')
+        first = daily.assess(value, baseline, 0, now - timedelta(days=2))
+        self.assertTrue(first['valid'], first)
+        first['started_at'] = (now - timedelta(days=2)).isoformat()
+        reappeared = copy.deepcopy(baseline)
+        reappeared['serving'][0]['place_id'] = 'old-id'
+        reappeared['sources'] = copy.deepcopy(value['sources'])
+        returned = daily.assess(reappeared, baseline, 0, now - timedelta(days=1), first)
+        self.assertTrue(returned['valid'], returned)
+        returned['started_at'] = (now - timedelta(days=1)).isoformat()
+        self.assertFalse(returned['removal_evidence'].get('places'))
+        missing = daily.assess(value, baseline, 0, now, returned)
+        self.assertFalse(missing['promotable'])
+        self.assertEqual(missing['removal_evidence']['places']['old-id']['observations'], 1)
+
+    def test_confirmation_uses_bogota_day_boundaries(self):
+        value = candidate()
+        baseline = copy.deepcopy(value)
+        baseline['places'][0]['place_id'] = 'old-id'
+        today = datetime.now(timezone.utc).replace(hour=5, minute=30)
+        value['sources'][0]['name'] = (today - timedelta(days=1)).strftime('GTFS_%Y%m%d.zip')
+        first = daily.assess(value, baseline, 0, today - timedelta(hours=1))
+        self.assertTrue(first['valid'])
+        second = daily.assess(value, baseline, 0, today, first)
+        self.assertTrue(second['promotable'])
+        # Different UTC dates can still be the same calendar day in Bogotá.
+        late = today.replace(hour=1)
+        first = daily.assess(value, baseline, 0, late - timedelta(hours=2))
+        self.assertTrue(first['valid'])
+        second = daily.assess(value, baseline, 0, late, first)
+        self.assertFalse(second['promotable'])
+
 
 class FakeR2:
     def __init__(self, archive_fails=False, report_fails=False):
@@ -125,10 +189,12 @@ class FakeR2:
 
 
 class PublicationTests(unittest.TestCase):
-    def run_daily(self, store, value=None):
+    def run_daily(self, store, value=None, build_error=None):
         value = candidate() if value is None else value
 
         def build():
+            if build_error:
+                raise RuntimeError(build_error)
             output = Path(sys.argv[sys.argv.index('--out') + 1])
             identity_baseline = Path(sys.argv[sys.argv.index('--identity-baseline') + 1])
             identities = json.loads(identity_baseline.read_text())
@@ -193,6 +259,20 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual(current['version'], original['version'])
         self.assertGreaterEqual(current['checked_at'], original['checked_at'])
 
+    def test_unchanged_candidate_cannot_refresh_a_corrupt_retained_download(self):
+        store = FakeR2()
+        self.assertEqual(self.run_daily(store)[0], 0)
+        original = json.loads(store.objects['current.json'])
+        original['catalog'].update(key='retained/catalog.json.gz',
+                                   url='https://catalog.test/retained/catalog.json.gz')
+        store.objects['retained/catalog.json.gz'] = b'corrupt'
+        store.objects['current.json'] = daily.encode(original)
+        previous = store.objects['current.json']
+        result, report = self.run_daily(store)
+        self.assertEqual(result, 1)
+        self.assertIn('checksum mismatch', report['publication_error'])
+        self.assertEqual(store.objects['current.json'], previous)
+
     def test_unchanged_legacy_digest_does_not_force_publication_after_canonicalization(self):
         store = FakeR2()
         self.assertEqual(self.run_daily(store)[0], 0)
@@ -233,6 +313,56 @@ class PublicationTests(unittest.TestCase):
         self.assertFalse(report['valid'])
         self.assertEqual(report['publication'], 'invalid')
         self.assertEqual(store.objects['current.json'], previous)
+
+    def test_aborted_build_preserves_evidence_and_later_valid_day_confirms_removal(self):
+        store = FakeR2()
+        self.assertEqual(self.run_daily(store)[0], 0)
+        yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).astimezone(daily.ZoneInfo('America/Bogota')).date().isoformat()
+        ledger = {'places': {'p1': {'first_seen': yesterday, 'last_seen': yesterday, 'observations': 1}}}
+        ledger['serving'] = {'p1:1': dict(ledger['places']['p1'])}
+        store.objects['latest-observation.json'] = daily.encode({'valid': True, 'removal_evidence': ledger})
+        result, failed = self.run_daily(store, build_error='source unavailable')
+        self.assertEqual(result, 1)
+        self.assertEqual(json.loads(store.objects['latest-observation.json'])['removal_evidence'], ledger)
+        self.assertNotIn('valid', failed)
+        value = candidate()
+        value['places'][0]['place_id'] = 'replacement'
+        value['serving'][0]['place_id'] = 'replacement'
+        result, report = self.run_daily(store, value)
+        self.assertEqual(result, 0)
+        self.assertEqual(report['publication'], 'published')
+        self.assertEqual(report['removal_evidence']['places']['p1']['observations'], 2)
+
+    def test_failure_to_read_observation_cannot_overwrite_its_evidence(self):
+        store = FakeR2()
+        self.assertEqual(self.run_daily(store)[0], 0)
+        saved = store.objects['latest-observation.json']
+        read = store.read
+
+        def unavailable(name):
+            if name == 'latest-observation.json':
+                raise RuntimeError('R2 read failed')
+            return read(name)
+
+        with patch.object(store, 'read', side_effect=unavailable):
+            self.assertEqual(self.run_daily(store)[0], 1)
+        self.assertEqual(store.objects['latest-observation.json'], saved)
+
+    def test_hold_reports_published_age_without_refreshing_check_time(self):
+        store = FakeR2()
+        self.assertEqual(self.run_daily(store)[0], 0)
+        current = json.loads(store.objects['current.json'])
+        old = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
+        current.update(checked_at=old, generated_at=old)
+        store.objects['current.json'] = daily.encode(current)
+        value = candidate()
+        value['places'][0]['place_id'] = 'replacement'
+        value['serving'][0]['place_id'] = 'replacement'
+        result, report = self.run_daily(store, value)
+        self.assertEqual(result, 0)
+        self.assertEqual(report['publication'], 'held')
+        self.assertEqual(report['publication_health']['status'], 'stale')
+        self.assertEqual(json.loads(store.objects['current.json'])['checked_at'], old)
 
     def test_evidence_failure_during_hold_still_fails(self):
         for failure in ('archive_fails', 'report_fails'):
