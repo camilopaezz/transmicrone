@@ -11,9 +11,29 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from probe_catalog_sources import ResponseCapture
+import build_catalog
 
 
 class CaptureTests(unittest.TestCase):
+    def test_content_retries_retain_every_original_response(self):
+        bodies = [b'<html>upstream failure</html>', b'{"recorrido":null}',
+                  b'{"recorrido":[{"id":"1","codigo":"A","nombre":"Stop"}]}']
+        responses = []
+        for body in bodies:
+            response = io.BytesIO(body)
+            response.status = 200
+            response.headers = {'Content-Type': 'application/json'}
+            responses.append(response)
+        with tempfile.TemporaryDirectory() as temp, \
+             patch('urllib.request.urlopen', side_effect=responses), \
+             patch.object(build_catalog.time, 'sleep'):
+            capture = ResponseCapture(Path(temp), retries=2)
+            with patch.object(build_catalog, 'http_json', capture.http_json):
+                result = list(build_catalog.route_detail_results(
+                    [{'id': '1', 'nombre': 'One', 'codigo': 'A1'}], pause=0))
+            self.assertIsNone(result[0][2])
+            self.assertEqual([path.read_bytes() for path in sorted(Path(temp).glob('*.body'))], bodies)
+
     def test_preserves_invalid_json_before_parse_failure(self):
         response = io.BytesIO(b"<html>upstream failure</html>")
         response.status = 200
