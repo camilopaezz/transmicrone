@@ -5,6 +5,7 @@ import co.camilo.transmicrone.BuildConfig
 import co.camilo.transmicrone.data.ArrivalsRepository
 import co.camilo.transmicrone.data.catalog.CatalogRepository
 import co.camilo.transmicrone.data.catalog.JsonCatalogRepository
+import co.camilo.transmicrone.data.catalog.PublishedCatalogRepository
 import co.camilo.transmicrone.data.catalog.CatalogRouteRepository
 import co.camilo.transmicrone.data.feed.ArrivalsParser
 import co.camilo.transmicrone.data.feed.BodegaFeedClient
@@ -18,6 +19,7 @@ import co.camilo.transmicrone.data.local.InstallationId
 import co.camilo.transmicrone.domain.Clock
 import co.camilo.transmicrone.domain.SystemClock
 import kotlinx.serialization.json.Json
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.io.File
 
 class AppContainer(
@@ -35,9 +37,19 @@ class AppContainer(
 ) {
     val json: Json = json
 
-    // Android's asset merger expands .gz sources and removes their .gz suffix.
-    val catalog: CatalogRepository = catalogRepository ?: JsonCatalogRepository(json, gzip = false) {
-        context.assets.open("catalog.json")
+    private val publishedCatalog = if (catalogRepository == null) PublishedCatalogRepository(
+        bundled = {
+            // Android's asset merger expands .gz sources and removes their .gz suffix.
+            JsonCatalogRepository(json, gzip = false) { context.assets.open("catalog.json") }
+        },
+        cache = File(context.filesDir, "published-catalog.json.gz"),
+        catalogUrl = "https://transminuto-catalog.cpzhmlb.uk/catalog/".toHttpUrl(),
+    ) else null
+
+    val catalog: CatalogRepository = catalogRepository ?: requireNotNull(publishedCatalog)
+
+    internal fun checkForCatalogUpdate() {
+        publishedCatalog?.checkForUpdate()
     }
 
     val boards: BoardRepository = boardRepository ?: DataStoreBoardRepository(context, json)

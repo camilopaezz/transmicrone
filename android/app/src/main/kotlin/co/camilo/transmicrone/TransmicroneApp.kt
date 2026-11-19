@@ -1,7 +1,11 @@
 package co.camilo.transmicrone
 
 import android.app.Application
+import android.util.Log
 import co.camilo.transmicrone.di.AppContainer
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class TransmicroneApp : Application() {
     lateinit var container: AppContainer
@@ -10,5 +14,12 @@ class TransmicroneApp : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                container.checkForCatalogUpdate()
+            } catch (failure: Exception) {
+                Log.w("PublishedCatalog", "Catalog update unavailable", failure)
+            }
+        }
     }
 }
