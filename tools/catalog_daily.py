@@ -11,6 +11,7 @@ import os
 import sys
 import tarfile
 import traceback
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
@@ -107,7 +108,7 @@ def prior_removal_evidence(observation: dict | None) -> dict:
 
 
 def assess(catalog: dict, baseline: dict, build_exit: int, now: datetime, prior_observation: dict | None = None) -> dict:
-    errors, holds = [], []
+    errors = []
     if build_exit:
         errors.append(f"Builder exited {build_exit}")
     if catalog.get("schema_version") != 1:
@@ -152,7 +153,7 @@ def assess(catalog: dict, baseline: dict, build_exit: int, now: datetime, prior_
     changes = compare(baseline, catalog)
     for section, change in changes.items():
         old_count = len(baseline.get(section, []))
-        if old_count and len(catalog.get(section, [])) < old_count * 0.9:
+        if old_count and len(change['removed']) * 10 > old_count:
             errors.append(f'{section}: more than 10% of records disappeared')
     evidence = prior_removal_evidence(prior_observation)
     if not errors:
@@ -172,13 +173,85 @@ def assess(catalog: dict, baseline: dict, build_exit: int, now: datetime, prior_
                     entry = {'first_seen': today, 'last_seen': today, 'observations': 1}
                 updated[section][identity] = entry
         evidence = updated
-    for section, change in changes.items():
-        unconfirmed = [identity for identity in change['removed']
-                       if evidence.get(section, {}).get(identity, {}).get('observations', 0) < 2]
-        if unconfirmed:
-            holds.append(f"{section}: {len(unconfirmed)} removed identities need a second complete daily observation")
-    return {'valid': not errors, 'promotable': not errors and not holds,
-            'errors': errors, 'holds': holds, 'changes': changes, 'removal_evidence': evidence}
+    pending = {section: [identity for identity in change['removed']
+                         if evidence.get(section, {}).get(identity, {}).get('observations', 0) < 2]
+               for section, change in changes.items()}
+    return {'valid': not errors, 'promotable': not errors,
+            'errors': errors, 'holds': [], 'pending_removals': pending,
+            'changes': changes, 'removal_evidence': evidence}
+
+
+def publication_catalog(candidate: dict, baseline: dict, pending: dict) -> tuple[dict, dict]:
+    """Retain uncertain removals and their dependencies without replacing fresh rows.
+
+    Assessment and removal evidence always use the unmodified source observation.
+    The returned catalog alone is packed, hashed, and used as the next baseline.
+    """
+    merged = copy.deepcopy(candidate)
+    # Preserve fetched_at and all other provenance on retained rows.
+    def indexed(catalog, section):
+        key = SECTIONS[section]
+        return {str(row[key]) if key else f"{row['place_id']}:{row['route_id']}": copy.deepcopy(row)
+                for row in catalog.get(section, [])}
+    rows = {section: indexed(candidate, section) for section in SECTIONS}
+    old = {section: indexed(baseline, section) for section in SECTIONS}
+    retained = {section: {} for section in SECTIONS}
+
+    def retain(section, identity, reason):
+        if identity not in rows[section]:
+            if identity not in old[section]:
+                raise ValueError(f'Missing publication dependency: {section}/{identity}')
+            rows[section][identity] = old[section][identity]
+            retained[section][identity] = reason
+
+    for section, identities in pending.items():
+        for identity in identities:
+            retain(section, identity, 'pending_removal')
+    for edge in rows['serving'].values():
+        retain('places', edge['place_id'], 'serving_dependency')
+        retain('servicios', str(edge['route_id']), 'serving_dependency')
+    for service in rows['servicios'].values():
+        ids = set(map(str, service.get('catalog_ids_sharing_painted', [])))
+        if service.get('catalog_id') is not None:
+            ids.add(str(service['catalog_id']))
+        for identity in ids:
+            for section in ('service_hours', 'service_routes'):
+                # These catalog IDs are optional metadata; older baselines can
+                # reference an ID that neither source ever supplied.
+                if identity in old[section]:
+                    retain(section, identity, 'service_dependency')
+
+    edges_by_place = {identity: [] for identity in rows['places']}
+    for edge in rows['serving'].values():
+        service = rows['servicios'][str(edge['route_id'])]
+        edge['painted'] = service.get('painted')
+        edges_by_place[edge['place_id']].append(edge['route_id'])
+    for identity, place in rows['places'].items():
+        ids = sorted(edges_by_place[identity], key=str)
+        place['served_route_ids'] = [str(rid) for rid in ids]
+        place['served_painted'] = sorted({rows['servicios'][str(rid)]['painted'] for rid in ids
+                                         if rows['servicios'][str(rid)].get('painted')})
+    for section in SECTIONS:
+        merged[section] = [rows[section][key] for key in sorted(rows[section])]
+    merged['counts'] = {**candidate.get('counts', {}),
+                        'places': len(merged['places']), 'servicios': len(merged['servicios']),
+                        'serving_edges': len(merged['serving']),
+                        'estaciones': sum(p.get('kind') == 'estacion' for p in merged['places']),
+                        'paraderos': sum(p.get('kind') == 'paradero' for p in merged['places']),
+                        'estaciones_with_tm': sum(p.get('kind') == 'estacion' and bool(p.get('tm_code'))
+                                                  for p in merged['places'])}
+    merged['retained_records'] = retained
+    return merged, retained
+
+
+class PublicBaseline:
+    """Read the published baseline for PR previews without storage credentials."""
+    def read(self, name):
+        request = urllib.request.Request(
+            'https://transminuto-catalog.cpzhmlb.uk/catalog/' + name,
+            headers={'User-Agent': 'transminuto-catalog/1.0'})
+        with urllib.request.urlopen(request, timeout=60) as response:
+            return response.read()
 
 
 class R2:
@@ -234,7 +307,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--build-only', action='store_true', help='Exercise collection without configured R2')
+    parser.add_argument('--preview', action='store_true',
+                        help='Assess selective publication against public baseline without R2 writes')
     args = parser.parse_args()
+    if args.preview and args.build_only:
+        parser.error('--preview and --build-only are mutually exclusive')
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
     now = datetime.now(timezone.utc)
@@ -242,22 +319,24 @@ def main():
     store, previous_manifest, prior_observation, baseline = None, None, None, {}
     published_manifest = None
     observation_loaded = False
-    report = {'version': version, 'started_at': now.isoformat(), 'mode': 'build-only' if args.build_only else 'r2',
+    report = {'version': version, 'started_at': now.isoformat(), 'mode': 'preview' if args.preview else ('build-only' if args.build_only else 'r2'),
               'run_url': f"https://github.com/{os.environ.get('GITHUB_REPOSITORY', 'camilopaezz/transmicrone')}/actions/runs/{os.environ.get('GITHUB_RUN_ID', '')}"}
     code = 1
     try:
         if not args.build_only:
-            store = R2()
-            previous = store.read('current.json')
+            reader = PublicBaseline() if args.preview else R2()
+            if not args.preview:
+                store = reader
+            previous = reader.read('current.json')
             previous_manifest = json.loads(previous) if previous else None
             published_manifest = previous_manifest
-            observation = store.read('latest-observation.json')
+            observation = reader.read('latest-observation.json')
             prior_observation = json.loads(observation) if observation else None
             # Preserve the ledger even if collection aborts before assessment.
             report['removal_evidence'] = prior_removal_evidence(prior_observation)
             observation_loaded = True
             if previous_manifest:
-                raw = store.read(previous_manifest['source_catalog']['key'])
+                raw = reader.read(previous_manifest['source_catalog']['key'])
                 if raw is None or sha(raw) != previous_manifest['source_catalog']['sha256']:
                     raise RuntimeError('Previous R2 catalog missing or checksum mismatch')
                 baseline = json.loads(gzip.decompress(raw))
@@ -284,16 +363,27 @@ def main():
         # The bundled catalog is useful for first-run comparison, but is not a prior publication.
         assessment['changes'] = compare(baseline, candidate)
         report.update(assessment)
-        report['counts'] = candidate['counts']
+        report['observed_counts'] = candidate['counts']
+        publication = candidate
+        if assessment['valid']:
+            publication, report['retained_records'] = publication_catalog(
+                candidate, baseline if previous_manifest else {}, assessment['pending_removals'])
+        report['counts'] = publication['counts']
+        report['published_changes'] = compare(baseline, publication)
+        (out / 'publication-catalog.json').write_bytes(encode(publication))
         report['source_failures'] = candidate['failures']
         report['source_warnings'] = candidate.get('warnings', [])
-        payload = {section: records(candidate, section) for section in SECTIONS}
+        payload = {section: records(publication, section) for section in SECTIONS}
         report['content_sha256'] = sha(encode(payload))
-        packed = gzip.compress(encode(pack(candidate)), mtime=0)
+        packed = gzip.compress(encode(pack(publication)), mtime=0)
         (out / 'catalog.json.gz').write_bytes(packed)
-        source = gzip.compress(encode(candidate), mtime=0)
+        source = gzip.compress(encode(publication), mtime=0)
         (out / 'source-catalog.json.gz').write_bytes(source)
         (out / 'changes.json').write_bytes(encode(assessment['changes']))
+        baseline_payload = {section: records(baseline, section) for section in SECTIONS}
+        unchanged = previous_manifest and sha(encode(baseline_payload)) == report['content_sha256']
+        if args.preview:
+            report['preview_result'] = 'invalid' if not assessment['valid'] else ('unchanged' if unchanged else 'publish')
         if store:
             base = f'versions/{version}'
             source_object = store.put(f'{base}/source-catalog.json.gz', source, 'application/gzip')
@@ -306,16 +396,12 @@ def main():
             # Public read-back exercises the same path a future app will use.
             for obj in (artifact, report['candidate_manifest']):
                 verify_public(obj)
-            # Recompute using today's canonical comparison so an older digest format
-            # cannot force publication when only irrelevant ordering changed.
-            baseline_payload = {section: records(baseline, section) for section in SECTIONS}
-            unchanged = previous_manifest and sha(encode(baseline_payload)) == report['content_sha256']
-            report['publication'] = 'invalid' if not assessment['valid'] else ('unchanged' if unchanged else 'held')
-            # Archive evidence before promoting the pointer, even when validation holds it.
+            report['publication'] = 'invalid' if not assessment['valid'] else ('unchanged' if unchanged else 'pending')
+            # Archive evidence before promoting the pointer.
             report['manifest'] = manifest
         else:
-            report['publication'] = 'build-only'
-        # A valid observation can succeed while removal confirmation prevents promotion.
+            report['publication'] = ('preview' if assessment['valid'] else 'invalid') if args.preview else 'build-only'
+        # Invalid source observations never advance the published pointer.
         code = 0 if assessment['valid'] else 1
     except Exception as error:
         report['error'] = str(error)
@@ -366,10 +452,10 @@ def main():
             if report['publication_health']['status'] != 'fresh':
                 print('::warning title=Catalog freshness::Published catalog has not been successfully verified within 48 hours, or its manifest is unavailable. See the report.', flush=True)
         (out / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
-        summary = f"Catalog {version}: {report.get('publication', 'failed')}\n\n" + json.dumps({key: report.get(key) for key in ('counts', 'errors', 'holds', 'publication_health', 'source_warnings', 'error', 'publication_error')}, ensure_ascii=False, indent=2)
+        summary = f"Catalog {version}: {report.get('publication', 'failed')}\n\n" + json.dumps({key: report.get(key) for key in ('preview_result', 'counts', 'errors', 'pending_removals', 'retained_records', 'publication_health', 'source_warnings', 'error', 'publication_error')}, ensure_ascii=False, indent=2)
         print(summary, flush=True)
-        if code == 0 and report.get('valid') and not report.get('promotable'):
-            print('::notice title=Catalog publication held::Valid candidate and evidence saved; current catalog retained pending removal confirmation.', flush=True)
+        if code == 0 and any(report.get('retained_records', {}).values()):
+            print('::notice title=Catalog removals deferred::Validated catalog prepared; uncertain removals and required dependencies retained. See the report.', flush=True)
         if os.environ.get('GITHUB_STEP_SUMMARY'):
             with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as stream:
                 stream.write('## Daily catalog\n\n```\n' + summary + '\n```\n')
