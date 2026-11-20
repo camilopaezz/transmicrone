@@ -9,6 +9,11 @@ on:
         description: Collect and build without R2 publication
         type: boolean
         default: false
+  pull_request:
+    paths:
+      - .github/workflows/catalog-daily.yml
+      - tools/catalog_daily.py
+      - tests/test_catalog_daily.py
   push:
     branches: [t3/catalog-over-the-air-updates]
     paths:
@@ -19,20 +24,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: catalog-daily
+  group: catalog-daily${{ github.event_name == 'pull_request' && format('-pr-{0}', github.event.pull_request.number) || '' }}
   cancel-in-progress: false
 
 jobs:
   publish:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
-    env:
-      R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID }}
-      R2_BUCKET: ${{ vars.R2_BUCKET }}
-      R2_PUBLIC_URL: ${{ vars.R2_PUBLIC_URL }}
-      R2_PREFIX: catalog
-      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install R2 client
@@ -43,9 +41,17 @@ jobs:
           python3 -m unittest discover -s tests -q
       - name: Collect, build, validate, and publish
         env:
+          R2_ACCOUNT_ID: ${{ github.event_name != 'pull_request' && vars.R2_ACCOUNT_ID || '' }}
+          R2_BUCKET: ${{ github.event_name != 'pull_request' && vars.R2_BUCKET || '' }}
+          R2_PUBLIC_URL: ${{ github.event_name != 'pull_request' && vars.R2_PUBLIC_URL || '' }}
+          R2_PREFIX: catalog
+          R2_ACCESS_KEY_ID: ${{ github.event_name != 'pull_request' && secrets.R2_ACCESS_KEY_ID || '' }}
+          R2_SECRET_ACCESS_KEY: ${{ github.event_name != 'pull_request' && secrets.R2_SECRET_ACCESS_KEY || '' }}
           BUILD_ONLY: ${{ inputs.build_only || (github.event_name == 'push' && vars.CATALOG_R2_READY != 'true') }}
         run: |
-          if [ "$BUILD_ONLY" = true ]; then
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            python3 -u tools/catalog_daily.py --out "$RUNNER_TEMP/catalog-daily" --preview
+          elif [ "$BUILD_ONLY" = true ]; then
             python3 -u tools/catalog_daily.py --out "$RUNNER_TEMP/catalog-daily" --build-only
           else
             python3 -u tools/catalog_daily.py --out "$RUNNER_TEMP/catalog-daily"
@@ -68,6 +74,7 @@ jobs:
             ${{ runner.temp }}/catalog-daily/report.json
             ${{ runner.temp }}/catalog-daily/changes.json
             ${{ runner.temp }}/catalog-daily/catalog.json
+            ${{ runner.temp }}/catalog-daily/publication-catalog.json
             ${{ runner.temp }}/catalog-daily/catalog.json.gz
             ${{ runner.temp }}/catalog-daily/source-catalog.json.gz
             ${{ steps.evidence.outputs.responses_path }}

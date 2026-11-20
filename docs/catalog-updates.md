@@ -194,9 +194,9 @@ public download verification.
 
 Publication fails closed on missing or failed sources, incomplete or stale route
 details, duplicate identities, broken place/route joins, expired GTFS validity,
-or a GTFS archive older than two days. A loss of more than 10% of any compared
-record section also blocks publication. Ordinary removals must appear in two
-complete observations on different Bogotá calendar days. Each report now carries
+or a GTFS archive older than two days. Removal of more than 10% of the published
+identities in any compared record section blocks publication, even if additions
+keep the total count stable. Ordinary removals must appear in two complete observations on different Bogotá calendar days. Each report now carries
 `removal_evidence`, keyed by section and record identity, with `first_seen`,
 `last_seen`, and an `observations` count. Dates use Bogotá calendar days. Invalid
 or aborted collection preserves the ledger without advancing it. Multiple runs
@@ -210,12 +210,35 @@ First publication
 bootstraps from a complete fresh build and records a comparison with the bundled
 catalog. These checks are initial conservative rules to evaluate over daily runs.
 
-Held candidates retain their evidence and candidate manifests but do not replace
-`current.json`. A valid, fully archived hold completes successfully and emits a
-`Catalog publication held` notice in Actions. The report and summary retain the
-hold reasons. Invalid data, collection errors, verification errors, and evidence
-or publication upload failures still fail the job. Success means that the daily
-observation completed, not necessarily that a new catalog was promoted.
+Valid observations publish additions and edits while deferring unconfirmed
+removals. Each pending removed identity is copied from the published baseline;
+confirmed removals are applied. Retained serving links keep their place and
+service dependencies, even if those parents' removals are confirmed. Referenced
+route details and hours are retained when available in the baseline. Fresh
+records always take precedence. Place service lists and publication counts are
+rebuilt from the resulting catalog so retained links remain selectable in Android.
+
+The source observation remains distinct from the effective publication. Reports
+keep raw `changes`, `observed_counts`, and `removal_evidence`; `published_changes`,
+`counts`, and `retained_records` describe the effective publication. Retention
+reasons distinguish pending removals from required dependencies. Retained route
+details preserve their original fetch timestamps. The uploaded source catalog,
+compact catalog, and manifest digest all describe the same effective publication;
+that source catalog becomes the next run's baseline. Raw candidates remain in
+Actions artifacts alongside original response evidence. Confirmation still uses
+only complete fresh observations, never the retained records.
+
+This policy protects top-level identities in places, services, hours, route
+details, and serving links. Changes within an existing record, including stop
+sequence, platforms, and query metadata, remain edits and publish after validation.
+It does not infer field-level removal confirmation.
+
+A candidate containing only pending removals may leave the effective catalog
+unchanged. The publisher verifies the retained download and refreshes `checked_at`
+in that case. A changed effective catalog advances `current.json` only after
+archiving and verification. Actions emits `Catalog removals deferred` when records
+are retained. Invalid data, collection errors, verification errors, and evidence
+or publication upload failures still fail the job and leave publication blocked.
 Archive creation writes a temporary file and only renames it after a successful
 close. A partial archive cannot hide the intact loose response files from the
 artifact fallback. Both the response archive and assessment report must reach
@@ -258,8 +281,23 @@ run the same read-only check locally:
 python3 tools/catalog_health.py --max-age-hours 48
 ```
 
-Unconfirmed removals still hold the entire candidate. Selective publication and
-deterministic resolution of ambiguous joins require separate changes.
+Ambiguous joins still require deterministic resolution separately. Pending removal
+confirmation no longer blocks unrelated validated updates.
+
+Pull requests changing the daily publication code, tests, or workflow run a full
+live collection with `--preview`. This reads the public manifest, checksum-verified
+source catalog, and removal ledger, then produces the effective publication
+locally. It never creates an R2 client or receives R2 credentials. The artifact
+contains the raw `catalog.json`, effective `publication-catalog.json`, compressed
+publication files, report, and response evidence. `preview_result` reports whether
+the run would publish a changed catalog, verify an unchanged one, or reject invalid
+data. PR previews do not advance the production confirmation ledger.
+
+Run this same read-only preview locally:
+
+```sh
+python3 tools/catalog_daily.py --out /tmp/catalog-preview --preview
+```
 
 ## Catalog identity and ordering
 

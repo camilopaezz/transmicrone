@@ -21,9 +21,11 @@ def candidate():
     stamp = now.isoformat()
     return {
         'schema_version': 1, 'generated_at': stamp, 'failures': [], 'counts': {'places': 1},
-        'places': [{'place_id': 'p1', 'name': 'One'}],
+        'places': [{'place_id': 'p1' if i == 0 else f'p{i + 1}', 'name': 'One',
+                    'kind': 'paradero', 'query_paradero': f'Q{i}', 'served_painted': ['A1']}
+                   for i in range(11)],
         'servicios': [{'route_id': 1, 'painted': 'A1'}],
-        'serving': [{'place_id': 'p1', 'route_id': 1}],
+        'serving': [{'place_id': 'p1' if i == 0 else f'p{i + 1}', 'route_id': 1} for i in range(11)],
         'service_hours': [{'catalog_id': '1', 'fetched_at': stamp, 'windows': []}],
         'service_routes': [{'catalog_id': '1', 'fetched_at': stamp, 'stops': [{'name': 'One'}]}],
         'sources': [
@@ -63,12 +65,12 @@ class AssessmentTests(unittest.TestCase):
         value['sources'][0]['feed_info'][0]['feed_end_date'] = '20250101'
         self.assertFalse(self.assess(value)['valid'])
 
-    def test_removal_holds_publication(self):
+    def test_pending_removal_does_not_hold_publication(self):
         value = candidate()
         baseline = copy.deepcopy(value)
         baseline['places'].append({'place_id': 'removed', 'name': 'Old'})
         result = self.assess(value, baseline)
-        self.assertFalse(result['promotable'])
+        self.assertTrue(result['promotable'])
         self.assertEqual(result['changes']['places']['removed'], ['removed'])
 
     def test_comparison_ignores_fetch_timestamps_but_preserves_stop_order(self):
@@ -98,7 +100,7 @@ class AssessmentTests(unittest.TestCase):
         for valid in (True, False):
             prior = {'valid': valid, 'started_at': datetime.now(timezone.utc).isoformat(),
                      'changes': {'places': {'removed': ['old-id']}}}
-            self.assertFalse(daily.assess(value, baseline, 0, datetime.now(timezone.utc), prior)['promotable'])
+            self.assertIn('old-id', daily.assess(value, baseline, 0, datetime.now(timezone.utc), prior)['pending_removals']['places'])
 
     def test_removal_evidence_survives_invalid_day_without_counting_it(self):
         value = candidate()
@@ -124,7 +126,7 @@ class AssessmentTests(unittest.TestCase):
         first = daily.assess(value, baseline, 0, now)
         first['started_at'] = now.isoformat()
         again = daily.assess(value, baseline, 0, now, first)
-        self.assertFalse(again['promotable'])
+        self.assertIn('old-id', again['pending_removals']['places'])
         self.assertEqual(again['removal_evidence'], first['removal_evidence'])
 
     def test_reappearance_resets_pending_removal(self):
@@ -144,7 +146,7 @@ class AssessmentTests(unittest.TestCase):
         returned['started_at'] = (now - timedelta(days=1)).isoformat()
         self.assertFalse(returned['removal_evidence'].get('places'))
         missing = daily.assess(value, baseline, 0, now, returned)
-        self.assertFalse(missing['promotable'])
+        self.assertIn('old-id', missing['pending_removals']['places'])
         self.assertEqual(missing['removal_evidence']['places']['old-id']['observations'], 1)
 
     def test_confirmation_uses_bogota_day_boundaries(self):
@@ -162,7 +164,47 @@ class AssessmentTests(unittest.TestCase):
         first = daily.assess(value, baseline, 0, late - timedelta(hours=2))
         self.assertTrue(first['valid'])
         second = daily.assess(value, baseline, 0, late, first)
-        self.assertFalse(second['promotable'])
+        self.assertIn('old-id', second['pending_removals']['places'])
+
+
+    def test_gross_losses_cannot_be_hidden_by_additions(self):
+        baseline = candidate()
+        value = copy.deepcopy(baseline)
+        for i in range(2):
+            old_id = value['places'][i]['place_id']
+            value['places'][i]['place_id'] = f'new-{i}'
+            value['serving'][i]['place_id'] = f'new-{i}'
+        result = self.assess(value, baseline)
+        self.assertFalse(result['valid'])
+        self.assertIn('places: more than 10% of records disappeared', result['errors'])
+
+    def test_retained_edge_keeps_confirmed_parent_dependencies_and_packed_visibility(self):
+        baseline = candidate()
+        baseline['servicios'][0].update(catalog_id='1', catalog_ids_sharing_painted=['1'])
+        value = copy.deepcopy(baseline)
+        value['places'] = value['places'][1:]
+        value['serving'] = []
+        value['servicios'] = []
+        value['service_routes'] = []
+        value['service_hours'] = []
+        merged, retained = daily.publication_catalog(value, baseline, {'serving': ['p1:1']})
+        self.assertEqual(retained['places'], {'p1': 'serving_dependency'})
+        self.assertEqual(retained['servicios'], {'1': 'serving_dependency'})
+        self.assertEqual(retained['service_routes'], {'1': 'service_dependency'})
+        self.assertEqual(merged['service_routes'], baseline['service_routes'])
+        packed = daily.pack(merged)
+        self.assertEqual([p['place_id'] for p in packed['places']], ['p1'])
+        self.assertEqual(packed['servicios'][0]['route_ids'], [1])
+        self.assertEqual(merged['counts']['serving_edges'], 1)
+        self.assertEqual(value['serving'], [], 'Merging must not mutate the source observation')
+
+
+    def test_missing_optional_catalog_metadata_does_not_block_publication(self):
+        value = candidate()
+        value['servicios'][0].update(catalog_id='6430', catalog_ids_sharing_painted=['6430'])
+        merged, retained = daily.publication_catalog(value, value, {})
+        self.assertEqual(merged['servicios'], value['servicios'])
+        self.assertFalse(any(retained.values()))
 
 
 class FakeR2:
@@ -284,7 +326,7 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual(report['publication'], 'unchanged')
         self.assertEqual(json.loads(store.objects['current.json'])['version'], original['version'])
 
-    def test_valid_removal_hold_succeeds_without_changing_published_manifest(self):
+    def test_pending_removal_publishes_updates_and_retains_missing_records(self):
         store = FakeR2()
         self.assertEqual(self.run_daily(store)[0], 0)
         previous = store.objects['current.json']
@@ -293,14 +335,18 @@ class PublicationTests(unittest.TestCase):
         value['serving'][0]['place_id'] = 'replacement'
         result, report = self.run_daily(store, value)
         self.assertTrue(report['valid'])
-        self.assertFalse(report['promotable'])
-        self.assertTrue(report['holds'])
-        self.assertEqual(report['publication'], 'held')
-        self.assertEqual(store.objects['current.json'], previous)
+        self.assertTrue(report['promotable'])
+        self.assertIn('p1', report['pending_removals']['places'])
+        self.assertEqual(report['publication'], 'published')
+        self.assertNotEqual(store.objects['current.json'], previous)
+        current = json.loads(store.objects['current.json'])
+        published = json.loads(daily.gzip.decompress(store.objects[current['source_catalog']['key']]))
+        self.assertIn('p1', {p['place_id'] for p in published['places']})
+        self.assertIn('replacement', {p['place_id'] for p in published['places']})
         saved = json.loads(store.objects['latest-observation.json'])
-        self.assertEqual(saved['publication'], 'held')
+        self.assertEqual(saved['publication'], 'published')
         self.assertEqual(saved['holds'], report['holds'])
-        self.assertEqual(result, 0, 'A fully saved, valid observation is successful even when promotion is held')
+        self.assertEqual(result, 0)
 
     def test_invalid_candidate_still_fails_without_changing_published_manifest(self):
         store = FakeR2()
@@ -348,7 +394,7 @@ class PublicationTests(unittest.TestCase):
             self.assertEqual(self.run_daily(store)[0], 1)
         self.assertEqual(store.objects['latest-observation.json'], saved)
 
-    def test_hold_reports_published_age_without_refreshing_check_time(self):
+    def test_selective_publication_refreshes_published_health(self):
         store = FakeR2()
         self.assertEqual(self.run_daily(store)[0], 0)
         current = json.loads(store.objects['current.json'])
@@ -360,11 +406,11 @@ class PublicationTests(unittest.TestCase):
         value['serving'][0]['place_id'] = 'replacement'
         result, report = self.run_daily(store, value)
         self.assertEqual(result, 0)
-        self.assertEqual(report['publication'], 'held')
-        self.assertEqual(report['publication_health']['status'], 'stale')
-        self.assertEqual(json.loads(store.objects['current.json'])['checked_at'], old)
+        self.assertEqual(report['publication'], 'published')
+        self.assertEqual(report['publication_health']['status'], 'fresh')
+        self.assertNotEqual(json.loads(store.objects['current.json'])['checked_at'], old)
 
-    def test_evidence_failure_during_hold_still_fails(self):
+    def test_evidence_failure_during_selective_publication_still_fails(self):
         for failure in ('archive_fails', 'report_fails'):
             with self.subTest(failure=failure):
                 store = FakeR2()
@@ -377,9 +423,85 @@ class PublicationTests(unittest.TestCase):
                 result, report = self.run_daily(store, value)
                 self.assertEqual(result, 1)
                 self.assertTrue(report['valid'])
-                self.assertFalse(report['promotable'])
+                self.assertTrue(report['promotable'])
                 self.assertIn('publication_error', report)
                 self.assertEqual(store.objects['current.json'], previous)
+
+
+    def test_next_day_confirms_removal_after_selective_baseline_advances(self):
+        store = FakeR2()
+        original = candidate()
+        self.assertEqual(self.run_daily(store, original)[0], 0)
+        value = copy.deepcopy(original)
+        value['places'][0]['name'] = 'Updated'
+        value['serving'] = value['serving'][1:]
+        result, first = self.run_daily(store, value)
+        self.assertEqual(result, 0)
+        self.assertEqual(first['publication'], 'published')
+        self.assertEqual(first['retained_records']['serving'], {'p1:1': 'pending_removal'})
+        current = json.loads(store.objects['current.json'])
+        published = json.loads(daily.gzip.decompress(store.objects[current['source_catalog']['key']]))
+        self.assertEqual(published['places'][0]['name'], 'Updated')
+        self.assertEqual(len(published['serving']), 11)
+        yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).astimezone(daily.ZoneInfo('America/Bogota')).date().isoformat()
+        entry = first['removal_evidence']['serving']['p1:1']
+        entry.update(first_seen=yesterday, last_seen=yesterday)
+        store.objects['latest-observation.json'] = daily.encode(first)
+        result, second = self.run_daily(store, value)
+        self.assertEqual(result, 0)
+        self.assertEqual(second['publication'], 'published')
+        self.assertFalse(second['pending_removals']['serving'])
+        current = json.loads(store.objects['current.json'])
+        published = json.loads(daily.gzip.decompress(store.objects[current['source_catalog']['key']]))
+        self.assertEqual(len(published['serving']), 10)
+        self.assertFalse(published['places'][0]['served_painted'])
+
+
+    def test_pending_removal_only_verifies_unchanged_publication(self):
+        store = FakeR2()
+        value = candidate()
+        self.assertEqual(self.run_daily(store, value)[0], 0)
+        original = json.loads(store.objects['current.json'])
+        value['serving'] = value['serving'][1:]
+        value['places'][0]['served_painted'] = []
+        result, report = self.run_daily(store, value)
+        self.assertEqual(result, 0)
+        self.assertEqual(report['publication'], 'unchanged')
+        current = json.loads(store.objects['current.json'])
+        self.assertEqual(current['version'], original['version'])
+        self.assertIn('p1:1', report['retained_records']['serving'])
+        self.assertEqual(report['observed_counts'], value['counts'])
+        self.assertEqual(report['counts']['serving_edges'], 11)
+
+    def test_public_preview_uses_baseline_without_creating_r2_client_or_writing(self):
+        store = FakeR2()
+        value = candidate()
+        self.assertEqual(self.run_daily(store, value)[0], 0)
+        previous = copy.deepcopy(store.objects)
+        value['places'][0]['name'] = 'Updated'
+        value['serving'] = value['serving'][1:]
+
+        def build():
+            Path(sys.argv[sys.argv.index('--out') + 1]).write_bytes(daily.encode(value))
+            return 0
+
+        with tempfile.TemporaryDirectory() as temp, \
+             patch.object(sys, 'argv', ['daily', '--out', temp, '--preview']), \
+             patch.object(daily, 'PublicBaseline', return_value=store), \
+             patch.object(daily, 'R2') as private, \
+             patch.object(daily.build_catalog, 'main', side_effect=build), \
+             redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            result = daily.main()
+            report = json.loads((Path(temp) / 'report.json').read_text())
+            published = json.loads((Path(temp) / 'publication-catalog.json').read_text())
+            self.assertEqual(report['mode'], 'preview')
+            self.assertEqual(report['publication'], 'preview')
+            self.assertEqual(len(published['serving']), 11)
+            self.assertEqual(published['places'][0]['name'], 'Updated')
+            self.assertIn('p1:1', report['retained_records']['serving'])
+            self.assertEqual(result, 0)
+            private.assert_not_called()
+        self.assertEqual(store.objects, previous)
 
 
 class ArchiveTests(unittest.TestCase):
