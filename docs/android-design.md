@@ -10,8 +10,6 @@ The app follows the `android-glass-ui` skill (`~/.claude/skills/android-glass-ui
 - Home dock primary action is `Agregar tablero`; search and settings share one header capsule.
 - Typeface: Adwaita Sans, Regular and Medium.
 
-Known gaps against the system, to fix when touching these screens: Ajustes groups each section in one card with a divider instead of segmented rows, uses `primary` section labels, and keeps M3's default tracking on `bodyLarge` and `bodyMedium`.
-
 ## Theme
 
 System, light, and dark modes are available in Ajustes. Android 12+ wallpaper colors are enabled by default and can be disabled. Other devices, and devices with wallpaper colors disabled, use the transit-red palette. Settings persist separately from saved boards.
