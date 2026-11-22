@@ -114,7 +114,7 @@ fun ArrivalRow(arrival: Arrival, now: Instant = Instant.now(), routeColor: Strin
     val age = arrival.sourceReportedAt?.let { Duration.between(it, now).seconds.coerceAtLeast(0) }
     val stale = vehicle && age != null && age > 120
     val staleLabel = stringResource(R.string.old_vehicle_report)
-    val desc = listOfNotNull("${arrival.painted} a $destination", arrival.label?.let { stringResource(R.string.bus_label, it) },
+    val desc = listOfNotNull(stringResource(R.string.arrival_service_destination, arrival.painted, destination), arrival.label?.let { stringResource(R.string.bus_label, it) },
         if (stale) staleLabel else null,
         if (stale) stringResource(R.string.last_vehicle_estimate, phrase) else phrase,
         display.distance, occupancy, estimate).joinToString(", ")

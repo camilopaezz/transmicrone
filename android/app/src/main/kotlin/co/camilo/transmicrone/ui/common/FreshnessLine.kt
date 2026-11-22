@@ -62,7 +62,7 @@ fun FreshnessLine(freshness: Freshness, modifier: Modifier = Modifier, onRetry: 
             relativeTime(freshness.cachedAt),
         )
         is Freshness.Failed -> stringResource(R.string.freshness_failed_kind, failureKindLabel(freshness.kind))
-        is Freshness.Empty -> stringResource(R.string.freshness_empty)
+        is Freshness.Empty -> stringResource(R.string.arrivals_empty)
         Freshness.Unsupported -> stringResource(R.string.freshness_unsupported)
     }
     val failed = freshness is Freshness.Failed || freshness is Freshness.FailedCached

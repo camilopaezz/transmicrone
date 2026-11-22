@@ -189,7 +189,7 @@ class CatalogUiTest {
                     searchFailed = true)
             }
         }
-        compose.onNodeWithText("No se pudo buscar en el catálogo.").assertIsDisplayed()
+        compose.onNodeWithText("No se pudo buscar. Inténtalo de nuevo.").assertIsDisplayed()
         compose.onNodeWithText("Reintentar").performClick()
         compose.runOnIdle { assertEquals(1, searches) }
     }
@@ -232,7 +232,7 @@ class CatalogUiTest {
         }
         compose.onNodeWithText("Lugares atendidos por el servicio").assertDoesNotExist()
         compose.onNodeWithText("León XIII").assertDoesNotExist()
-        compose.onNodeWithText("No se pudo leer el recorrido del catálogo. Intenta de nuevo.").assertIsDisplayed()
+        compose.onNodeWithText("No se pudo cargar el recorrido.").assertIsDisplayed()
         compose.onNodeWithText("CAD||Portal Norte").assertDoesNotExist()
     }
 }
