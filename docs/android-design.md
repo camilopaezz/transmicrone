@@ -2,6 +2,16 @@
 
 The current app uses Material 3 Expressive, bundled Adwaita Sans, a Spanish UI, and edge-to-edge layouts. Product boundaries are in [app-scope.md](app-scope.md); builds and verification are in [the Android README](../android/README.md).
 
+## Visual system overrides
+
+The app follows the `android-glass-ui` skill (`~/.claude/skills/android-glass-ui/`). Its tokens apply unless listed here.
+
+- Floating headers use the split shape: a 52 dp back circle beside a separate title capsule.
+- Home dock primary action is `Agregar tablero`; search and settings share one header capsule.
+- Typeface: Adwaita Sans, Regular and Medium.
+
+Known gaps against the system, to fix when touching these screens: Ajustes groups each section in one card with a divider instead of segmented rows, uses `primary` section labels, and keeps M3's default tracking on `bodyLarge` and `bodyMedium`.
+
 ## Theme
 
 System, light, and dark modes are available in Ajustes. Android 12+ wallpaper colors are enabled by default and can be disabled. Other devices, and devices with wallpaper colors disabled, use the transit-red palette. Settings persist separately from saved boards.

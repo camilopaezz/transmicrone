@@ -4,6 +4,8 @@ Android arrivals boards and local tools for Bogotá's TransMilenio and SITP.
 
 Builds, previews, and device installs: follow [AGENTS.md](AGENTS.md). Build commands and catalog refresh instructions are in [android/README.md](android/README.md).
 
+UI work (any screen, component, or motion): follow the `android-glass-ui` skill (`~/.claude/skills/android-glass-ui/SKILL.md`); this app's behaviour and overrides are in [docs/android-design.md](docs/android-design.md).
+
 Read [docs/feed.md](docs/feed.md) before configuring or testing live positions. Read [docs/arrivals.md](docs/arrivals.md) before testing station or stop arrivals. Credentials belong in ignored local configuration.
 
 For live-field joins to GTFS, GIS, or fleet IDs, read [docs/join.md](docs/join.md). Public catalog variant IDs are separate from GTFS and live route IDs.
