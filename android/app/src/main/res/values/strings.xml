@@ -102,7 +102,6 @@
     <string name="service_lookup_loading">Abriendo servicio %1$s…</string>
     <string name="settings_title">Ajustes</string>
     <string name="settings_appearance">Apariencia</string>
-    <string name="settings_theme">Tema</string>
     <string name="settings_system">Sistema</string>
     <string name="settings_light">Claro</string>
     <string name="settings_dark">Oscuro</string>
@@ -120,6 +119,8 @@
     <string name="settings_occupancy">«Sin dato de ocupación» significa que el bus no informó qué tan lleno va.</string>
     <string name="settings_about">Acerca de</string>
     <string name="settings_version">Versión %1$s</string>
+    <string name="settings_source_title">Fuentes de datos</string>
+    <string name="settings_refresh_title">Actualización automática</string>
     <string name="settings_source">Estaciones, paraderos y recorridos de TransMilenio y SITP. Las llegadas vienen de un servicio no oficial que puede fallar o no mostrar todos los buses.</string>
     <plurals name="settings_refresh">
         <item quantity="one">Las llegadas se actualizan cada %1$d segundo mientras el tablero está abierto.</item>

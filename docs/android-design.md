@@ -2,6 +2,14 @@
 
 The current app uses Material 3 Expressive, bundled Adwaita Sans, a Spanish UI, and edge-to-edge layouts. Product boundaries are in [app-scope.md](app-scope.md); builds and verification are in [the Android README](../android/README.md).
 
+## Visual system overrides
+
+The app follows the `android-glass-ui` skill (`~/.claude/skills/android-glass-ui/`). Its tokens apply unless listed here.
+
+- Floating headers use the split shape: a 52 dp back circle beside a separate title capsule.
+- Home dock primary action is `Agregar tablero`; search and settings share one header capsule.
+- Typeface: Adwaita Sans, Regular and Medium.
+
 ## Theme
 
 System, light, and dark modes are available in Ajustes. Android 12+ wallpaper colors are enabled by default and can be disabled. Other devices, and devices with wallpaper colors disabled, use the transit-red palette. Settings persist separately from saved boards.
@@ -50,4 +58,8 @@ Interactive targets are at least 48 dp. Containers grow with font scale. Board s
 
 The visible board polls every 25 seconds. Successful manual refreshes have an eight-second throttle; failed requests can retry immediately, and an in-flight guard prevents duplicate requests. Fetch time and vehicle source time remain separate. The UI marks known vehicle reports older than two minutes as stale and does not derive a precise countdown.
 
-Ajustes also explains arrival ranges, old reports, and unknown occupancy, and shows the app version and unofficial data-source notice. There is no in-app credential or sample-data toggle.
+## Ajustes
+
+Ajustes uses opaque segmented groups beneath the floating header. Each row is its own `surfaceContainer` segment, 2 dp from its neighbors, with 28 dp outer corners and 4 dp inner corners. Rows have a 24 dp leading icon, a body-large title, an optional supporting line, and a minimum height of 56 dp, or 72 dp with supporting text. Section labels use title-small text in the on-surface-variant color, with 24 dp above and 8 dp below. Groups are 24 dp apart. The shared primitives live in `ui/common/SegmentedGroup.kt`.
+
+Theme choices (Sistema, Claro, Oscuro) are radio rows in one group. Wallpaper colors are a separate switch row. Each choice and switch row is a single accessible control. Board order lists one row per board, with services as supporting text and up/down buttons. At a font scale of 1.5 or more, the buttons move beneath the text so names wrap only at word boundaries. A quiet `surfaceContainerLow` card explains arrival ranges, old reports, and unknown occupancy. Acerca de groups the app version, the unofficial data-source notice, and the refresh interval. Mock builds add a `tertiaryContainer` callout labeled `Datos de ejemplo`. The list scrolls behind the navigation bar. There is no in-app credential or sample-data toggle.
