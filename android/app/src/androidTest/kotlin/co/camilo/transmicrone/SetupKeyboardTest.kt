@@ -22,6 +22,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
+// CI emulators can take well over 5 s to focus the window and show the IME.
+private const val KEYBOARD_TIMEOUT_MS = 20_000L
+
 class SetupKeyboardTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
@@ -39,12 +42,12 @@ class SetupKeyboardTest {
                     isEditing = true, editingBoardName = "León XIII")
             }
         }
-        compose.waitUntil(5_000) { compose.activity.hasWindowFocus() }
+        compose.waitUntil(KEYBOARD_TIMEOUT_MS) { compose.activity.hasWindowFocus() }
         // Invoke the field's click without touch coordinates that can move
         // while the automatically requested keyboard resizes the layout.
         compose.onNodeWithText("leon xii").performSemanticsAction(SemanticsActions.OnClick) { it() }
         compose.onNodeWithText("leon xii").assertIsFocused()
-        compose.waitUntil(5_000) {
+        compose.waitUntil(KEYBOARD_TIMEOUT_MS) {
             ViewCompat.getRootWindowInsets(compose.activity.window.decorView)
                 ?.isVisible(WindowInsetsCompat.Type.ime()) == true
         }
@@ -71,7 +74,7 @@ class SetupKeyboardTest {
         } }
         compose.onNode(hasScrollAction()).performScrollToNode(hasText("Nombre del tablero (opcional)"))
         compose.onNodeWithText("Nombre del tablero (opcional)").performClick()
-        compose.waitUntil(5_000) {
+        compose.waitUntil(KEYBOARD_TIMEOUT_MS) {
             ViewCompat.getRootWindowInsets(compose.activity.window.decorView)
                 ?.isVisible(WindowInsetsCompat.Type.ime()) == true
         }
