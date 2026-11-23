@@ -217,10 +217,10 @@ class HomeUiTest {
                 ), now)
             }
         }
-        compose.onNodeWithText("Reporte antiguo", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("Ubicación desactualizada", useUnmergedTree = true).assertIsDisplayed()
         compose.onAllNodesWithText("Reporte 08:16:03", substring = true, useUnmergedTree = true).assertCountEquals(0)
         compose.onNodeWithText("Bus T10405 · 2594 m", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithText("Última estimación: Servicio llegando", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("Tiempo anterior: Servicio llegando", useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
@@ -237,7 +237,7 @@ class HomeUiTest {
                 )
             }
         }
-        compose.onNodeWithText("Sin tableros").assertIsDisplayed()
+        compose.onNodeWithText("Aún no tienes tableros").assertIsDisplayed()
         compose.onNodeWithText("Agregar tablero").assertIsDisplayed()
     }
 
@@ -249,7 +249,7 @@ class HomeUiTest {
             }
         }
         compose.onNodeWithText("Cargando tus tableros…").assertIsDisplayed()
-        compose.onAllNodesWithText("Sin tableros").assertCountEquals(0)
+        compose.onAllNodesWithText("Aún no tienes tableros").assertCountEquals(0)
         compose.onAllNodesWithText("Agregar tablero").assertCountEquals(0)
     }
 
@@ -297,11 +297,11 @@ class HomeUiTest {
         compose.onAllNodesWithText("E48", useUnmergedTree = true)[0].assertIsDisplayed()
         compose.onNodeWithText("CAD", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithText("Entre 2 y 4 min", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithText("Ocupación desconocida", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("Sin dato de ocupación", useUnmergedTree = true).assertIsDisplayed()
         compose.onAllNodesWithText("Tableros").assertCountEquals(0)
         compose.onAllNodesWithContentDescription("Editar tablero")[0].assertIsDisplayed()
         val rowName = compose.onAllNodesWithContentDescription(
-            "E48 a CAD, Entre 2 y 4 min, 200 m, Ocupación desconocida",
+            "E48 hacia CAD, Entre 2 y 4 min, 200 m, Sin dato de ocupación",
             substring = true,
         ).fetchSemanticsNodes()
         assertTrue(rowName.isNotEmpty())
@@ -330,7 +330,7 @@ class HomeUiTest {
                 )
             }
         }
-        compose.onAllNodesWithText("el servidor rechazó la consulta", substring = true).assertCountEquals(0)
+        compose.onAllNodesWithText("el servidor rechazó la solicitud", substring = true).assertCountEquals(0)
         compose.onAllNodesWithText("Mostrando datos anteriores", substring = true).assertCountEquals(0)
         compose.onAllNodesWithText("Actualizado", substring = true).assertCountEquals(0)
         compose.onAllNodesWithText("Reintentar").assertCountEquals(0)
@@ -358,7 +358,7 @@ class HomeUiTest {
         }
         compose.onAllNodesWithText("Mostrando datos anteriores", substring = true).assertCountEquals(0)
         compose.onAllNodesWithText("Actualizado", substring = true).assertCountEquals(0)
-        compose.onAllNodesWithText("el servidor rechazó la consulta", substring = true).assertCountEquals(0)
+        compose.onAllNodesWithText("el servidor rechazó la solicitud", substring = true).assertCountEquals(0)
         compose.onAllNodesWithText("No se pudo actualizar", substring = true).assertCountEquals(0)
     }
 
@@ -381,8 +381,8 @@ class HomeUiTest {
                 )
             }
         }
-        compose.onNodeWithText("Cargando catálogo…").assertIsDisplayed()
-        compose.onAllNodesWithText("No hay lugares con ese nombre en el catálogo.").assertCountEquals(0)
+        compose.onNodeWithText("Cargando estaciones y paraderos…").assertIsDisplayed()
+        compose.onAllNodesWithText("No encontramos ese lugar. Prueba con otro nombre o código.").assertCountEquals(0)
     }
 
     @Test
@@ -418,7 +418,7 @@ class HomeUiTest {
             }
         }
         compose.onNodeWithText("Entre 2 y 4 min", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithText("Ocupación desconocida", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("Sin dato de ocupación", useUnmergedTree = true).assertIsDisplayed()
     }
 
     private fun sampleBoard() = Board(

@@ -54,7 +54,7 @@ class HomeCollapsingTitleTest {
         list.performScrollToIndex(11)
         val destination = compose.onNodeWithText("Destino 10", useUnmergedTree = true).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         org.junit.Assert.assertTrue(destination.top >= title.bottom)
-        val card = compose.onNodeWithContentDescription("E48 a Destino 10", substring = true).fetchSemanticsNode().boundsInRoot
+        val card = compose.onNodeWithContentDescription("E48 hacia Destino 10", substring = true).fetchSemanticsNode().boundsInRoot
         val viewport = list.fetchSemanticsNode().boundsInRoot
         org.junit.Assert.assertTrue(card.top >= viewport.top && card.bottom <= viewport.bottom)
         compose.onNodeWithTag("board-title-selector").assertIsDisplayed()
@@ -132,7 +132,7 @@ class HomeCollapsingTitleTest {
         val list = compose.onNodeWithTag("arrival-viewport")
         list.performTouchInput { swipeUp() }
         list.performScrollToIndex(1)
-        val card = compose.onAllNodesWithContentDescription("E48 a CAD", substring = true)[0].fetchSemanticsNode().boundsInRoot
+        val card = compose.onAllNodesWithContentDescription("E48 hacia CAD", substring = true)[0].fetchSemanticsNode().boundsInRoot
         val capsule = compose.onNodeWithTag("home-title-capsule").fetchSemanticsNode().boundsInRoot
         org.junit.Assert.assertTrue(card.top < capsule.bottom && card.bottom > capsule.top)
         compose.onNodeWithTag("scroll-edge-top").assertExists()

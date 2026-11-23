@@ -44,7 +44,7 @@ class ManagementUiTest {
                 isEditing = true, editingBoardName = "León XIII", onDelete = { deleted++ })
         } }
         compose.onNodeWithText("Eliminar tablero").performClick()
-        compose.onNodeWithText("Se eliminará el tablero «León XIII». Podrás deshacerlo durante unos segundos en el aviso de confirmación.").assertIsDisplayed()
+        compose.onNodeWithText("Se eliminará «León XIII». Podrás deshacerlo durante unos segundos.").assertIsDisplayed()
         compose.onNodeWithText("Cancelar").performClick()
         compose.runOnIdle { assertEquals(0, deleted) }
         compose.onNodeWithText("¿Eliminar este tablero?").assertDoesNotExist()
@@ -92,9 +92,9 @@ class ManagementUiTest {
         compose.onNodeWithContentDescription("Editar tablero").performClick()
         compose.onNodeWithText("Eliminar tablero").performClick()
         compose.onNodeWithText("Eliminar").performClick()
-        compose.onNodeWithText("Sin tableros").assertIsDisplayed()
+        compose.onNodeWithText("Aún no tienes tableros").assertIsDisplayed()
         compose.onNodeWithText("Deshacer").assertIsDisplayed().performClick()
-        compose.onNodeWithText("Sin tableros").assertDoesNotExist()
+        compose.onNodeWithText("Aún no tienes tableros").assertDoesNotExist()
         compose.onNodeWithContentDescription("Editar tablero").assertIsDisplayed()
     }
 
