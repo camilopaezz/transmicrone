@@ -32,7 +32,7 @@ class HomeImprovementsTest {
             HomeScreen(listOf(BoardView(board, listOf(arrival), Freshness.FailedCached(Instant.now().minusSeconds(180), FailureKind.TIMEOUT))),
                 0, {}, {}, {}, {})
         } }
-        compose.onAllNodesWithText("se agotó el tiempo", substring = true).assertCountEquals(0)
+        compose.onAllNodesWithText("tardó demasiado", substring = true).assertCountEquals(0)
         compose.onAllNodesWithText("Mostrando datos anteriores", substring = true).assertCountEquals(0)
         compose.onAllNodesWithText("Actualizado", substring = true).assertCountEquals(0)
         compose.onAllNodesWithText("Reintentar").assertCountEquals(0)
@@ -63,8 +63,8 @@ class HomeImprovementsTest {
                 HomeScreen(listOf(BoardView(board, listOf(arrival), Freshness.Updated(Instant.now()))), 0, {}, {}, {}, {})
             } }
         }
-        compose.onNodeWithText("Fuente no oficial. Las frases de llegada no son un reloj.").performScrollTo().assertIsDisplayed()
-        val notice = compose.onNodeWithText("Fuente no oficial. Las frases de llegada no son un reloj.").fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithText("Datos no oficiales. Los tiempos son aproximados.").performScrollTo().assertIsDisplayed()
+        val notice = compose.onNodeWithText("Datos no oficiales. Los tiempos son aproximados.").fetchSemanticsNode().boundsInRoot
         val add = compose.onNodeWithContentDescription("Agregar tablero").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         assertTrue("The last item must scroll above the floating dock", notice.bottom <= add.top)
     }

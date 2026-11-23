@@ -183,7 +183,7 @@ class GlassControlsTest {
         compose.runOnIdle { page.intValue = 1 }
         compose.onNodeWithText("Agregar tablero").assertIsDisplayed()
         compose.onNodeWithTag("arrival-viewport").performScrollToIndex(40)
-        compose.onNodeWithText("Fuente no oficial. Las frases de llegada no son un reloj.").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Datos no oficiales. Los tiempos son aproximados.").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Agregar tablero").assertIsDisplayed()
     }
 

@@ -57,8 +57,8 @@ class AdaptiveLayoutTest {
         assertTrue("The dock must leave room for unobscured list gestures", dock.bottom <= viewport.top || dock.top >= viewport.top + minHeight)
         compose.onNodeWithContentDescription("Agregar tablero").assertIsDisplayed().performClick()
         compose.runOnIdle { assertTrue(added) }
-        compose.onNodeWithTag("arrival-viewport").performScrollToNode(hasText("No hay servicios acercándose de los que elegiste."))
-        compose.onNodeWithText("No hay servicios acercándose de los que elegiste.").assertIsDisplayed()
+        compose.onNodeWithTag("arrival-viewport").performScrollToNode(hasText("Sin buses en camino por ahora"))
+        compose.onNodeWithText("Sin buses en camino por ahora").assertIsDisplayed()
     }
 
     @Test fun pinnedSavePanelOverlaysTheListAndLastServiceCanClearIt() {
@@ -151,7 +151,7 @@ class AdaptiveLayoutTest {
                     0, {}, {}, {}, {})
             }
         } }
-        val notice = "Fuente no oficial. Las frases de llegada no son un reloj."
+        val notice = "Datos no oficiales. Los tiempos son aproximados."
         compose.onNodeWithTag("arrival-viewport").performScrollToNode(hasText(notice))
         compose.waitForIdle()
         val viewport = compose.onNodeWithTag("arrival-viewport").fetchSemanticsNode().boundsInRoot
