@@ -1,6 +1,5 @@
 package co.camilo.transmicrone
 
-import co.camilo.transmicrone.data.catalog.JsonCatalogRepository
 import co.camilo.transmicrone.data.catalog.PublishedCatalogRepository
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -18,6 +17,8 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
+import java.time.Duration
+import java.time.Instant
 import java.util.zip.GZIPOutputStream
 
 class PublishedCatalogTest {
@@ -41,12 +42,17 @@ class PublishedCatalogTest {
 
             assertTrue(bytes.contentEquals(cache.readBytes()))
             assertEquals("Bundled", running.place("paradero:123")?.name)
+            val commit = requireNotNull(running.prepareLatest())
+            assertEquals("Bundled", running.place("paradero:123")?.name)
+            commit()
+            assertEquals("Published", running.place("paradero:123")?.name)
+            assertEquals(null, running.prepareLatest())
             assertEquals("/catalog/current.json", server.takeRequest().path)
             val request = server.takeRequest()
             assertEquals(artifactPath, request.path)
             assertEquals("transminuto-catalog/1.0", request.getHeader("User-Agent"))
 
-            val restarted = repository(server)
+            val restarted = repository(server, now = start.plus(Duration.ofHours(7)))
             assertEquals(publishedDate, restarted.generatedAt())
             assertEquals("Published", restarted.search("published").single().name)
             val service = restarted.explore("E48").services.single()
@@ -55,6 +61,26 @@ class PublishedCatalogTest {
 
             server.enqueue(manifest(server, bytes))
             restarted.checkForUpdate()
+            assertEquals(3, server.requestCount)
+            assertEquals(null, restarted.prepareLatest())
+        }
+    }
+
+    @Test fun successfulChecksAreThrottledButFailuresRetry() {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(503))
+            assertThrows(IOException::class.java) { repository(server).checkForUpdate() }
+
+            server.enqueue(manifest(server, gzip(catalog(bundledDate, "Same")), bundledDate))
+            repository(server).checkForUpdate()
+            assertEquals(2, server.requestCount)
+
+            repository(server, now = start.plus(Duration.ofHours(5))).checkForUpdate()
+            assertEquals(2, server.requestCount)
+
+            // A clock moved backwards does not suppress checks indefinitely.
+            server.enqueue(manifest(server, gzip(catalog(bundledDate, "Same")), bundledDate))
+            repository(server, now = start.minus(Duration.ofHours(1))).checkForUpdate()
             assertEquals(3, server.requestCount)
         }
     }
@@ -75,7 +101,9 @@ class PublishedCatalogTest {
             for ((body, declared) in invalid) {
                 server.enqueue(manifest(server, declared, latest))
                 server.enqueue(MockResponse().setBody(Buffer().write(body)))
-                assertThrows(IllegalArgumentException::class.java) { repository(server).checkForUpdate() }
+                val repository = repository(server)
+                assertThrows(IllegalArgumentException::class.java) { repository.checkForUpdate() }
+                assertEquals(null, repository.prepareLatest())
                 assertTrue(previous.contentEquals(cache.readBytes()))
                 assertEquals("Previous", repository(server).place("paradero:123")?.name)
                 assertFalse(File(directory.root, "catalog.json.gz.pending").exists())
@@ -122,10 +150,13 @@ class PublishedCatalogTest {
         }
     }
 
-    private fun repository(server: MockWebServer) = PublishedCatalogRepository(
-        bundled = { JsonCatalogRepository(Json, gzip = false) { catalog(bundledDate, "Bundled").byteInputStream() } },
+    private val start = Instant.parse("2026-11-20T12:00:00Z")
+
+    private fun repository(server: MockWebServer, now: Instant = start) = PublishedCatalogRepository(
+        openBundled = { catalog(bundledDate, "Bundled").byteInputStream() },
         cache = cache,
         catalogUrl = server.url("/catalog/"),
+        now = { now },
     )
 
     private fun catalog(date: String, name: String, serviceIndex: Int = 0) = """

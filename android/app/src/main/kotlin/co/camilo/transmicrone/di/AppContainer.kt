@@ -4,7 +4,6 @@ import android.content.Context
 import co.camilo.transmicrone.BuildConfig
 import co.camilo.transmicrone.data.ArrivalsRepository
 import co.camilo.transmicrone.data.catalog.CatalogRepository
-import co.camilo.transmicrone.data.catalog.JsonCatalogRepository
 import co.camilo.transmicrone.data.catalog.PublishedCatalogRepository
 import co.camilo.transmicrone.data.catalog.CatalogRouteRepository
 import co.camilo.transmicrone.data.feed.ArrivalsParser
@@ -38,12 +37,10 @@ class AppContainer(
     val json: Json = json
 
     private val publishedCatalog = if (catalogRepository == null) PublishedCatalogRepository(
-        bundled = {
-            // Android's asset merger expands .gz sources and removes their .gz suffix.
-            JsonCatalogRepository(json, gzip = false) { context.assets.open("catalog.json") }
-        },
+        // Android's asset merger expands .gz sources and removes their .gz suffix.
+        openBundled = { context.assets.open("catalog.json") },
         cache = File(context.filesDir, "published-catalog.json.gz"),
-        catalogUrl = "https://transminuto-catalog.cpzhmlb.uk/catalog/".toHttpUrl(),
+        catalogUrl = BuildConfig.CATALOG_BASE_URL.toHttpUrl(),
     ) else null
 
     val catalog: CatalogRepository = catalogRepository ?: requireNotNull(publishedCatalog)

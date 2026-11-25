@@ -42,6 +42,11 @@ require(localSigning.isEmpty() || signingConfigured) { "Incomplete release signi
 
 val feedBaseUrl = feedSetting("BASE_URL", "TRANSMICRONE_BASE_URL", feedField("BASE_URL"))
 val feedAppId = feedSetting("APPID", "TRANSMICRONE_APP_ID", "unconfigured")
+val catalogBaseUrl = providers.gradleProperty("catalogBaseUrl")
+    .orElse("https://transminuto-catalog.cpzhmlb.uk/catalog/").get()
+require(catalogBaseUrl.startsWith("https://") && catalogBaseUrl.endsWith("/")) {
+    "catalogBaseUrl must be an https URL ending in /"
+}
 val prNumber = providers.gradleProperty("prNumber").orNull
 require(prNumber == null || prNumber.matches(Regex("[1-9][0-9]*"))) {
     "prNumber must be a positive pull request number"
@@ -64,6 +69,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "FEED_BASE_URL", "\"$feedBaseUrl\"")
         buildConfigField("String", "FEED_APPID", "\"$feedAppId\"")
+        buildConfigField("String", "CATALOG_BASE_URL", "\"$catalogBaseUrl\"")
         buildConfigField("boolean", "MOCK_FEED", "false")
         buildConfigField("long", "AUTO_REFRESH_MS", "25000L")
         buildConfigField("int", "HTTP_CONNECT_TIMEOUT_MS", "10000")

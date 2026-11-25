@@ -15,6 +15,7 @@ import co.camilo.transmicrone.domain.matchingCatalogVariants
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.decodeFromStream
 import java.io.InputStream
 import java.util.zip.GZIPInputStream
 
@@ -63,6 +64,13 @@ interface CatalogRepository {
     fun place(placeId: String): Place?
     suspend fun generatedAt(): String?
     suspend fun routes(option: ServicioOption): List<ServiceRoute> = emptyList()
+
+    /**
+     * Loads a newer snapshot downloaded during this process, off the main thread. Returns a
+     * commit that switches to it, or null. Callers commit on the main thread only while no
+     * catalog-derived results are on screen; an uncommitted snapshot is retried later.
+     */
+    fun prepareLatest(): (() -> Unit)? = null
 }
 
 class JsonCatalogRepository internal constructor(
@@ -71,7 +79,8 @@ class JsonCatalogRepository internal constructor(
     constructor(json: Json, gzip: Boolean, opener: () -> InputStream) : this({
         opener().use { raw ->
             val stream = if (gzip) GZIPInputStream(raw) else raw
-            stream.bufferedReader(Charsets.UTF_8).use { json.decodeFromString<PackedCatalog>(it.readText()) }
+            // Streaming avoids holding the decompressed JSON text next to the parsed catalog.
+            stream.buffered().use { json.decodeFromStream<PackedCatalog>(it) }
         }
     })
 

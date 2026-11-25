@@ -226,8 +226,10 @@ include loose response files so a timeout before archiving does not discard them
 
 ## Android downloads
 
-Android checks the public `catalog/current.json` once per app process on a
-background thread. Catalog search, operating hours, and route stops load offline
+Android checks the public `catalog/current.json` on a background thread when the
+app process starts, at most once every six hours after a successful check. A
+failed check retries on the next process start. The build property
+`catalogBaseUrl` overrides the publisher URL. Catalog search, operating hours, and route stops load offline
 from the newest usable local snapshot, either the packaged catalog or a previous
 download. The app uses the catalog's `generated_at` to compare versions.
 `checked_at` tracks publisher health, so an older check date does not prevent
@@ -236,9 +238,21 @@ Android from using the last published catalog.
 The app accepts a supported manifest and an immutable catalog URL on the
 publisher's host. It checks the compressed size and SHA-256 and loads the
 candidate through the catalog parser before atomically replacing its private
-copy. A failed check or download leaves the previous copy available. The next
-cold start uses the downloaded data, keeping search results and board edits on
-one snapshot for the duration of the running process.
+copy. A failed check or download leaves the previous copy available. Parsing
+streams the decompressed JSON. A cold start compares the packaged and downloaded
+timestamps without building either catalog, then loads only the newer one.
+Validating or switching to a download briefly holds a second catalog in the
+background; running out of memory there keeps the current one.
+
+The running app switches to a verified download when it returns to the
+foreground on the home screen, or when a new catalog search starts. The new
+catalog loads in the background and takes over only if that screen is still
+showing, so a search, its details, and a board edit always use one snapshot.
+
+The daily job rejects an artifact above Android's limits of 5 MiB compressed or
+32 MiB decompressed, because every installed app would refuse it. Above 75% of
+either limit, the job adds a `size_warnings` entry and a workflow warning so an
+app release can raise the limits first.
 
 Saved boards continue using their stored station or stop code and selected
 service IDs for arrivals. Downloading a new catalog does not rewrite those

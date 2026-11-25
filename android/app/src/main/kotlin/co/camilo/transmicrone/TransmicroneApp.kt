@@ -17,7 +17,8 @@ class TransmicroneApp : Application() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 container.checkForCatalogUpdate()
-            } catch (failure: Exception) {
+            } catch (failure: Throwable) {
+                // Includes OutOfMemoryError on small heaps; an optional update must not crash the app.
                 Log.w("PublishedCatalog", "Catalog update unavailable", failure)
             }
         }

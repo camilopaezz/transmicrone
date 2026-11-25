@@ -4,56 +4,70 @@ import co.camilo.transmicrone.domain.ServicioOption
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.decodeFromStream
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.ResponseBody
-import okio.GzipSource
-import okio.buffer
-import okio.source
 import java.io.File
+import java.io.FilterInputStream
 import java.io.IOException
+import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
+import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.TimeUnit
+import java.util.zip.GZIPInputStream
 
+// tools/catalog_daily.py checks published artifacts against these limits; keep them in sync.
 private const val MAX_MANIFEST_BYTES = 64L * 1024
 private const val MAX_DOWNLOAD_BYTES = 5L * 1024 * 1024
 private const val MAX_CATALOG_BYTES = 32L * 1024 * 1024
 
 internal class PublishedCatalogRepository(
-    private val bundled: () -> JsonCatalogRepository,
+    // The packaged catalog as uncompressed JSON.
+    private val openBundled: () -> InputStream,
     private val cache: File,
     private val catalogUrl: HttpUrl,
+    private val now: () -> Instant = Instant::now,
+    private val checkInterval: Duration = Duration.ofHours(6),
 ) : CatalogRepository {
     private val json = Json { ignoreUnknownKeys = true }
     private val client = OkHttpClient.Builder()
         .followRedirects(false)
         .callTimeout(25, TimeUnit.SECONDS)
         .build()
+    private val checked = File(cache.parentFile, "${cache.name}.checked")
 
-    // Pin one snapshot for the process, including any searches and edits already in progress.
-    private val active by lazy {
-        val previous = if (cache.isFile) {
+    // One snapshot serves the process until activateLatest() switches at a point the UI chooses.
+    @Volatile private var current: JsonCatalogRepository? = null
+    // Generation time of a verified download that is newer than the current snapshot.
+    @Volatile private var staged: Instant? = null
+
+    private val active: JsonCatalogRepository
+        get() = current ?: synchronized(this) { current ?: initial().also { current = it } }
+
+    // Compares timestamps without building either catalog, then loads only the newer one.
+    private fun initial(): JsonCatalogRepository {
+        val cachedDate = if (cache.isFile) try { stamp { openCached(cache) } } catch (_: Exception) { null } else null
+        val shippedDate = try { stamp(openBundled) } catch (_: Exception) { null }
+        if (cachedDate != null && (shippedDate == null || cachedDate > shippedDate)) {
             try {
-                cachedRepository(cache).also { it.load() }
+                return cachedRepository(cache).also { it.load() }
             } catch (_: Exception) {
-                null
+                // Fall back to the packaged catalog.
             }
-        } else null
-        val shipped = bundled()
-        val shippedDate = try {
-            shipped.load()?.let(Instant::parse)
-        } catch (failure: Exception) {
-            if (previous != null) return@lazy previous
-            throw failure
         }
-        val previousDate = previous?.load()?.let(Instant::parse)
-        if (previousDate != null && (shippedDate == null || previousDate > shippedDate)) previous
-        else shipped
+        return JsonCatalogRepository(json, gzip = false, opener = openBundled)
     }
+
+    private fun stamp(open: () -> InputStream): Instant? =
+        open().buffered().use { json.decodeFromStream<CatalogStamp>(it) }.generatedAt?.let(Instant::parse)
+
+    private fun openCached(file: File): InputStream =
+        LimitedInputStream(GZIPInputStream(file.inputStream().buffered()), MAX_CATALOG_BYTES)
 
     override suspend fun search(query: String, limit: Int) = active.search(query, limit)
     override suspend fun explore(query: String, limit: Int) = active.explore(query, limit)
@@ -62,8 +76,34 @@ internal class PublishedCatalogRepository(
     override suspend fun generatedAt() = active.generatedAt()
     override suspend fun routes(option: ServicioOption) = active.routes(option)
 
-    /** Called once per process on the IO dispatcher. The cache is replaced only after validation. */
+    override fun prepareLatest(): (() -> Unit)? {
+        val target = staged ?: return null
+        val replacement = try {
+            cachedRepository(cache).also { require(it.load()?.let(Instant::parse) == target) }
+        } catch (_: Throwable) {
+            // Includes OutOfMemoryError. The current snapshot stays; the next cold start retries.
+            synchronized(this) { if (staged == target) staged = null }
+            return null
+        }
+        return {
+            synchronized(this) {
+                if (staged == target) {
+                    current = replacement
+                    staged = null
+                }
+            }
+        }
+    }
+
+    /**
+     * Runs on a background thread at process start. Skips the network if a check succeeded
+     * within [checkInterval]. The cache is replaced only after validation.
+     */
     fun checkForUpdate() {
+        val checkedAt = now()
+        val last = lastChecked()
+        if (last != null && last <= checkedAt && last > checkedAt - checkInterval) return
+
         val activeDate = active.load()?.let(Instant::parse)
         val manifest = fetch(catalogUrl.newBuilder().addPathSegment("current.json").build()) { body ->
             val source = body.source()
@@ -74,7 +114,7 @@ internal class PublishedCatalogRepository(
             "Unsupported published catalog schema"
         }
         val generatedAt = Instant.parse(manifest.generatedAt)
-        if (activeDate != null && generatedAt <= activeDate) return
+        if (activeDate != null && generatedAt <= activeDate) return recordChecked(checkedAt)
 
         val artifact = manifest.catalog
         require(manifest.version.matches(Regex("[A-Za-z0-9-]{1,100}"))) { "Invalid catalog version" }
@@ -108,21 +148,37 @@ internal class PublishedCatalogRepository(
                     "Catalog download differs from manifest"
                 }
             }
+            // Only the timestamp is kept, so the candidate is not held in memory beside the active catalog.
             require(cachedRepository(pending).load()?.let(Instant::parse) == generatedAt) {
                 "Catalog timestamp differs from manifest"
             }
-            Files.move(pending.toPath(), cache.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            synchronized(this) {
+                Files.move(pending.toPath(), cache.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+                staged = generatedAt
+            }
+            recordChecked(checkedAt)
         } finally {
             pending.delete()
         }
     }
 
+    private fun lastChecked(): Instant? = try {
+        if (checked.isFile) Instant.ofEpochMilli(checked.readText().trim().toLong()) else null
+    } catch (_: Exception) {
+        null
+    }
+
+    private fun recordChecked(at: Instant) {
+        try {
+            checked.writeText(at.toEpochMilli().toString())
+        } catch (_: IOException) {
+            // Without the stamp the next process checks again, which is harmless.
+        }
+    }
+
     private fun cachedRepository(file: File) = JsonCatalogRepository {
         require(file.length() in 1..MAX_DOWNLOAD_BYTES) { "Invalid cached catalog size" }
-        val packed = GzipSource(file.source()).buffer().use { source ->
-            require(!source.request(MAX_CATALOG_BYTES + 1)) { "Decompressed catalog exceeds size limit" }
-            json.decodeFromString<PackedCatalog>(source.readUtf8())
-        }
+        val packed = openCached(file).buffered().use { json.decodeFromStream<PackedCatalog>(it) }
         require(!packed.generatedAt.isNullOrBlank()) { "Published catalog has no generation timestamp" }
         Instant.parse(packed.generatedAt)
         require(packed.places.isNotEmpty() && packed.places.distinctBy { it.placeId }.size == packed.places.size) {
@@ -142,6 +198,23 @@ internal class PublishedCatalogRepository(
         }
     }
 }
+
+private class LimitedInputStream(input: InputStream, private val limit: Long) : FilterInputStream(input) {
+    private var count = 0L
+
+    private fun counted(bytes: Long) {
+        if (bytes > 0) count += bytes
+        require(count <= limit) { "Decompressed catalog exceeds size limit" }
+    }
+
+    override fun read(): Int = super.read().also { if (it != -1) counted(1) }
+    override fun read(b: ByteArray, off: Int, len: Int): Int = super.read(b, off, len).also { counted(it.toLong()) }
+    override fun skip(n: Long): Long = super.skip(n).also(::counted)
+    override fun markSupported() = false
+}
+
+@Serializable
+private class CatalogStamp(@SerialName("generated_at") val generatedAt: String? = null)
 
 @Serializable
 private data class PublishedCatalogManifest(
