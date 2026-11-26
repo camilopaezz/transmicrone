@@ -36,7 +36,7 @@ class HomeImprovementsTest {
         compose.onAllNodesWithText("Mostrando datos anteriores", substring = true).assertCountEquals(0)
         compose.onAllNodesWithText("Actualizado", substring = true).assertCountEquals(0)
         compose.onNodeWithText("No se pudo actualizar").assertIsDisplayed()
-        compose.onNodeWithText("Guardados hace", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Datos de hace", substring = true).assertIsDisplayed()
         compose.onNodeWithText("Reintentar").assertHeightIsAtLeast(48.dp)
     }
 

@@ -3,8 +3,6 @@ package co.camilo.transmicrone.ui.common
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
@@ -36,32 +34,27 @@ fun RequestFailureNotice(
 ) {
     var showingDetails by rememberSaveable(title) { mutableStateOf(false) }
     val updatingLabel = stringResource(R.string.freshness_updating)
-    FloatingControlSurface(
+    // Content layer: the notice scrolls with the list, so it is an opaque card, not glass.
+    Surface(
+        onClick = { showingDetails = true },
         modifier = modifier.fillMaxWidth().testTag("request-failure-notice"),
-        shape = MaterialTheme.shapes.large,
-        // This row is inside the backdrop source, like inline action panels.
-        blurred = false,
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
-        Row(Modifier.padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(
-                onClick = { showingDetails = true },
-                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
-            ) {
-                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.errorContainer) {
-                    Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.Error, stringResource(R.string.request_failure_details),
-                            Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onErrorContainer)
-                    }
-                }
-                Spacer(Modifier.width(8.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(compactTitle, style = MaterialTheme.typography.bodyMedium)
-                    if (supportingText != null) Text(supportingText, style = MaterialTheme.typography.bodySmall)
-                }
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(18.dp))
+        // Content-card padding (16 dp) keeps the notice to one 48 dp row; see docs/android-design.md.
+        Row(
+            Modifier.padding(start = 16.dp, end = 8.dp, top = 16.dp, bottom = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Default.Error, stringResource(R.string.request_failure_details),
+                tint = MaterialTheme.colorScheme.error)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f).heightIn(min = 48.dp), verticalArrangement = Arrangement.Center) {
+                Text(compactTitle, style = MaterialTheme.typography.bodyMedium)
+                if (supportingText != null) Text(supportingText, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            Spacer(Modifier.width(8.dp))
             if (onRetry != null) FilledTonalButton(
                 onClick = onRetry, enabled = !retrying,
                 modifier = Modifier.heightIn(min = 48.dp).semantics {

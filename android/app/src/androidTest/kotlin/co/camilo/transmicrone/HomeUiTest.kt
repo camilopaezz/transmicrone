@@ -64,18 +64,18 @@ class HomeUiTest {
             }
         }
         compose.onNodeWithText("No se pudo actualizar").assertIsDisplayed()
-        compose.onNodeWithText("El servicio de llegadas tardó demasiado en responder. Vuelve a intentar.").assertDoesNotExist()
+        compose.onNodeWithText("El servicio de llegadas tardó mucho en responder. Inténtalo de nuevo.").assertDoesNotExist()
         compose.onNodeWithContentDescription("Ver detalles del error").performClick()
-        compose.onNodeWithText("El servicio de llegadas tardó demasiado en responder. Vuelve a intentar.").assertIsDisplayed()
+        compose.onNodeWithText("El servicio de llegadas tardó mucho en responder. Inténtalo de nuevo.").assertIsDisplayed()
         compose.onNodeWithText("Cerrar").performClick()
-        compose.onNodeWithText("No hay servicios acercándose de los que elegiste.").assertDoesNotExist()
+        compose.onNodeWithText("Sin buses en camino por ahora").assertDoesNotExist()
         compose.onNodeWithText("Reintentar").performClick()
         compose.runOnIdle { assertTrue(retries == 1) }
         compose.onNodeWithTag("retry-progress").assertIsDisplayed()
         compose.onNodeWithTag("refresh-capsule").assertDoesNotExist()
         compose.runOnIdle { freshness.value = Freshness.Empty(Instant.now()) }
         compose.onNodeWithTag("request-failure-notice").assertDoesNotExist()
-        compose.onNodeWithText("No hay servicios acercándose de los que elegiste.").assertIsDisplayed()
+        compose.onNodeWithText("Sin buses en camino por ahora").assertIsDisplayed()
         compose.onNodeWithText("No se pudieron consultar las llegadas").assertDoesNotExist()
     }
 
@@ -130,7 +130,7 @@ class HomeUiTest {
         }
         val cardTop = compose.onNodeWithText("CAD", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.top
         compose.onNodeWithContentDescription("Ver detalles del error").performClick()
-        compose.onNodeWithText("Última consulta correcta:", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Última actualización:", substring = true).assertIsDisplayed()
         compose.onAllNodesWithText("Reintentar")[1].performClick()
         compose.runOnIdle { assertTrue(retries == 1) }
         compose.onNodeWithText("Cerrar").assertDoesNotExist()
@@ -207,8 +207,8 @@ class HomeUiTest {
         compose.onNodeWithContentDescription("Ver detalles del error").performClick()
         compose.onNodeWithText("Servicios sin actualizar").assertIsDisplayed()
         compose.onNodeWithText("Soacha").assertIsDisplayed()
-        compose.onNodeWithText("Sin consulta correcta anterior").assertIsDisplayed()
-        compose.onNodeWithText("Las llegadas anteriores siguen visibles y pueden haber cambiado.").assertDoesNotExist()
+        compose.onNodeWithText("Todavía no se ha actualizado").assertIsDisplayed()
+        compose.onNodeWithText("Las llegadas que ves son de antes y pueden haber cambiado.").assertDoesNotExist()
         compose.onNodeWithText("Cerrar").performClick()
         compose.onNodeWithText("Reintentar").assertIsDisplayed()
     }
@@ -499,10 +499,10 @@ class HomeUiTest {
             }
         }
         compose.onNodeWithText("No se pudo actualizar").assertIsDisplayed()
-        compose.onNodeWithText("Guardados hace", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Datos de hace", substring = true).assertIsDisplayed()
         val notice = compose.onNodeWithTag("request-failure-notice").fetchSemanticsNode().boundsInRoot
-        assertTrue("Failure feedback must leave room for arrivals", notice.height <= with(compose.density) { 80.dp.toPx() })
-        compose.onNodeWithText("Las llegadas anteriores siguen visibles y pueden haber cambiado.").assertDoesNotExist()
+        assertTrue("Failure feedback must leave room for arrivals: ${notice.height}px", notice.height <= with(compose.density) { 80.dp.toPx() })
+        compose.onNodeWithText("Las llegadas que ves son de antes y pueden haber cambiado.").assertDoesNotExist()
         compose.onNodeWithText("CAD", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithText("Reintentar").assertIsDisplayed()
     }
