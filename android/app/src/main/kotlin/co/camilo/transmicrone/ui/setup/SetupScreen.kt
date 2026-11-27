@@ -5,6 +5,7 @@ import co.camilo.transmicrone.ui.common.FloatingScaffold
 import co.camilo.transmicrone.ui.common.FloatingSearchHeader
 import co.camilo.transmicrone.ui.common.FloatingScreenHeader
 import co.camilo.transmicrone.ui.common.FloatingActionPanel
+import co.camilo.transmicrone.ui.common.RequestFailureNotice
 import co.camilo.transmicrone.ui.common.LocalScreenEntered
 
 import androidx.compose.foundation.BorderStroke
@@ -153,16 +154,11 @@ fun SetupScreen(
                             }
                         }
                         if (catalogLoadFailed || searchFailed) item {
-                            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(
-                                    stringResource(if (searchFailed) R.string.setup_search_failed else R.string.catalog_load_failed),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                                if (query.length >= 2) TextButton(onClick = { onQuery(query) }) {
-                                    Text(stringResource(R.string.retry_refresh))
-                                }
-                            }
+                            RequestFailureNotice(
+                                title = stringResource(if (searchFailed) R.string.setup_search_failed else R.string.catalog_load_failed),
+                                message = stringResource(R.string.catalog_failure_help),
+                                onRetry = if (query.length >= 2) ({ onQuery(query) }) else null,
+                            )
                         }
                         if (catalogReady && !searching) {
                             results.groupBy { it.kind }.toSortedMap(compareBy { it.ordinal }).forEach { (kind, places) ->

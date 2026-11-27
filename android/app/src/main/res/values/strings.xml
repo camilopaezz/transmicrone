@@ -138,4 +138,20 @@
     <string name="board_custom_name">Nombre del tablero (opcional)</string>
     <string name="board_custom_name_hint">Déjalo vacío para usar «%1$s».</string>
     <string name="board_header_page">" · %1$d/%2$d"</string>
+    <string name="arrivals_failure_previous">Las llegadas que ves son de antes y pueden haber cambiado.</string>
+    <string name="request_failure_transport">No hay conexión con el servicio de llegadas. Revisa tu internet e inténtalo de nuevo.</string>
+    <string name="request_failure_timeout">El servicio de llegadas tardó mucho en responder. Inténtalo de nuevo.</string>
+    <string name="request_failure_unauthorized">El servicio de llegadas no dejó entrar a la app. Si sigue pasando, busca una actualización.</string>
+    <string name="request_failure_rejected">El servicio de llegadas no aceptó la búsqueda. Inténtalo más tarde.</string>
+    <string name="request_failure_malformed">La respuesta del servicio de llegadas no se pudo leer. Inténtalo de nuevo en un momento.</string>
+    <string name="request_failure_generic">No se pudieron cargar las llegadas. Inténtalo de nuevo.</string>
+    <string name="catalog_failure_help">Inténtalo de nuevo para cargar la información.</string>
+    <string name="request_failure_details">Ver detalles del error</string>
+    <string name="close_details">Cerrar</string>
+    <string name="arrivals_partial_failure_short">Actualización incompleta</string>
+    <string name="arrivals_cache_age">Datos de %1$s</string>
+    <string name="arrivals_failed_services">Servicios sin actualizar</string>
+    <string name="arrivals_last_success">Última actualización: %1$s</string>
+    <string name="arrivals_never_fetched">Todavía no se ha actualizado</string>
+    <string name="arrivals_service_fetch_times">Última actualización de cada servicio</string>
 </resources>
