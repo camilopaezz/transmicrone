@@ -116,6 +116,8 @@ class AppViewModel(
     private var searchJob: Job? = null
     private var catalogSearchJob: Job? = null
     private var serviceLookupJob: Job? = null
+    private var catalogActivation: Job? = null
+    private var catalogCommitAllowed: (UiState) -> Boolean = { false }
     private val routeGenerations = mutableMapOf<String, Long>()
     private val routeJobs = mutableMapOf<String, Job>()
     private var navigationGeneration = 0L
@@ -153,6 +155,33 @@ class AppViewModel(
     fun setStarted(started: Boolean) {
         _state.update { it.copy(started = started) }
         if (started) restartLoop() else stopPolling()
+        // Home shows no catalog-derived results, so a downloaded catalog can take over here.
+        if (started && _state.value.screen == Screen.HOME) activateLatestCatalog { it.screen == Screen.HOME }
+    }
+
+    /**
+     * Switches catalogs only if [safe] still holds on the main thread once the new one is loaded.
+     * The latest request's condition replaces that of a load already in progress.
+     */
+    private fun activateLatestCatalog(safe: (UiState) -> Boolean) {
+        catalogCommitAllowed = safe
+        if (catalogActivation?.isActive == true) return
+        catalogActivation = viewModelScope.launch {
+            val commit = try {
+                withContext(io) { catalog.prepareLatest() }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
+            }
+            if (commit != null && catalogCommitAllowed(_state.value)) {
+                commit()
+                // Routes resolved against the previous snapshot carry its places.
+                routeJobs.values.forEach { it.cancel() }
+                routeJobs.clear()
+                _state.update { it.copy(routes = emptyMap(), selectedRoutes = emptyMap()) }
+            }
+        }
     }
 
     fun onPage(index: Int) {
@@ -271,6 +300,9 @@ class AppViewModel(
         _state.update { it.copy(screen = Screen.SEARCH, details = emptyList(),
             catalogSearchSession = it.catalogSearchSession + 1) }
         stopPolling()
+        // A new search session starts with no results, so it can switch snapshots.
+        val session = _state.value.catalogSearchSession
+        activateLatestCatalog { it.screen == Screen.SEARCH && it.catalogSearchSession == session }
         searchCatalog(_state.value.catalogQuery)
     }
 
@@ -282,6 +314,7 @@ class AppViewModel(
         if (!searching) return
         catalogSearchJob = viewModelScope.launch(compute) {
             delay(150)
+            catalogActivation?.join()
             try {
                 val results = catalog.explore(query)
                 if (isActive) _state.update {

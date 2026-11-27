@@ -128,6 +128,69 @@ class AppViewModelTest {
     }
 
     @Test
+    fun downloadedCatalogActivatesOnlyWhereNoCatalogResultsAreShown() = vmTest {
+        val catalog = FakeCatalog(listOf(leonPlace()))
+        val vm = viewModel(ScriptedFeed(), MemoryBoards(), catalog = catalog)
+        runCurrent()
+        vm.openSearch()
+        vm.searchCatalog("leon")
+        advanceTimeBy(151)
+        runCurrent()
+        val place = vm.state.value.catalogResults.places.single()
+        vm.openDetails(CatalogEntry.Location(place))
+
+        catalog.staged = listOf(ricaurtePlace())
+        vm.setStarted(false)
+        vm.setStarted(true)
+        runCurrent()
+        assertEquals(CatalogEntry.Location(place), vm.state.value.details.single())
+        vm.backSetup()
+        vm.searchCatalog("leon")
+        advanceTimeBy(151)
+        runCurrent()
+        assertEquals(listOf(place), vm.state.value.catalogResults.places)
+
+        vm.backSetup()
+        vm.openSearch()
+        vm.searchCatalog("leon")
+        advanceTimeBy(151)
+        runCurrent()
+        assertTrue(vm.state.value.catalogResults.places.isEmpty())
+        vm.searchCatalog("ricaurte")
+        advanceTimeBy(151)
+        runCurrent()
+        assertEquals(listOf(ricaurtePlace()), vm.state.value.catalogResults.places)
+    }
+
+    @Test
+    fun downloadedCatalogIsNotCommittedAfterLeavingHomeDuringLoad() = vmTest {
+        val catalog = FakeCatalog(listOf(leonPlace()))
+        val vm = viewModel(ScriptedFeed(), MemoryBoards(), catalog = catalog)
+        runCurrent()
+        catalog.staged = listOf(ricaurtePlace())
+        vm.setStarted(true)
+        vm.openSetup()
+        runCurrent()
+        assertEquals(Screen.SETUP, vm.state.value.screen)
+        assertEquals(leonPlace(), catalog.place(leonPlace().placeId))
+        assertEquals(listOf(ricaurtePlace()), catalog.staged)
+    }
+
+    @Test
+    fun searchOpenedDuringHomeLoadUsesTheDownloadedCatalog() = vmTest {
+        val catalog = FakeCatalog(listOf(leonPlace()))
+        val vm = viewModel(ScriptedFeed(), MemoryBoards(), catalog = catalog)
+        runCurrent()
+        catalog.staged = listOf(ricaurtePlace())
+        vm.setStarted(true)
+        vm.openSearch()
+        vm.searchCatalog("ricaurte")
+        advanceTimeBy(151)
+        runCurrent()
+        assertEquals(listOf(ricaurtePlace()), vm.state.value.catalogResults.places)
+    }
+
+    @Test
     fun latestServiceTapWinsAndBackInvalidatesPendingLookup() = vmTest {
         val first = leonPlace().servicios.single()
         val second = first.copy(painted = "E42", destino = "7 de Agosto")
@@ -1190,7 +1253,7 @@ private class ScriptedFeed : FeedClient {
 }
 
 private class FakeCatalog(
-    private val places: List<Place>,
+    private var places: List<Place>,
     var generatedAtDelayMs: Long = 0,
     var searchDelays: Map<String, Long> = emptyMap(),
     var serviceDelays: Map<String, Long> = emptyMap(),
@@ -1201,6 +1264,15 @@ private class FakeCatalog(
 ) : CatalogRepository {
     var placeCalls = 0
         private set
+    var staged: List<Place>? = null
+
+    override fun prepareLatest(): (() -> Unit)? {
+        val next = staged ?: return null
+        return {
+            places = next
+            staged = null
+        }
+    }
 
     override suspend fun explore(query: String, limit: Int) = co.camilo.transmicrone.domain.CatalogResults(places = search(query, limit))
     override suspend fun service(painted: String, destino: String): co.camilo.transmicrone.domain.CatalogEntry.Service? {

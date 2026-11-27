@@ -26,6 +26,11 @@ SECTIONS = {
     "places": "place_id", "servicios": "route_id", "service_hours": "catalog_id",
     "service_routes": "catalog_id", "serving": None,
 }
+# Android rejects artifacts above these limits; see PublishedCatalogRepository.kt.
+ANDROID_MAX_DOWNLOAD_BYTES = 5 * 1024 * 1024
+ANDROID_MAX_CATALOG_BYTES = 32 * 1024 * 1024
+# Warn early enough to ship an app with higher limits before publication stops.
+ANDROID_SIZE_WARNING_RATIO = 0.75
 
 
 def encode(value: object) -> bytes:
@@ -105,6 +110,17 @@ def prior_removal_evidence(observation: dict | None) -> dict:
     return {section: {identity: {'first_seen': day, 'last_seen': day, 'observations': 1}
                       for identity in change.get('removed', [])}
             for section, change in observation.get('changes', {}).items()}
+
+
+def android_size_check(compressed: int, decompressed: int) -> tuple[list[str], list[str]]:
+    errors, warnings = [], []
+    for label, size, limit in (('compressed', compressed, ANDROID_MAX_DOWNLOAD_BYTES),
+                               ('decompressed', decompressed, ANDROID_MAX_CATALOG_BYTES)):
+        if size > limit:
+            errors.append(f'Android catalog {label} size {size} exceeds the app limit {limit}')
+        elif size > limit * ANDROID_SIZE_WARNING_RATIO:
+            warnings.append(f'Android catalog {label} size {size} is above {ANDROID_SIZE_WARNING_RATIO:.0%} of the app limit {limit}')
+    return errors, warnings
 
 
 def assess(catalog: dict, baseline: dict, build_exit: int, now: datetime, prior_observation: dict | None = None) -> dict:
@@ -375,7 +391,17 @@ def main():
         report['source_warnings'] = candidate.get('warnings', [])
         payload = {section: records(publication, section) for section in SECTIONS}
         report['content_sha256'] = sha(encode(payload))
-        packed = gzip.compress(encode(pack(publication)), mtime=0)
+        packed_raw = encode(pack(publication))
+        packed = gzip.compress(packed_raw, mtime=0)
+        # Every installed app would reject an oversized artifact, so it cannot be published.
+        size_errors, size_warnings = android_size_check(len(packed), len(packed_raw))
+        if size_errors:
+            assessment['errors'] = assessment['errors'] + size_errors
+            assessment['valid'] = assessment['promotable'] = False
+        assessment['size_warnings'] = size_warnings
+        for warning in size_warnings:
+            print(f'::warning title=Catalog size::{warning}', flush=True)
+        report.update({key: assessment[key] for key in ('errors', 'valid', 'promotable', 'size_warnings')})
         (out / 'catalog.json.gz').write_bytes(packed)
         source = gzip.compress(encode(publication), mtime=0)
         (out / 'source-catalog.json.gz').write_bytes(source)
@@ -452,7 +478,7 @@ def main():
             if report['publication_health']['status'] != 'fresh':
                 print('::warning title=Catalog freshness::Published catalog has not been successfully verified within 48 hours, or its manifest is unavailable. See the report.', flush=True)
         (out / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
-        summary = f"Catalog {version}: {report.get('publication', 'failed')}\n\n" + json.dumps({key: report.get(key) for key in ('preview_result', 'counts', 'errors', 'pending_removals', 'retained_records', 'publication_health', 'source_warnings', 'error', 'publication_error')}, ensure_ascii=False, indent=2)
+        summary = f"Catalog {version}: {report.get('publication', 'failed')}\n\n" + json.dumps({key: report.get(key) for key in ('preview_result', 'counts', 'errors', 'pending_removals', 'retained_records', 'size_warnings', 'publication_health', 'source_warnings', 'error', 'publication_error')}, ensure_ascii=False, indent=2)
         print(summary, flush=True)
         if code == 0 and any(report.get('retained_records', {}).values()):
             print('::notice title=Catalog removals deferred::Validated catalog prepared; uncertain removals and required dependencies retained. See the report.', flush=True)
