@@ -62,8 +62,8 @@ android {
         applicationId = "co.camilo.transmicrone"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.1.0-alpha.3"
+        versionCode = 5
+        versionName = "0.1.0-alpha.4"
         // Also inherited by the test APK, which cannot reference the app's strings.
         resValue("string", "launcher_name", "TransMinuto")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
