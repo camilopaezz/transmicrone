@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import io
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -207,6 +208,25 @@ class AssessmentTests(unittest.TestCase):
         self.assertFalse(any(retained.values()))
 
 
+class AndroidSizeTests(unittest.TestCase):
+    def test_limits_match_android(self):
+        source = (Path(__file__).resolve().parents[1] / 'android/app/src/main/kotlin/co/camilo/transmicrone/data/catalog/PublishedCatalogRepository.kt').read_text()
+        def limit(name):
+            match = re.search(rf'const val {name} = (\d+)L \* 1024 \* 1024', source)
+            self.assertIsNotNone(match, name)
+            return int(match.group(1)) * 1024 * 1024
+        self.assertEqual(limit('MAX_DOWNLOAD_BYTES'), daily.ANDROID_MAX_DOWNLOAD_BYTES)
+        self.assertEqual(limit('MAX_CATALOG_BYTES'), daily.ANDROID_MAX_CATALOG_BYTES)
+
+    def test_warns_near_limits_and_rejects_above_them(self):
+        small = daily.ANDROID_MAX_DOWNLOAD_BYTES // 2
+        self.assertEqual(daily.android_size_check(small, small), ([], []))
+        errors, warnings = daily.android_size_check(daily.ANDROID_MAX_DOWNLOAD_BYTES - 1, small)
+        self.assertEqual((len(errors), len(warnings)), (0, 1))
+        errors, warnings = daily.android_size_check(small, daily.ANDROID_MAX_CATALOG_BYTES + 1)
+        self.assertEqual((len(errors), len(warnings)), (1, 0))
+
+
 class FakeR2:
     def __init__(self, archive_fails=False, report_fails=False):
         self.objects = {}
@@ -313,6 +333,19 @@ class PublicationTests(unittest.TestCase):
         result, report = self.run_daily(store)
         self.assertEqual(result, 1)
         self.assertIn('checksum mismatch', report['publication_error'])
+        self.assertEqual(store.objects['current.json'], previous)
+
+    def test_catalog_android_cannot_load_is_not_published(self):
+        store = FakeR2()
+        self.assertEqual(self.run_daily(store)[0], 0)
+        previous = store.objects['current.json']
+        value = candidate()
+        value['places'][0]['name'] = 'Changed'
+        with patch.object(daily, 'ANDROID_MAX_CATALOG_BYTES', 10):
+            result, report = self.run_daily(store, value)
+        self.assertEqual(result, 1)
+        self.assertEqual(report['publication'], 'invalid')
+        self.assertTrue(any('exceeds the app limit' in error for error in report['errors']))
         self.assertEqual(store.objects['current.json'], previous)
 
     def test_unchanged_legacy_digest_does_not_force_publication_after_canonicalization(self):

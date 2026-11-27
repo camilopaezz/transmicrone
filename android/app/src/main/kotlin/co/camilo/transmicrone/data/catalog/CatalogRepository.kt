@@ -15,10 +15,11 @@ import co.camilo.transmicrone.domain.matchingCatalogVariants
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.decodeFromStream
 import java.io.InputStream
 import java.util.zip.GZIPInputStream
 
-private const val SUPPORTED_CATALOG_SCHEMA_VERSION = 1
+internal const val SUPPORTED_CATALOG_SCHEMA_VERSION = 1
 
 private fun foldSearchText(value: String): String {
     val folded = TextNorm.fold(value)
@@ -63,13 +64,26 @@ interface CatalogRepository {
     fun place(placeId: String): Place?
     suspend fun generatedAt(): String?
     suspend fun routes(option: ServicioOption): List<ServiceRoute> = emptyList()
+
+    /**
+     * Loads a newer snapshot downloaded during this process, off the main thread. Returns a
+     * commit that switches to it, or null. Callers commit on the main thread only while no
+     * catalog-derived results are on screen; an uncommitted snapshot is retried later.
+     */
+    fun prepareLatest(): (() -> Unit)? = null
 }
 
-class JsonCatalogRepository(
-    private val json: Json,
-    private val gzip: Boolean,
-    private val opener: () -> InputStream,
+class JsonCatalogRepository internal constructor(
+    private val readPacked: () -> PackedCatalog,
 ) : CatalogRepository {
+    constructor(json: Json, gzip: Boolean, opener: () -> InputStream) : this({
+        opener().use { raw ->
+            val stream = if (gzip) GZIPInputStream(raw) else raw
+            // Streaming avoids holding the decompressed JSON text next to the parsed catalog.
+            stream.buffered().use { json.decodeFromStream<PackedCatalog>(it) }
+        }
+    })
+
     @Volatile
     private var loaded: CatalogMetadata? = null
 
@@ -86,10 +100,7 @@ class JsonCatalogRepository(
         loaded?.let { return it }
         synchronized(this) {
             loaded?.let { return it }
-            opener().use { raw ->
-                val stream = if (gzip) GZIPInputStream(raw) else raw
-                val text = stream.bufferedReader(Charsets.UTF_8).readText()
-                val packed = json.decodeFromString(PackedCatalog.serializer(), text)
+            readPacked().let { packed ->
                 require(packed.schemaVersion == SUPPORTED_CATALOG_SCHEMA_VERSION) {
                     "Unsupported catalog schema_version: ${packed.schemaVersion}"
                 }
@@ -204,7 +215,9 @@ class JsonCatalogRepository(
         return services.find { it.option.painted == painted && it.option.destino == destino }
     }
 
-    override suspend fun generatedAt(): String? = catalog().generatedAt
+    internal fun load(): String? = catalog().generatedAt
+
+    override suspend fun generatedAt(): String? = load()
 
     override suspend fun routes(option: ServicioOption): List<ServiceRoute> {
         catalog()
